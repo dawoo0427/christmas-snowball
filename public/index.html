@@ -72,8 +72,8 @@
   #help { left:calc(14px + env(safe-area-inset-left,0px)); bottom:calc(10px + env(safe-area-inset-bottom,0px)); font-size:12px; color:#cfe0ffcc; line-height:1.6; }
   #chatbox { position:fixed; left:calc(14px + env(safe-area-inset-left,0px)); bottom:calc(46px + env(safe-area-inset-bottom,0px)); display:none; gap:6px; z-index:4; }
   #chatbox.open { display:flex; }
-  #chatbox input { width:min(320px, 62vw); font-size:15px; padding:8px 12px; border-radius:12px; border:2px solid #ffffff50; background:#0b1430e8; color:#fff; user-select:text; -webkit-user-select:text; }
-  #chatbox button { font-family:var(--display); font-size:15px; border:none; border-radius:12px; padding:0 14px; background:#2f6fd6; color:#fff; }
+  #chatbox input { flex:1; min-width:0; width:min(320px, 62vw); font-size:15px; padding:8px 12px; border-radius:12px; border:2px solid #ffffff50; background:#0b1430e8; color:#fff; user-select:text; -webkit-user-select:text; }
+  #chatbox button { flex:none; white-space:nowrap; font-family:var(--display); font-size:15px; border:none; border-radius:12px; padding:0 16px; background:#2f6fd6; color:#fff; }
   #respawn { left:50%; top:45%; transform:translate(-50%,-50%); font-family:var(--display); font-size:30px; text-align:center; display:none; }
   #net { left:50%; bottom:calc(12px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); font-size:13px; color:#ffb3b3; display:none; }
   #hurt { position:fixed; inset:0; pointer-events:none; box-shadow: inset 0 0 160px #ff2040; opacity:0; transition:opacity .15s; }
@@ -126,7 +126,9 @@
   body.touch #hpbar { width:170px; height:18px; }
   body.touch #toast { font-size:28px; }
   body.touch #feed { bottom:calc(150px + env(safe-area-inset-bottom,0px)); font-size:12px; }
-  body.touch #chatbox { bottom:auto; top:calc(70px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); }
+  body.touch #chatbox { bottom:auto; top:0; left:0; right:0; z-index:7; padding:calc(10px + env(safe-area-inset-top,0px)) max(12px, env(safe-area-inset-right,0px)) 10px max(12px, env(safe-area-inset-left,0px)); background:#0b1430f0; }
+  body.touch #chatbox input { width:auto; font-size:16px; }
+  body.touch #gear { display:none !important; }
   @media (max-height:520px) {
     #overlay h1 { font-size:30px; }
     #overlay h2 { font-size:13px; margin-bottom:8px; }
@@ -145,6 +147,11 @@
     #toast small { font-size:14px; }
   }
   @media (max-width:640px) { #objective small { display:none; } #toast { font-size:28px; } }
+  @media (max-width:600px) {
+    #objective { top:auto; bottom:calc(92px + env(safe-area-inset-bottom,0px)); font-size:13px; padding:4px 12px; max-width:calc(100vw - 32px); white-space:nowrap; }
+    body.touch #feed { bottom:calc(132px + env(safe-area-inset-bottom,0px)); }
+    #hpbar { width:min(170px, 40vw); }
+  }
   @media (prefers-reduced-motion: reduce) { #toast, #hurt, #feed div { transition:none; } }
 </style>
 </head>
@@ -179,7 +186,7 @@
 <div id="touch">
   <div class="joy" id="joyL"><i></i></div>
   <div class="joy" id="joyR"><i></i></div>
-  <div id="camBtns"><button data-b="camL" aria-label="카메라 왼쪽으로 돌리기">⟲</button><button data-b="camR" aria-label="카메라 오른쪽으로 돌리기">⟳</button><button data-b="chat" aria-label="채팅">💬</button><button data-b="mic" aria-label="마이크 켜기/끄기" id="micBtn" hidden>🎙️</button></div>
+  <div id="camBtns"><button data-b="camL" aria-label="카메라 왼쪽으로 돌리기">⟲</button><button data-b="camR" aria-label="카메라 오른쪽으로 돌리기">⟳</button><button data-b="chat" aria-label="채팅">💬</button><button data-b="mic" aria-label="마이크 켜기/끄기" id="micBtn" hidden>🎙️</button><button data-b="settings" aria-label="설정">⚙️</button></div>
   <div id="tbtns"><button data-b="jump">점프</button><button data-b="dash">대시</button><button data-b="reload">장전</button></div>
 </div>
 <div id="overlay"><div><h1>🎄 크리스마스 눈싸움 3D</h1><h2>눈마을을 불러오는 중…</h2></div></div>
@@ -1073,7 +1080,7 @@ document.querySelectorAll('#tbtns button, #camBtns button').forEach(b => {
   b.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation(); audio();
     const k = b.dataset.b; held[k] = true;
-    if (k === 'reload') startReload(); if (k === 'dash') dash(); if (k === 'jump') jump(); if (k === 'chat') openChat(); if (k === 'mic') toggleMic();
+    if (k === 'reload') startReload(); if (k === 'dash') dash(); if (k === 'jump') jump(); if (k === 'chat') openChat(); if (k === 'mic') toggleMic(); if (k === 'settings') toggleSettings(true);
   });
   const up = () => { held[b.dataset.b] = false; };
   b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
