@@ -12,6 +12,11 @@ const SERVER_NAME = process.env.SERVER_NAME || '눈마을 1서버';
 const MAX_PLAYERS = +process.env.MAX_PLAYERS || 60;
 const TICK = 30, SNAP_EVERY = 2;                   // 30Hz 시뮬레이션, 15Hz 상태 전송
 const CAMP_RESPAWN = +process.env.CAMP_RESPAWN || 180;   // 해방된 캠프가 다시 점령되기까지(초)
+// Cloudflare Realtime TURN (보이스 채팅 중계). 키는 환경변수에만 두고 브라우저에는 임시 자격 증명만 준다.
+const TURN_KEY_ID = process.env.TURN_KEY_ID || '';
+const TURN_KEY_API_TOKEN = process.env.TURN_KEY_API_TOKEN || '';
+const TURN_API_BASE = process.env.TURN_API_BASE || 'https://rtc.live.cloudflare.com/v1/turn/keys';
+const TURN_TTL = 86400;
 const { TYPES, TYPE_BY_ID, heightAt, pushOut, hitsCollider, inVillage, clamp, TAU } = W;
 const rand = (a, b) => a + Math.random() * (b - a);
 const angLerp = (a, b, t) => a + W.angDiff(a, b) * t;
@@ -29,6 +34,13 @@ const STATIC = {
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname === '/turn') {
+    getIceServers().then(ice => {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(ice));
+    });
+    return;
+  }
   if (url.pathname === '/health') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify({ ok: true, server: SERVER_NAME, players: players.size, max: MAX_PLAYERS }));
@@ -42,6 +54,34 @@ const server = http.createServer((req, res) => {
     res.end(buf);
   });
 });
+
+// ============================================================
+//  TURN 임시 자격 증명 (모든 접속자가 함께 쓰고, 만료 1시간 전에 새로 받는다)
+// ============================================================
+const STUN_ONLY = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }], relay: false };
+let iceCache = null, iceExpires = 0, icePending = null;
+async function fetchCloudflareIce() {
+  const headers = { Authorization: 'Bearer ' + TURN_KEY_API_TOKEN, 'Content-Type': 'application/json' };
+  const body = JSON.stringify({ ttl: TURN_TTL });
+  let r = await fetch(`${TURN_API_BASE}/${encodeURIComponent(TURN_KEY_ID)}/credentials/generate-ice-servers`, { method: 'POST', headers, body });
+  if (r.status === 404) r = await fetch(`${TURN_API_BASE}/${encodeURIComponent(TURN_KEY_ID)}/credentials/generate`, { method: 'POST', headers, body });
+  if (!r.ok) throw new Error('TURN API ' + r.status);
+  const j = await r.json();
+  let list = Array.isArray(j.iceServers) ? j.iceServers : (j.iceServers ? [j.iceServers] : []);
+  // 브라우저는 53번 포트 주소에서 시간이 오래 걸리므로 뺀다
+  list = list.map(s => ({ ...s, urls: (Array.isArray(s.urls) ? s.urls : [s.urls]).filter(u => typeof u === 'string' && !/:53(\?|$)/.test(u)) })).filter(s => s.urls.length);
+  if (!list.some(s => s.urls.some(u => u.startsWith('turn')))) throw new Error('TURN 주소가 응답에 없어요');
+  return { iceServers: list, relay: true };
+}
+function getIceServers() {
+  if (!TURN_KEY_ID || !TURN_KEY_API_TOKEN) return Promise.resolve(STUN_ONLY);
+  if (iceCache && Date.now() < iceExpires) return Promise.resolve(iceCache);
+  if (!icePending) icePending = fetchCloudflareIce()
+    .then(ice => { iceCache = ice; iceExpires = Date.now() + (TURN_TTL - 3600) * 1000; log('TURN 자격 증명 발급 완료'); return ice; })
+    .catch(e => { log('TURN 발급 실패:', e.message); iceCache = null; iceExpires = 0; return STUN_ONLY; })
+    .finally(() => { icePending = null; });
+  return icePending;
+}
 
 // ============================================================
 //  WebSocket (RFC 6455 최소 구현)
@@ -422,4 +462,4 @@ setInterval(() => {
   for (const p of players.values()) { if (now - p.conn.lastMsg > 30000) p.conn.close(); else p.conn.frame(9, Buffer.alloc(0)); }
 }, 10000);
 
-server.listen(PORT, () => log(`${SERVER_NAME} 시작: http://localhost:${PORT}`));
+server.listen(PORT, () => log(`${SERVER_NAME} 시작: http://localhost:${PORT} · 보이스 중계(TURN): ${TURN_KEY_ID && TURN_KEY_API_TOKEN ? '설정됨' : '없음 (직접 연결만)'}`));

@@ -41,6 +41,11 @@ node server.js
 | `SERVER_NAME` | 눈마을 1서버 | 화면에 보이는 서버 이름 |
 | `MAX_PLAYERS` | 60 | 최대 동시 접속자 수 |
 | `CAMP_RESPAWN` | 180 | 해방된 캠프가 다시 점령되기까지 걸리는 시간(초) |
+| `TURN_KEY_ID` | (없음) | Cloudflare Realtime TURN 키 ID. 보이스 채팅 중계용 |
+| `TURN_KEY_API_TOKEN` | (없음) | Cloudflare Realtime TURN API 토큰. **절대 코드에 넣지 말고 환경변수로만** |
+
+TURN 키가 없으면 보이스 채팅은 기기끼리 직접 연결만 시도합니다(일부 모바일·회사 네트워크에서는 연결 실패).
+키가 있으면 서버가 `/turn` 에서 24시간짜리 임시 자격 증명을 발급해 브라우저에 전달하고, 키 자체는 브라우저로 나가지 않습니다.
 
 ## 폴더 구조
 

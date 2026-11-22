@@ -186,6 +186,7 @@
   <label class="opt" for="optVoice"><span>보이스 채팅<small>근처(약 40m 안) 플레이어와 음성으로 대화해요</small></span><input type="checkbox" id="optVoice"></label>
   <label class="opt" for="optMic"><span>내 마이크<small>끄면 듣기만 해요 · 단축키 V</small></span><input type="checkbox" id="optMic" checked></label>
   <label class="opt" for="optHear"><span>다른 사람 목소리 듣기</span><input type="checkbox" id="optHear" checked></label>
+  <label class="opt" for="optRelay"><span>IP 숨기기<small>항상 중계 서버를 거쳐 연결해요. 내 인터넷 주소가 상대에게 보이지 않아요</small></span><input type="checkbox" id="optRelay" checked></label>
   <label class="opt" for="optMusic"><span>배경음악<small>단축키 M</small></span><input type="checkbox" id="optMusic"></label>
   <label class="opt" for="optSfx"><span>효과음</span><input type="checkbox" id="optSfx" checked></label>
   <p class="vstat" id="vstat"></p>
@@ -866,15 +867,25 @@ function killEnemy(e) {
 //  보이스 채팅 (근거리 WebRTC, 서버는 연결 신호만 전달)
 // ============================================================
 const VOICE_RANGE = 40, VOICE_DROP = 55, VOICE_MAX_PEERS = 8;
-const RTC_CFG = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
+let RTC_CFG = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
+let turnReady = false, turnAt = 0;
+async function loadIce() {
+  if (Date.now() - turnAt < 6 * 3600e3) return;
+  try {
+    const j = await (await fetch('turn', { cache: 'no-store' })).json();
+    if (j && Array.isArray(j.iceServers) && j.iceServers.length) { RTC_CFG = { iceServers: j.iceServers }; turnReady = !!j.relay; turnAt = Date.now(); }
+  } catch (e) {}
+}
+const rtcConfig = () => ({ ...RTC_CFG, iceTransportPolicy: turnReady && voice.relayOnly ? 'relay' : 'all' });
 const voice = { on: false, micOn: store.get('snowball-mic', '1') === '1', hearOn: store.get('snowball-hear', '1') === '1', stream: null,
-  peers: new Map(), pendingIce: new Map(), muted: new Set(), blocked: new Set(), analyser: null, buf: null, talking: false, talkT: 0, checkT: 0, connected: 0, busy: false };
+  peers: new Map(), pendingIce: new Map(), muted: new Set(), blocked: new Set(), relayOnly: store.get('snowball-relay', '1') === '1', analyser: null, buf: null, talking: false, talkT: 0, checkT: 0, connected: 0, busy: false };
 const voiceSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection);
 async function setVoice(on) {
   if (on === voice.on || voice.busy) return;
   if (on) {
     if (!voiceSupported) { toast('보이스 채팅을 쓸 수 없어요', '이 브라우저는 음성 연결을 지원하지 않아요', 3); syncSettings(); return; }
     voice.busy = true; syncSettings();
+    await loadIce();
     try {
       voice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     } catch (e) {
@@ -908,7 +919,7 @@ function toggleMic() {
   toast(voice.micOn ? '🎙️ 마이크 켜짐' : '🔇 마이크 꺼짐', '', 1);
 }
 function createPeer(id, initiator) {
-  const pc = new RTCPeerConnection(RTC_CFG);
+  const pc = new RTCPeerConnection(rtcConfig());
   const el = document.createElement('audio'); el.autoplay = true; el.playsInline = true; el.hidden = true; document.body.appendChild(el);
   const peer = { id, pc, el, connected: false, made: time };
   voice.peers.set(id, peer);
@@ -988,10 +999,11 @@ function syncSettings() {
   const v = $('optVoice'); v.checked = voice.on; v.disabled = voice.busy || !voiceSupported;
   $('optMic').checked = voice.micOn; $('optMic').disabled = !voice.on;
   $('optHear').checked = voice.hearOn;
+  $('optRelay').checked = voice.relayOnly && turnReady; $('optRelay').disabled = !turnReady;
   $('optMusic').checked = musicOn; $('optSfx').checked = sfxOn;
   $('vstat').textContent = !voiceSupported ? '이 브라우저에서는 보이스 채팅을 쓸 수 없어요.'
     : voice.busy ? '마이크 권한을 기다리는 중이에요…'
-    : voice.on ? `지금 근처 ${voice.connected}명과 연결돼 있어요. 멀어질수록 목소리가 작아져요.`
+    : voice.on ? `지금 근처 ${voice.connected}명과 연결돼 있어요. 멀어질수록 목소리가 작아져요.${turnReady ? (voice.relayOnly ? ' 중계 서버로 연결 중이라 IP가 보이지 않아요.' : ' 연결이 어려우면 중계 서버를 써요.') : ' (중계 서버가 없어 일부 네트워크에선 연결이 안 될 수 있어요)'}`
     : '보이스 채팅을 켜면 마이크 권한을 물어봐요. 근처 플레이어끼리만 연결돼요.';
   renderPlayerList();
 }
@@ -1030,6 +1042,7 @@ $('settings').addEventListener('keydown', e => { if (e.key === 'Escape') { e.sto
 $('optVoice').addEventListener('change', e => setVoice(e.target.checked));
 $('optMic').addEventListener('change', e => { voice.micOn = e.target.checked; store.set('snowball-mic', voice.micOn ? '1' : '0'); applyMic(); });
 $('optHear').addEventListener('change', e => { voice.hearOn = e.target.checked; store.set('snowball-hear', voice.hearOn ? '1' : '0'); });
+$('optRelay').addEventListener('change', e => { voice.relayOnly = e.target.checked; store.set('snowball-relay', voice.relayOnly ? '1' : '0'); for (const id of [...voice.peers.keys()]) closePeer(id); });
 $('optMusic').addEventListener('change', e => { musicOn = e.target.checked; store.set('snowball-music', musicOn ? '1' : '0'); });
 $('optSfx').addEventListener('change', e => { sfxOn = e.target.checked; store.set('snowball-sfx', sfxOn ? '1' : '0'); });
 setInterval(() => { if ($('settings').classList.contains('open')) syncSettings(); }, 1000);

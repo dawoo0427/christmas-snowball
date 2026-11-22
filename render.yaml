@@ -11,3 +11,7 @@ services:
         value: 눈마을 1서버
       - key: MAX_PLAYERS
         value: "60"
+      - key: TURN_KEY_ID
+        sync: false
+      - key: TURN_KEY_API_TOKEN
+        sync: false
