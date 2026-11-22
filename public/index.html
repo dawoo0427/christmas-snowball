@@ -22,8 +22,29 @@
   canvas#game { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
   .panel { position:fixed; pointer-events:none; text-shadow:0 2px 4px #0009; }
   #stats { left:calc(14px + env(safe-area-inset-left,0px)); top:calc(12px + env(safe-area-inset-top,0px)); }
-  #hearts { font-size:26px; letter-spacing:2px; color:var(--heart); line-height:1; }
-  #hearts .off { opacity:.25; color:#fff; }
+  #hpbar { position:relative; width:220px; height:20px; border-radius:11px; background:#0b1430c0; border:2px solid #ffffff60; overflow:hidden; }
+  #hpbar i { position:absolute; inset:0 auto 0 0; width:100%; background:linear-gradient(90deg,#ff4d6d,#ff8a65); transition:width .15s; }
+  #hpbar i.mid { background:linear-gradient(90deg,#ffb300,#ffd34d); }
+  #hpbar i.high { background:linear-gradient(90deg,#2ecc71,#7dffb0); }
+  #hpbar span { position:relative; display:block; text-align:center; font-family:var(--display); font-size:14px; line-height:16px; color:#fff; text-shadow:0 1px 2px #000; }
+  #gear { position:fixed; right:calc(202px + env(safe-area-inset-right,0px)); top:calc(12px + env(safe-area-inset-top,0px)); width:42px; height:42px; border-radius:50%; border:2px solid #ffffff60;
+    background:#0b1430c8; color:#fff; font-size:20px; cursor:pointer; display:none; z-index:3; }
+  body.playing #gear { display:block; }
+  body.touch #gear { right:calc(140px + env(safe-area-inset-right,0px)); }
+  #settings { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:min(360px, calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto;
+    background:#0b1430f2; border:2px solid #ffffff40; border-radius:18px; padding:18px 20px; z-index:6; display:none; user-select:text; }
+  #settings.open { display:block; }
+  #settings h3 { font-family:var(--display); font-weight:400; font-size:24px; margin:0 0 12px; }
+  #settings label.opt { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid #ffffff18; font-size:15px; cursor:pointer; }
+  #settings label.opt small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+  #settings input[type=checkbox] { appearance:none; -webkit-appearance:none; width:50px; height:28px; border-radius:14px; background:#ffffff30; position:relative; flex:none; cursor:pointer; transition:background .15s; }
+  #settings input[type=checkbox]::after { content:""; position:absolute; left:3px; top:3px; width:22px; height:22px; border-radius:50%; background:#fff; transition:left .15s; }
+  #settings input[type=checkbox]:checked { background:#2ecc71; }
+  #settings input[type=checkbox]:checked::after { left:25px; }
+  #settings input[type=checkbox]:disabled { opacity:.4; }
+  #settings input:focus-visible { outline:3px solid var(--gold); outline-offset:2px; }
+  #settings .vstat { font-size:13px; color:var(--muted); margin:10px 0 0; line-height:1.5; }
+  #settings .close { margin-top:14px; width:100%; font-family:var(--display); font-size:18px; padding:10px; border:none; border-radius:14px; background:var(--red); color:#fff; cursor:pointer; }
   #ammo { margin-top:6px; display:flex; gap:5px; align-items:center; flex-wrap:wrap; max-width:220px; }
   #ammo i { width:13px; height:13px; border-radius:50%; background:#fff; box-shadow:0 0 4px #9cf; display:inline-block; }
   #ammo i.off { background:#ffffff30; box-shadow:none; }
@@ -102,7 +123,7 @@
   body.touch #mini { width:120px; height:120px; }
   body.touch #scorebox { top:calc(186px + env(safe-area-inset-top,0px)); }
   body.touch #objective { font-size:14px; padding:5px 12px; }
-  body.touch #hearts { font-size:21px; }
+  body.touch #hpbar { width:170px; height:18px; }
   body.touch #toast { font-size:28px; }
   body.touch #feed { bottom:calc(150px + env(safe-area-inset-bottom,0px)); font-size:12px; }
   body.touch #chatbox { bottom:auto; top:calc(70px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); }
@@ -131,7 +152,7 @@
 <canvas id="game"></canvas>
 <div id="labels"></div>
 <div id="hurt"></div>
-<div class="panel" id="stats"><div id="hearts"></div><div id="ammo"></div><div id="buffs"></div></div>
+<div class="panel" id="stats"><div id="hpbar"><i></i><span></span></div><div id="ammo"></div><div id="buffs"></div></div>
 <div class="panel" id="objective"></div>
 <canvas id="mini" width="180" height="180"></canvas>
 <div class="panel" id="scorebox"><div id="score">0</div><div id="combo"></div><div id="board"></div></div>
@@ -141,13 +162,24 @@
 <div class="panel" id="net">서버와 연결이 불안정해요…</div>
 <div class="panel" id="help">
   WASD 이동 · Shift 대시 · Space 점프 · 마우스 조준 · 좌클릭 던지기(꾹: 강한 눈덩이)<br>
-  R 재장전 · Q/E 또는 우클릭 드래그 카메라 회전 · 휠 줌 · Enter 채팅 · M 음악
+  R 재장전 · Q/E 또는 우클릭 드래그 카메라 회전 · 휠 줌 · Enter 채팅 · V 마이크 · Esc 설정
+</div>
+<button id="gear" aria-label="설정 열기" title="설정">⚙️</button>
+<div id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <h3 id="setTitle">설정</h3>
+  <label class="opt" for="optVoice"><span>보이스 채팅<small>근처(약 40m 안) 플레이어와 음성으로 대화해요</small></span><input type="checkbox" id="optVoice"></label>
+  <label class="opt" for="optMic"><span>내 마이크<small>끄면 듣기만 해요 · 단축키 V</small></span><input type="checkbox" id="optMic" checked></label>
+  <label class="opt" for="optHear"><span>다른 사람 목소리 듣기</span><input type="checkbox" id="optHear" checked></label>
+  <label class="opt" for="optMusic"><span>배경음악<small>단축키 M</small></span><input type="checkbox" id="optMusic"></label>
+  <label class="opt" for="optSfx"><span>효과음</span><input type="checkbox" id="optSfx" checked></label>
+  <p class="vstat" id="vstat"></p>
+  <button class="close" id="setClose">닫기</button>
 </div>
 <form id="chatbox" autocomplete="off"><input id="chatIn" maxlength="60" placeholder="메시지 입력 후 Enter" aria-label="채팅 메시지"><button type="submit">보내기</button></form>
 <div id="touch">
   <div class="joy" id="joyL"><i></i></div>
   <div class="joy" id="joyR"><i></i></div>
-  <div id="camBtns"><button data-b="camL" aria-label="카메라 왼쪽으로 돌리기">⟲</button><button data-b="camR" aria-label="카메라 오른쪽으로 돌리기">⟳</button><button data-b="chat" aria-label="채팅">💬</button></div>
+  <div id="camBtns"><button data-b="camL" aria-label="카메라 왼쪽으로 돌리기">⟲</button><button data-b="camR" aria-label="카메라 오른쪽으로 돌리기">⟳</button><button data-b="chat" aria-label="채팅">💬</button><button data-b="mic" aria-label="마이크 켜기/끄기" id="micBtn" hidden>🎙️</button></div>
   <div id="tbtns"><button data-b="jump">점프</button><button data-b="dash">대시</button><button data-b="reload">장전</button></div>
 </div>
 <div id="overlay"><div><h1>🎄 크리스마스 눈싸움 3D</h1><h2>눈마을을 불러오는 중…</h2></div></div>
@@ -520,7 +552,7 @@ function makePenguin() {
   return { group: g, bd, held, body: navy };
 }
 const GIFT_INFO = {
-  heal: { color: 0xe53935, label: '체력 +2', c: '#ff8fa3' }, triple: { color: 0x1e88e5, label: '트리플 샷!', c: '#7dd3ff' },
+  heal: { color: 0xe53935, label: '체력 +40', c: '#ff8fa3' }, triple: { color: 0x1e88e5, label: '트리플 샷!', c: '#7dd3ff' },
   giant: { color: 0x8e24aa, label: '왕눈덩이!', c: '#d0a8ff' }, fast: { color: 0x43a047, label: '스피드 업!', c: '#8dffa8' },
 };
 function makeGift(color) {
@@ -532,6 +564,19 @@ function makeGift(color) {
   glow(color, 2.6, 0, 0, 0, g);
   return { group: g, inner };
 }
+
+// 힐팩: 빨간 십자 구급상자 + 초록 빛
+function makeHealPack() {
+  const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
+  mk(Box(1.0, 0.7, 0.7), toon(0xffffff), 0, 0, 0, inner);
+  const red = toon(0xe53935);
+  for (const z of [-0.36, 0.36]) { mk(Box(0.5, 0.15, 0.02), red, 0, 0, z, inner, false); mk(Box(0.15, 0.5, 0.02), red, 0, 0, z, inner, false); }
+  mk(Box(0.4, 0.1, 0.12), toon(0x6b3f1f), 0, 0.4, 0, inner);
+  glow(0x5dff9a, 2.6, 0, 0, 0, g, 1.5);
+  return { group: g, inner };
+}
+const heals = L.heals.map(h => { const m = makeHealPack(); scene.add(m.group); return { x: h.x, z: h.z, on: true, pending: 0, model: m, t: Math.random() * 5 }; });
+function setHeal(i, on) { const h = heals[i]; if (!h) return; h.on = on; h.model.group.visible = on && h.pending <= 0; }
 
 // ============================================================
 //  이펙트
@@ -575,10 +620,10 @@ function telegraph() {
 // ============================================================
 //  사운드
 // ============================================================
-let ac = null, musicOn = store.get('snowball-music', '1') === '1';
+let ac = null, musicOn = store.get('snowball-music', '1') === '1', sfxOn = store.get('snowball-sfx', '1') === '1';
 function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); }
-function tone(f, dur, type = 'sine', vol = 0.15, slide = 0, when = 0) {
-  if (!ac) return;
+function tone(f, dur, type = 'sine', vol = 0.15, slide = 0, when = 0, music = false) {
+  if (!ac || (!music && !sfxOn)) return;
   const o = ac.createOscillator(), g = ac.createGain(), t = when || ac.currentTime;
   o.type = type; o.frequency.setValueAtTime(f, t);
   if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + dur);
@@ -608,7 +653,7 @@ setInterval(() => {
   if (songT < ac.currentTime) songT = ac.currentTime + 0.05;
   while (songT < ac.currentTime + 0.4) {
     const [n, d] = SONG[songIdx];
-    if (n !== 'R') { tone(NOTE[n], 0.5, 'sine', 0.032, 0, songT); tone(NOTE[n] * 2, 0.25, 'sine', 0.011, 0, songT); }
+    if (n !== 'R') { tone(NOTE[n], 0.5, 'sine', 0.032, 0, songT, true); tone(NOTE[n] * 2, 0.25, 'sine', 0.011, 0, songT, true); }
     songT += d * 0.24; songIdx = (songIdx + 1) % SONG.length;
   }
 }, 100);
@@ -626,7 +671,7 @@ const enemies = new Map();             // id -> 적 (서버 상태를 화면에 
 const balls = new Map();               // id -> 눈덩이
 let gifts = [], popups = [], cid = 1;
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
-  return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: 6, maxHp: 6, ammo: 10, maxAmmo: 10,
+  return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
     reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
     walk: 0, throwAnim: 0, regenT: 0, inVillage: true, dead: false, respawnT: 0, squash: 0 };
 }
@@ -665,7 +710,9 @@ function onMsg(m) {
       me = newPlayer(m.x, m.z); myScore = 0; myCombo = 0; myKills = 0; playTime = 0;
       (m.camps || []).forEach((row, i) => applyCamp(i, row, true));
       if (m.g) applyGifts(m.g);
+      if (m.h) m.h.forEach((on, i) => setHeal(i, !!on));
       camYaw = camYawT = 0;
+      if (voice.on) send({ t: 'voice', on: 1 });
       for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = '';
       document.body.classList.add('playing');
       state = 'play'; overlay(null); audio();
@@ -675,9 +722,9 @@ function onMsg(m) {
     }
     case 'full': state = 'title'; overlay('title', `서버가 가득 찼어요 (최대 ${m.max | 0}명). 잠시 후 다시 시도해 주세요.`); break;
     case 'pj': names.set(m.id, { n: m.n, c: m.c }); feed(`<span class="sys">${esc(m.n)} 님이 들어왔어요</span>`); break;
-    case 'pl': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">${esc(nm.n)} 님이 나갔어요</span>`); names.delete(m.id); const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } break; }
+    case 'pl': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">${esc(nm.n)} 님이 나갔어요</span>`); names.delete(m.id); const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } closePeer(m.id); break; }
     case 's': applySnapshot(m); break;
-    case 'b': if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
+    case 'b': if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || 15 }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
     case 'be': { const b = balls.get(m.id); if (b) { killBall(b); burst(m.x, m.y, m.z, b.r > 0.4 ? 16 : 8, 0xeef4ff, 5, 2); } break; }
     case 'hit': {
       const b = balls.get(m.id); if (b) killBall(b);
@@ -710,6 +757,16 @@ function onMsg(m) {
       if (m.by === myId) giveBuff(m.k, g);
       break;
     }
+    case 'hoff': {
+      const h = heals[m.i]; if (h) { h.on = false; h.model.group.visible = false; }
+      if (m.by === myId && h) {
+        me.hp = Math.min(me.maxHp, me.hp + W.HEAL_AMOUNT); sfx.gift();
+        burst(h.x, heightAt(h.x, h.z) + 1, h.z, 24, 0x5dff9a, 6); popup(me.x, me.y + 3.2, me.z, `+${W.HEAL_AMOUNT} 회복`, '#7dffb0');
+      }
+      break;
+    }
+    case 'hon': { const h = heals[m.i]; if (h) { h.pending = 0; setHeal(m.i, true); } break; }
+    case 'rtc': onRtc(m.from, m.d); break;
     case 'chat': {
       const nm = names.get(m.id) || { n: '?', c: 0 };
       feed(`<b style="color:${ELF_CSS[nm.c % 6]}">${esc(nm.n)}</b> ${esc(m.s)}`);
@@ -738,15 +795,15 @@ function applyGifts(list) {
 function applySnapshot(m) {
   const seen = new Set();
   for (const row of m.p) {
-    const [id, x, z, y, face, vx, vz, flags, hp, dead, score] = row;
+    const [id, x, z, y, face, vx, vz, flags, hp, dead, score, vo] = row;
     if (id === myId) { myScore = score; continue; }
     seen.add(id);
     let r = remotes.get(id);
     const nm = names.get(id) || { n: '?', c: 0 };
     if (!r || r.c !== nm.c) { if (r) removeRemote(r); r = addRemote(id, nm); r.x = x; r.z = z; r.y = y; r.face = face; }
-    Object.assign(r, { tx: x, tz: z, ty: y, tface: face, vx, vz, flags, hp, dead: !!dead, score, n: nm.n });
+    Object.assign(r, { tx: x, tz: z, ty: y, tface: face, vx, vz, flags, hp, dead: !!dead, score, n: nm.n, voice: !!vo });
   }
-  for (const [id, r] of remotes) if (!seen.has(id)) { removeRemote(r); remotes.delete(id); }
+  for (const [id, r] of remotes) if (!seen.has(id)) { removeRemote(r); remotes.delete(id); closePeer(id); }
   const ids = new Set();
   for (const row of m.e) {
     const [id, tid, x, z, face, hp, max, wind, flash, moving] = row;
@@ -759,6 +816,7 @@ function applySnapshot(m) {
   for (const [id, e] of enemies) if (!ids.has(id)) { removeEnemy(e); enemies.delete(id); }
   m.c.forEach((row, i) => applyCamp(i, row));
   if (m.g) applyGifts(m.g);
+  if (m.h) m.h.forEach((on, i) => setHeal(i, !!on));
   if (typeof m.cb === 'number') myCombo = m.cb;
 }
 function addRemote(id, nm) {
@@ -785,6 +843,154 @@ function killEnemy(e) {
 }
 
 // ============================================================
+//  보이스 채팅 (근거리 WebRTC, 서버는 연결 신호만 전달)
+// ============================================================
+const VOICE_RANGE = 40, VOICE_DROP = 55, VOICE_MAX_PEERS = 8;
+const RTC_CFG = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
+const voice = { on: false, micOn: store.get('snowball-mic', '1') === '1', hearOn: store.get('snowball-hear', '1') === '1', stream: null,
+  peers: new Map(), pendingIce: new Map(), analyser: null, buf: null, talking: false, talkT: 0, checkT: 0, connected: 0, busy: false };
+const voiceSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection);
+async function setVoice(on) {
+  if (on === voice.on || voice.busy) return;
+  if (on) {
+    if (!voiceSupported) { toast('보이스 채팅을 쓸 수 없어요', '이 브라우저는 음성 연결을 지원하지 않아요', 3); syncSettings(); return; }
+    voice.busy = true; syncSettings();
+    try {
+      voice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch (e) {
+      voice.busy = false; syncSettings();
+      toast('마이크를 쓸 수 없어요', '브라우저 주소창의 권한 설정에서 마이크를 허용해 주세요', 3.5); return;
+    }
+    voice.busy = false; voice.on = true;
+    audio();
+    try { const src = ac.createMediaStreamSource(voice.stream); voice.analyser = ac.createAnalyser(); voice.analyser.fftSize = 512; voice.buf = new Uint8Array(voice.analyser.fftSize); src.connect(voice.analyser); } catch (e) { voice.analyser = null; }
+    applyMic();
+    send({ t: 'voice', on: 1 });
+    toast('🎙️ 보이스 채팅 켜짐', '근처에 있는 친구들과 대화할 수 있어요 · V로 마이크 끄기', 2.5);
+  } else {
+    voice.on = false;
+    send({ t: 'voice', on: 0 });
+    for (const id of [...voice.peers.keys()]) closePeer(id);
+    if (voice.stream) voice.stream.getTracks().forEach(t => t.stop());
+    voice.stream = null; voice.analyser = null; voice.talking = false;
+    $('micBtn').hidden = true;
+  }
+  store.set('snowball-voice', voice.on ? '1' : '0');
+  syncSettings();
+}
+function applyMic() {
+  if (voice.stream) voice.stream.getAudioTracks().forEach(t => { t.enabled = voice.micOn; });
+  const b = $('micBtn'); b.hidden = !voice.on; b.textContent = voice.micOn ? '🎙️' : '🔇';
+}
+function toggleMic() {
+  if (!voice.on) { toast('보이스 채팅이 꺼져 있어요', '⚙️ 설정에서 먼저 켜 주세요', 2); return; }
+  voice.micOn = !voice.micOn; store.set('snowball-mic', voice.micOn ? '1' : '0'); applyMic(); syncSettings();
+  toast(voice.micOn ? '🎙️ 마이크 켜짐' : '🔇 마이크 꺼짐', '', 1);
+}
+function createPeer(id, initiator) {
+  const pc = new RTCPeerConnection(RTC_CFG);
+  const el = document.createElement('audio'); el.autoplay = true; el.playsInline = true; el.hidden = true; document.body.appendChild(el);
+  const peer = { id, pc, el, connected: false, made: time };
+  voice.peers.set(id, peer);
+  if (voice.stream) voice.stream.getTracks().forEach(t => pc.addTrack(t, voice.stream));
+  pc.onicecandidate = e => { if (e.candidate) send({ t: 'rtc', to: id, d: { c: e.candidate.toJSON() } }); };
+  pc.ontrack = e => { el.srcObject = e.streams[0] || new MediaStream([e.track]); el.play().catch(() => {}); };
+  pc.onconnectionstatechange = () => {
+    peer.connected = pc.connectionState === 'connected';
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') closePeer(id);
+  };
+  if (initiator) pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => send({ t: 'rtc', to: id, d: { sdp: pc.localDescription.toJSON() } })).catch(() => closePeer(id));
+  return peer;
+}
+function closePeer(id) {
+  const p = voice.peers.get(id); if (!p) return;
+  voice.peers.delete(id); voice.pendingIce.delete(id);
+  try { p.pc.close(); } catch (e) {}
+  p.el.srcObject = null; p.el.remove();
+}
+async function flushIce(peer) {
+  const list = voice.pendingIce.get(peer.id) || []; voice.pendingIce.delete(peer.id);
+  for (const c of list) { try { await peer.pc.addIceCandidate(c); } catch (e) {} }
+}
+async function onRtc(from, d) {
+  if (!voice.on || !d) return;
+  let peer = voice.peers.get(from);
+  try {
+    if (d.sdp && d.sdp.type === 'offer') {
+      if (peer) closePeer(from);
+      peer = createPeer(from, false);
+      await peer.pc.setRemoteDescription(d.sdp);
+      const ans = await peer.pc.createAnswer(); await peer.pc.setLocalDescription(ans);
+      send({ t: 'rtc', to: from, d: { sdp: peer.pc.localDescription.toJSON() } });
+      await flushIce(peer);
+    } else if (d.sdp && d.sdp.type === 'answer' && peer) {
+      await peer.pc.setRemoteDescription(d.sdp); await flushIce(peer);
+    } else if (d.c) {
+      if (peer && peer.pc.remoteDescription) await peer.pc.addIceCandidate(d.c);
+      else { const l = voice.pendingIce.get(from) || []; if (l.length < 40) l.push(d.c); voice.pendingIce.set(from, l); }
+    }
+  } catch (e) { closePeer(from); }
+}
+function voiceTick(dt) {
+  if (!voice.on) { voice.connected = 0; return; }
+  // 말하는 중인지 (내 마이크 소리 크기)
+  if (voice.analyser && voice.micOn) {
+    voice.analyser.getByteTimeDomainData(voice.buf);
+    let sum = 0; for (let i = 0; i < voice.buf.length; i += 4) { const v = (voice.buf[i] - 128) / 128; sum += v * v; }
+    if (Math.sqrt(sum / (voice.buf.length / 4)) > 0.035) voice.talkT = 0.4;
+  }
+  voice.talkT -= dt; voice.talking = voice.micOn && voice.talkT > 0;
+  // 거리에 따른 볼륨
+  let n = 0;
+  for (const peer of voice.peers.values()) {
+    const r = remotes.get(peer.id);
+    const d = r ? Math.hypot(r.x - me.x, r.z - me.z) : 999;
+    peer.el.volume = voice.hearOn ? clamp(1 - (d - 8) / (VOICE_RANGE - 8), 0, 1) : 0;
+    if (peer.connected) n++;
+  }
+  voice.connected = n;
+  // 0.5초마다 연결 대상 정리: 가까운 보이스 사용자와 연결, 멀어지면 끊기
+  voice.checkT -= dt; if (voice.checkT > 0) return; voice.checkT = 0.5;
+  const cand = [...remotes.values()].filter(r => r.voice).map(r => ({ r, d: Math.hypot(r.x - me.x, r.z - me.z) })).sort((a, b) => a.d - b.d);
+  const want = new Set(cand.filter(c => c.d < VOICE_RANGE).slice(0, VOICE_MAX_PEERS).map(c => c.r.id));
+  for (const c of cand) if (want.has(c.r.id) && !voice.peers.has(c.r.id) && myId < c.r.id) createPeer(c.r.id, true);
+  for (const [id, peer] of voice.peers) {
+    const r = remotes.get(id);
+    const d = r ? Math.hypot(r.x - me.x, r.z - me.z) : 999;
+    if (!r || !r.voice || d > VOICE_DROP || (!peer.connected && time - peer.made > 15)) closePeer(id);
+  }
+}
+
+// ============================================================
+//  설정창
+// ============================================================
+function syncSettings() {
+  const v = $('optVoice'); v.checked = voice.on; v.disabled = voice.busy || !voiceSupported;
+  $('optMic').checked = voice.micOn; $('optMic').disabled = !voice.on;
+  $('optHear').checked = voice.hearOn;
+  $('optMusic').checked = musicOn; $('optSfx').checked = sfxOn;
+  $('vstat').textContent = !voiceSupported ? '이 브라우저에서는 보이스 채팅을 쓸 수 없어요.'
+    : voice.busy ? '마이크 권한을 기다리는 중이에요…'
+    : voice.on ? `지금 근처 ${voice.connected}명과 연결돼 있어요. 멀어질수록 목소리가 작아져요.`
+    : '보이스 채팅을 켜면 마이크 권한을 물어봐요. 근처 플레이어끼리만 연결돼요.';
+}
+function toggleSettings(open) {
+  const el = $('settings'), want = open === undefined ? !el.classList.contains('open') : open;
+  if (want && state !== 'play') return;
+  el.classList.toggle('open', want);
+  if (want) { syncSettings(); if (me) me.charging = false; $('setClose').focus(); }
+}
+$('gear').addEventListener('click', () => { audio(); toggleSettings(true); });
+$('setClose').addEventListener('click', () => toggleSettings(false));
+$('settings').addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); toggleSettings(false); } });
+$('optVoice').addEventListener('change', e => setVoice(e.target.checked));
+$('optMic').addEventListener('change', e => { voice.micOn = e.target.checked; store.set('snowball-mic', voice.micOn ? '1' : '0'); applyMic(); });
+$('optHear').addEventListener('change', e => { voice.hearOn = e.target.checked; store.set('snowball-hear', voice.hearOn ? '1' : '0'); });
+$('optMusic').addEventListener('change', e => { musicOn = e.target.checked; store.set('snowball-music', musicOn ? '1' : '0'); });
+$('optSfx').addEventListener('change', e => { sfxOn = e.target.checked; store.set('snowball-sfx', sfxOn ? '1' : '0'); });
+setInterval(() => { if ($('settings').classList.contains('open')) syncSettings(); }, 1000);
+
+// ============================================================
 //  입력
 // ============================================================
 const keys = {};
@@ -804,8 +1010,10 @@ addEventListener('keydown', e => {
     if (k === 'r') startReload();
     if (k === 'shift') dash();
     if (k === 'enter') { e.preventDefault(); openChat(); }
+    if (k === 'v') toggleMic();
+    if (k === 'escape') toggleSettings();
   }
-  if (k === 'm') { musicOn = !musicOn; store.set('snowball-music', musicOn ? '1' : '0'); toast(musicOn ? '♪ 음악 켜짐' : '음악 꺼짐', '', 1); }
+  if (k === 'm') { musicOn = !musicOn; store.set('snowball-music', musicOn ? '1' : '0'); toast(musicOn ? '♪ 음악 켜짐' : '음악 꺼짐', '', 1); syncSettings(); }
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (me) me.charging = false; });
@@ -865,7 +1073,7 @@ document.querySelectorAll('#tbtns button, #camBtns button').forEach(b => {
   b.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation(); audio();
     const k = b.dataset.b; held[k] = true;
-    if (k === 'reload') startReload(); if (k === 'dash') dash(); if (k === 'jump') jump(); if (k === 'chat') openChat();
+    if (k === 'reload') startReload(); if (k === 'dash') dash(); if (k === 'jump') jump(); if (k === 'chat') openChat(); if (k === 'mic') toggleMic();
   });
   const up = () => { held[b.dataset.b] = false; };
   b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
@@ -876,7 +1084,7 @@ document.querySelectorAll('#tbtns button, #camBtns button').forEach(b => {
 // ============================================================
 function startReload() {
   if (state !== 'play' || me.dead || me.reloadT > 0 || me.ammo >= me.maxAmmo) return;
-  me.reloadT = 1.0; me.charging = false; sfx.reload();
+  me.reloadT = W.RELOAD_TIME; me.charging = false; sfx.reload();
 }
 function dash() {
   if (state !== 'play' || me.dead || me.dashCD > 0) return;
@@ -966,7 +1174,7 @@ function giveBuff(kind, g) {
   sfx.gift();
   if (g) burst(g.x, heightAt(g.x, g.z) + 1, g.z, 26, info.color, 7);
   popup(p.x, p.y + 3.2, p.z, info.label, info.c);
-  if (kind === 'heal') p.hp = Math.min(p.maxHp, p.hp + 2);
+  if (kind === 'heal') p.hp = Math.min(p.maxHp, p.hp + 40);
   if (kind === 'triple') p.triple = 15;
   if (kind === 'giant') p.giant = 15;
   if (kind === 'fast') p.fast = 15;
@@ -991,10 +1199,10 @@ function toScreen(v) { tmpV.copy(v).project(camera); return { x: (tmpV.x * 0.5 +
 let hudCache = '';
 function updateHUD() {
   const p = me;
-  const h = '♥'.repeat(Math.max(0, p.hp)) + `<span class="off">${'♥'.repeat(Math.max(0, p.maxHp - p.hp))}</span>`;
-  const ammo = Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('') + (p.reloadT > 0 ? '<span>눈 뭉치는 중…</span>' : '');
+  const h = `${Math.max(0, Math.round(p.hp))} / ${p.maxHp}`;
+  const ammo = Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('') + (p.reloadT > 0 ? `<span>눈 뭉치는 중… ${p.reloadT.toFixed(1)}초</span>` : '');
   const buffs = [p.triple > 0 && `<span style="color:#7dd3ff">트리플 샷 ${p.triple.toFixed(0)}s</span>`, p.giant > 0 && `<span style="color:#d0a8ff">왕눈덩이 ${p.giant.toFixed(0)}s</span>`,
-    p.fast > 0 && `<span style="color:#8dffa8">스피드 ${p.fast.toFixed(0)}s</span>`, p.inVillage && !p.dead && `<span style="color:#ffd34d">🏠 마을 (안전지대)${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>`].filter(Boolean).join('');
+    p.fast > 0 && `<span style="color:#8dffa8">스피드 ${p.fast.toFixed(0)}s</span>`, voice.on && `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>`, p.inVillage && !p.dead && `<span style="color:#ffd34d">🏠 마을 (안전지대)${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>`].filter(Boolean).join('');
   const lib = camps.filter(c => c.liberated).length;
   let near = null, nd = 1e9; for (const c of camps) if (!c.liberated) { const d = Math.hypot(c.def.x - p.x, c.def.z - p.z); if (d < nd) { nd = d; near = c; } }
   const obj = `🎯 해방된 캠프 <b>${lib} / ${camps.length}</b>` + (near ? `<small>가장 가까운 곳: ${near.def.name} · ${Math.round(nd)}m · 남은 적 ${near.alive}</small>` : '<small>모든 캠프가 평화로워요! 곧 눈사람들이 돌아와요</small>');
@@ -1002,7 +1210,7 @@ function updateHUD() {
   const all = [{ id: myId, n: nick, score: myScore, c: colorIdx }, ...[...remotes.values()].map(r => ({ id: r.id, n: r.n, score: r.score, c: r.c }))].sort((a, b) => b.score - a.score);
   const board = `<div>🟢 ${esc(serverName)} · ${all.length}명 접속</div>` + all.slice(0, 5).map((q, i) => `<div class="${q.id === myId ? 'me' : ''}">${i + 1}. <b style="color:${q.id === myId ? 'var(--gold)' : ELF_CSS[q.c % 6]}">${esc(q.n)}</b> ${q.score.toLocaleString()}</div>`).join('');
   const key = h + ammo + buffs + obj + sc + cb + board;
-  if (key !== hudCache) { hudCache = key; $('hearts').innerHTML = h; $('ammo').innerHTML = ammo; $('buffs').innerHTML = buffs; $('objective').innerHTML = obj; $('score').textContent = sc; $('combo').textContent = cb; $('board').innerHTML = board; }
+  if (key !== hudCache) { hudCache = key; const bar = $('hpbar').firstElementChild, ratio = clamp(p.hp / p.maxHp, 0, 1); bar.style.width = (ratio * 100) + '%'; bar.className = ratio > 0.6 ? 'high' : ratio > 0.3 ? 'mid' : ''; $('hpbar').lastElementChild.textContent = h; $('ammo').innerHTML = ammo; $('buffs').innerHTML = buffs; $('objective').innerHTML = obj; $('score').textContent = sc; $('combo').textContent = cb; $('board').innerHTML = board; }
 }
 const mini = $('mini'), mctx = mini.getContext('2d'), MS = 180, WR = 125;
 const mbg = document.createElement('canvas'); mbg.width = mbg.height = MS;
@@ -1032,6 +1240,7 @@ function drawMinimap() {
     mctx.fillStyle = '#000'; mctx.fillText(c.liberated ? '✓' : (c.def.boss ? '♛' : c.alive), x, z + 3);
   }
   mctx.fillStyle = '#ffd34d'; for (const g of gifts) if (g && g.on && g.pending <= 0) { const [x, z] = toMini(g.x, g.z); mctx.fillRect(x - 1.5, z - 1.5, 3, 3); }
+  mctx.fillStyle = '#5dff9a'; for (const h of heals) if (h.on) { const [x, z] = toMini(h.x, h.z); mctx.fillRect(x - 2.5, z - 0.8, 5, 1.6); mctx.fillRect(x - 0.8, z - 2.5, 1.6, 5); }
   mctx.fillStyle = '#ff5252';
   for (const e of enemies.values()) { if (Math.hypot(e.x - me.x, e.z - me.z) > 45) continue; const [x, z] = toMini(e.x, e.z); mctx.fillRect(x - 1.5, z - 1.5, 3, 3); }
   for (const r of remotes.values()) { const [x, z] = toMini(r.x, r.z); mctx.fillStyle = ELF_CSS[r.c % 6]; mctx.beginPath(); mctx.arc(x, z, 3.5, 0, TAU); mctx.fill(); }
@@ -1051,10 +1260,10 @@ function swatchHtml() {
 function keysHtml() {
   return isTouch ? `<div class="keys"><b>왼쪽 화면</b><span>드래그해서 이동</span><b>오른쪽 화면</b><span>드래그로 조준 → 떼면 던지기</span>
     <b>톡 치기</b><span>가장 가까운 적에게 자동으로 던지기</span><b>꾹 끌기</b><span>0.5초 이상 모으면 강한 눈덩이</span>
-    <b>점프 · 대시</b><span>날아오는 눈덩이 피하기</span><b>💬</b><span>채팅</span></div>`
+    <b>점프 · 대시</b><span>날아오는 눈덩이 피하기</span><b>💬 · ⚙️</b><span>채팅 · 설정 (보이스 채팅)</span></div>`
   : `<div class="keys"><b>WASD</b><span>이동 (카메라 기준)</span><b>마우스</b><span>조준 · 적 근처를 가리키면 자동 조준</span>
     <b>좌클릭</b><span>던지기 · 꾹 누르면 강한 눈덩이</span><b>Shift / Space</b><span>대시(잠깐 무적) / 점프로 눈덩이 피하기</span>
-    <b>R</b><span>눈 뭉치기(재장전)</span><b>Enter</b><span>채팅</span>
+    <b>R</b><span>눈 뭉치기(재장전)</span><b>Enter / V</b><span>채팅 / 마이크 켜기·끄기</span><b>⚙️ 또는 Esc</b><span>설정 (보이스 채팅, 음악, 효과음)</span>
     <b>빨간 줄</b><span>적이 그 방향으로 던질 예정!</span><b>🏠 마을</b><span>안전지대 · 체력/눈덩이 회복</span></div>`;
 }
 let overlayKind = null, healthTimer = null;
@@ -1136,9 +1345,13 @@ function updateMe(dt) {
   p.inVillage = inVillage(p.x, p.z);
   if (p.inVillage) {
     p.regenT += dt;
-    if (p.regenT > 3 && p.hp < p.maxHp) { p.regenT = 0; p.hp++; popup(p.x, p.y + 3, p.z, '+♥', '#ff8fa3'); }
+    if (p.regenT > 1.5 && p.hp < p.maxHp) { p.regenT = 0; p.hp = Math.min(p.maxHp, p.hp + 10); popup(p.x, p.y + 3, p.z, '+10', '#7dffb0'); }
     if (p.ammo < p.maxAmmo && p.reloadT <= 0 && !p.charging && p.cd <= 0) p.ammo = p.maxAmmo;
   } else p.regenT = 0;
+  heals.forEach((h, i) => {
+    if (h.pending > 0) { h.pending -= dt; if (h.pending <= 0 && h.on) h.model.group.visible = true; return; }
+    if (h.on && p.hp < p.maxHp && Math.hypot(h.x - p.x, h.z - p.z) < 1.8) { h.pending = 2; h.model.group.visible = false; send({ t: 'heal', i }); }
+  });
   for (let i = 0; i < gifts.length; i++) {
     const g = gifts[i]; if (!g || !g.on || g.pending > 0) continue;
     if (Math.hypot(g.x - p.x, g.z - p.z) < 1.8) { g.pending = 2; g.model.group.visible = false; send({ t: 'gift', i }); }
@@ -1148,7 +1361,7 @@ function updateMe(dt) {
 function hurtMe(dmg) {
   const p = me;
   p.hp -= dmg; p.inv = 0.9; shake = 0.6; sfx.hurt(); p.squash = 0.5;
-  popup(p.x, p.y + 3, p.z, '아야!', '#ff6b6b');
+  popup(p.x, p.y + 3, p.z, `-${dmg}`, '#ff6b6b');
   $('hurt').style.opacity = 1; setTimeout(() => $('hurt').style.opacity = 0, 160);
   if (p.hp <= 0) { p.hp = 0; p.dead = true; p.respawnT = 5; p.charging = false; burst(p.x, p.y + 1, p.z, 40, 0xffffff, 8); }
 }
@@ -1174,7 +1387,7 @@ function updateBalls(dt) {
       if (!me.dead && Math.hypot(b.x - me.x, b.z - me.z) < 0.6 + b.r && y > me.y - 0.1 && y < me.y + 2.4) {
         killBall(b); burst(b.x, y, b.z, 18, 0xffffff, 7);
         send({ t: 'hurt', id: b.id });
-        if (me.inv <= 0) hurtMe(b.dmg || 1);
+        if (me.inv <= 0) hurtMe(b.dmg || 15);
         continue;
       }
       for (const r of remotes.values()) {
@@ -1220,10 +1433,11 @@ function step(dt) {
       if (r.bubbleT > 0) r.bubbleT -= dt;
     }
     if (myBubbleT > 0) myBubbleT -= dt;
+    voiceTick(dt);
     net.sendT -= dt;
     if (net.sendT <= 0) {
       net.sendT = 1 / 15;
-      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0);
+      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0);
       send({ t: 'p', x: r2(p.x), z: r2(p.z), y: r2(p.y), f: r2(p.face), vx: r1(p.vx), vz: r1(p.vz), fl, hp: p.hp, d: p.dead ? 1 : 0 });
     }
     $('net').style.display = net.open && performance.now() - net.lastMsg > 2500 ? 'block' : 'none';
@@ -1269,7 +1483,7 @@ function render(dt) {
     const s = toScreen(new THREE.Vector3(r.x, r.y + 3.4, r.z));
     r.tag.style.display = s.ok && state === 'play' ? '' : 'none';
     r.tag.style.left = s.x + 'px'; r.tag.style.top = s.y + 'px';
-    setTag(r.tag, r.dead ? `${r.n} 💤` : r.n, ELF_CSS[r.c % 6], r.bubbleT > 0 ? r.bubble : '');
+    setTag(r.tag, (r.flags & 16 ? '🔊 ' : r.voice ? '🎙️ ' : '') + (r.dead ? `${r.n} 💤` : r.n), ELF_CSS[r.c % 6], r.bubbleT > 0 ? r.bubble : '');
   }
   if (!myTag) { myTag = document.createElement('div'); myTag.className = 'tag'; $('labels').appendChild(myTag); }
   if (myBubbleT > 0 && state === 'play') {
@@ -1335,6 +1549,7 @@ function render(dt) {
     const ch = p.charging ? Math.min(1, p.charge / 0.5) : 0;
     aimFill.scale.setScalar(Math.max(0.01, ch * aimRing.scale.x)); aimFill.material.color.setHex(ch >= 1 ? 0xffb300 : 0x5aa0ff); aimFill.material.opacity = 0.55;
   }
+  for (const h of heals) { if (!h.model.group.visible) continue; h.t += dt; h.model.group.position.set(h.x, heightAt(h.x, h.z) + 1.0 + Math.sin(h.t * 2.2) * 0.2, h.z); h.model.inner.rotation.y = h.t; }
   for (const gf of gifts) { if (!gf || !gf.on) continue; gf.t += dt; gf.model.group.position.set(gf.x, heightAt(gf.x, gf.z) + 1.0 + Math.sin(gf.t * 2.5) * 0.25, gf.z); gf.model.inner.rotation.y = gf.t * 1.5; }
   for (const b of twinkleBulbs) b.m.material.color.copy(b.c).multiplyScalar(0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 3 + b.ph)));
   for (const gl of glows) gl.s.scale.setScalar(gl.base * (0.85 + 0.15 * Math.sin(time * 3 * gl.sp + gl.ph)));

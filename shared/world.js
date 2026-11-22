@@ -159,6 +159,23 @@
       const x = R.range(-120, 120), z = R.range(-120, 120);
       if (ok(x, z, 5)) { const r = { x, z, s: R.range(0.6, 1.6) }; data.rocks.push(r); addCollider({ t: 'c', x, z, r: r.s * 1.05, h: r.s * 1.3 }); }
     }
+    // 힐팩: 길 중간과 캠프 바깥, 숲 속 빈터에 고정 배치
+    data.heals = [];
+    const freeSpot = (x, z) => { const o = { x, z }; pushOut(o, 1.6); return o; };
+    for (const [, , bx, bz] of PATHS) {
+      const Lp = Math.hypot(bx, bz), nx = bx / Lp, nz = bz / Lp;
+      data.heals.push(freeSpot(nx * Lp * 0.55 + nz * 2.5, nz * Lp * 0.55 - nx * 2.5));
+    }
+    for (const c of CAMPS) {
+      const d = Math.hypot(c.x, c.z), nx = c.x / d, nz = c.z / d, Rr = c.boss ? 24 : 19;
+      data.heals.push(freeSpot(c.x - nx * Rr - nz * 6, c.z - nz * Rr + nx * 6));
+    }
+    for (let i = 0; i < 400 && data.heals.length < 16; i++) {
+      const x = R.range(-100, 100), z = R.range(-100, 100);
+      if (Math.hypot(x, z) < 40 || data.heals.some(h => Math.hypot(h.x - x, h.z - z) < 30)) continue;
+      if (CAMPS.some(c => Math.hypot(x - c.x, z - c.z) < 20)) continue;
+      const o = freeSpot(x, z); if (Math.hypot(o.x - x, o.z - z) < 0.01) data.heals.push(o);
+    }
     return data;
   }
   const layout = build();
@@ -166,11 +183,11 @@
   const World = {
     TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, CAMPS, LAKE, FLATS, PATHS,
     heightAt, pathDist, onIce, inVillage, pushOut, hitsCollider, colliders, layout,
-    BALL_H: 1.35, PLAYER_RANGE: 34,
+    BALL_H: 1.35, PLAYER_RANGE: 34, MAX_HP: 100, HEAL_AMOUNT: 35, RELOAD_TIME: 2.0,
     TYPES: {
-      snowman: { id: 0, hp: 3, r: 0.9, h: 2.9, speed: 4.2, cool: [1.9, 3.0], wind: 0.65, range: 13, maxRange: 24, spd: 17, err: 0.12, pts: 100, scale: 1 },
-      penguin: { id: 1, hp: 2, r: 0.7, h: 2.0, speed: 8.5, cool: [1.3, 2.1], wind: 0.5, range: 10, maxRange: 20, spd: 20, err: 0.1, pts: 150, scale: 1 },
-      boss:    { id: 2, hp: 40, r: 1.9, h: 6.3, speed: 3.0, cool: [1.6, 2.4], wind: 0.9, range: 15, maxRange: 30, spd: 15, err: 0.05, pts: 2000, scale: 2.2 },
+      snowman: { id: 0, hp: 3, r: 0.9, h: 2.9, speed: 4.2, cool: [1.9, 3.0], wind: 0.65, range: 13, maxRange: 24, spd: 17, err: 0.12, pts: 100, scale: 1, dmg: 15 },
+      penguin: { id: 1, hp: 2, r: 0.7, h: 2.0, speed: 8.5, cool: [1.3, 2.1], wind: 0.5, range: 10, maxRange: 20, spd: 20, err: 0.1, pts: 150, scale: 1, dmg: 12 },
+      boss:    { id: 2, hp: 40, r: 1.9, h: 6.3, speed: 3.0, cool: [1.6, 2.4], wind: 0.9, range: 15, maxRange: 30, spd: 15, err: 0.05, pts: 2000, scale: 2.2, dmg: 20 },
     },
     TYPE_BY_ID: ['snowman', 'penguin', 'boss'],
     GIFT_KINDS: ['heal', 'triple', 'giant', 'fast'],

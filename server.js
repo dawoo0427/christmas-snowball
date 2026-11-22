@@ -111,6 +111,8 @@ const balls = new Map();        // id -> ball
 let nextId = 1, nextEnemy = 1, nextEBall = 1, patrolT = 10;
 const camps = W.layout.camps.map(c => ({ idx: c.idx, def: c.def, R: c.R, alive: 0, liberated: false, respawnT: 0 }));
 const gifts = [];
+const heals = W.layout.heals.map(h => ({ x: h.x, z: h.z, on: true, respawn: 0 }));
+const HEAL_RESPAWN = 25;
 
 function broadcast(obj, except) { const s = JSON.stringify(obj), buf = Buffer.from(s); for (const p of players.values()) if (p !== except && p.ready) p.conn.frame(1, buf); }
 function addEnemy(type, x, z, camp) {
@@ -159,11 +161,11 @@ function onConnect(conn) {
       if (players.size >= MAX_PLAYERS) { conn.send({ t: 'full', max: MAX_PLAYERS }); return conn.close(); }
       const id = nextId++;
       p = { id, conn, n: cleanName(m.n) || '꼬마요정' + id, c: clamp(m.c | 0, 0, 5), x: rand(-3, 3), z: 12 + rand(-2, 2), y: 0, face: Math.PI, vx: 0, vz: 0,
-        flags: 0, hp: 6, dead: false, score: 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, joined: Date.now() };
+        flags: 0, hp: W.MAX_HP, dead: false, score: 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, voice: false, joined: Date.now() };
       p.y = heightAt(p.x, p.z);
       players.set(id, p);
       conn.send({ t: 'welcome', id, server: SERVER_NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c]),
-        camps: camps.map(c => [c.liberated ? 1 : 0, c.alive, Math.ceil(c.respawnT)]), g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]) });
+        camps: camps.map(c => [c.liberated ? 1 : 0, c.alive, Math.ceil(c.respawnT)]), g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)) });
       broadcast({ t: 'pj', id, n: p.n, c: p.c }, p);
       log(`입장 ${p.n}#${id} (현재 ${players.size}명)`);
       return;
@@ -185,7 +187,7 @@ function handle(p, m) {
       p.x = clamp(num(m.x, p.x), -W.LIMIT, W.LIMIT); p.z = clamp(num(m.z, p.z), -W.LIMIT, W.LIMIT);
       p.y = clamp(num(m.y, p.y), -20, 60); p.face = num(m.f, p.face);
       p.vx = clamp(num(m.vx), -40, 40); p.vz = clamp(num(m.vz), -40, 40);
-      p.flags = m.fl | 0; p.hp = clamp(m.hp | 0, 0, 6);
+      p.flags = m.fl | 0; p.hp = clamp(m.hp | 0, 0, W.MAX_HP);
       const dead = !!m.d;
       if (dead && !p.dead) { p.score = Math.max(0, p.score - 300); p.combo = 0; }
       p.dead = dead;
@@ -218,6 +220,24 @@ function handle(p, m) {
       if (!g || !g.on || p.dead || Math.hypot(g.x - p.x, g.z - p.z) > 3.5) return;
       g.on = false; g.respawn = 40; p.score += 50;
       broadcast({ t: 'gift', i, by: p.id, k: W.GIFT_KINDS[g.ti] });
+      break;
+    }
+    case 'heal': {               // 힐팩 줍기
+      const i = m.i | 0, h = heals[i];
+      if (!h || !h.on || p.dead || Math.hypot(h.x - p.x, h.z - p.z) > 3.5) return;
+      h.on = false; h.respawn = HEAL_RESPAWN;
+      broadcast({ t: 'hoff', i, by: p.id });
+      break;
+    }
+    case 'voice': {              // 보이스 채팅 참여/해제
+      p.voice = !!m.on;
+      break;
+    }
+    case 'rtc': {                // WebRTC 연결 신호 전달 (서버는 내용을 보지 않고 상대에게만 넘긴다)
+      const to = players.get(m.to | 0);
+      if (!to || to === p || !p.voice || !to.voice || !m.d || typeof m.d !== 'object') return;
+      if (JSON.stringify(m.d).length > 20000) return;
+      to.conn.send({ t: 'rtc', from: p.id, d: m.d });
       break;
     }
     case 'chat': {
@@ -288,9 +308,9 @@ function enemyThrow(e, target) {
   const r = e.type === 'boss' ? 0.45 : 0.3, h = e.type === 'boss' ? 2.2 : W.BALL_H;
   for (const s of angs) {
     const dx = Math.sin(s.a), dz = Math.cos(s.a);
-    const b = { id: 'e' + (nextEBall++), owner: 'e', x: e.x + dx * (T.r + 0.3), z: e.z + dz * (T.r + 0.3), h, dx, dz, spd: s.spd, r, dmg: 1, dist: 0, max: 34, fall: 0 };
+    const b = { id: 'e' + (nextEBall++), owner: 'e', x: e.x + dx * (T.r + 0.3), z: e.z + dz * (T.r + 0.3), h, dx, dz, spd: s.spd, r, dmg: T.dmg, dist: 0, max: 34, fall: 0 };
     balls.set(b.id, b);
-    broadcast({ t: 'b', id: b.id, o: 'e', x: r1(b.x), z: r1(b.z), h: r1(h), dx: r2(dx), dz: r2(dz), s: r1(b.spd), r: r2(r) });
+    broadcast({ t: 'b', id: b.id, o: 'e', x: r1(b.x), z: r1(b.z), h: r1(h), dx: r2(dx), dz: r2(dz), s: r1(b.spd), r: r2(r), dm: T.dmg });
   }
 }
 function endBall(b, silent) {
@@ -366,6 +386,7 @@ function step(dt) {
   }
   // 선물, 캠프 재점령
   gifts.forEach((g, i) => { if (!g.on) { g.respawn -= dt; if (g.respawn <= 0) placeGift(i); } });
+  heals.forEach((h, i) => { if (!h.on) { h.respawn -= dt; if (h.respawn <= 0) { h.on = true; broadcast({ t: 'hon', i }); } } });
   for (const c of camps) if (c.liberated) {
     c.respawnT -= dt;
     if (c.respawnT <= 0) {
@@ -377,15 +398,16 @@ function step(dt) {
 }
 let tick = 0;
 function snapshot() {
-  const ps = [...players.values()].map(p => [p.id, r1(p.x), r1(p.z), r1(p.y), r2(p.face), r1(p.vx), r1(p.vz), p.flags, p.hp, p.dead ? 1 : 0, p.score]);
+  const ps = [...players.values()].map(p => [p.id, r1(p.x), r1(p.z), r1(p.y), r2(p.face), r1(p.vx), r1(p.vz), p.flags, p.hp, p.dead ? 1 : 0, p.score, p.voice ? 1 : 0]);
   const cs = camps.map(c => [c.liberated ? 1 : 0, c.alive, Math.ceil(Math.max(0, c.respawnT))]);
   const gs = gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]);
+  const hs = heals.map(h => (h.on ? 1 : 0));
   const es = [...enemies.values()];
   for (const p of players.values()) {
     if (!p.ready || p.conn.congested) continue;
     const near = es.filter(e => Math.abs(e.x - p.x) < 110 && Math.abs(e.z - p.z) < 110)
       .map(e => [e.id, e.T.id, r1(e.x), r1(e.z), r2(e.face), e.hp, e.max, e.wind > 0 ? 1 : 0, e.flash > 0 ? 1 : 0, e.moving]);
-    p.conn.send({ t: 's', p: ps, e: near, c: cs, g: tick % 10 === 0 ? gs : undefined, cb: p.combo });
+    p.conn.send({ t: 's', p: ps, e: near, c: cs, g: tick % 10 === 0 ? gs : undefined, h: tick % 10 === 0 ? hs : undefined, cb: p.combo });
   }
 }
 let last = Date.now();
