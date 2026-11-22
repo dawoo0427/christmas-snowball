@@ -44,6 +44,15 @@
   #settings input[type=checkbox]:disabled { opacity:.4; }
   #settings input:focus-visible { outline:3px solid var(--gold); outline-offset:2px; }
   #settings .vstat { font-size:13px; color:var(--muted); margin:10px 0 0; line-height:1.5; }
+  #settings .safe { font-size:12px; color:#ffd9a0; background:#ffb3001a; border-radius:10px; padding:8px 10px; margin:10px 0 0; line-height:1.55; }
+  #settings h4 { font-family:var(--display); font-weight:400; font-size:18px; margin:16px 0 6px; }
+  #plistSet { display:flex; flex-direction:column; gap:6px; max-height:200px; overflow:auto; }
+  #plistSet .prow { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; background:#ffffff0d; }
+  #plistSet .prow b { flex:1; min-width:0; font-family:var(--display); font-weight:400; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #plistSet .prow small { color:var(--muted); font-size:11px; }
+  #plistSet button { flex:none; font-size:13px; padding:5px 10px; border-radius:10px; border:1px solid #ffffff40; background:#ffffff12; color:#fff; cursor:pointer; white-space:nowrap; }
+  #plistSet button.on { background:#e53935; border-color:#e53935; }
+  #plistSet .empty { color:var(--muted); font-size:13px; }
   #settings .close { margin-top:14px; width:100%; font-family:var(--display); font-size:18px; padding:10px; border:none; border-radius:14px; background:var(--red); color:#fff; cursor:pointer; }
   #ammo { margin-top:6px; display:flex; gap:5px; align-items:center; flex-wrap:wrap; max-width:220px; }
   #ammo i { width:13px; height:13px; border-radius:50%; background:#fff; box-shadow:0 0 4px #9cf; display:inline-block; }
@@ -180,6 +189,9 @@
   <label class="opt" for="optMusic"><span>배경음악<small>단축키 M</small></span><input type="checkbox" id="optMusic"></label>
   <label class="opt" for="optSfx"><span>효과음</span><input type="checkbox" id="optSfx" checked></label>
   <p class="vstat" id="vstat"></p>
+  <p class="safe">🎧 이어폰을 쓰면 울림(에코)이 줄어요.<br>⚠️ 모르는 사람에게 이름, 학교, 연락처 같은 개인정보를 말하지 마세요. 불편한 사람은 아래에서 음소거하거나 차단할 수 있어요.</p>
+  <h4>접속 중인 플레이어</h4>
+  <div id="plistSet"></div>
   <button class="close" id="setClose">닫기</button>
 </div>
 <form id="chatbox" autocomplete="off"><input id="chatIn" maxlength="60" placeholder="메시지 입력 후 Enter" aria-label="채팅 메시지"><button type="submit">보내기</button></form>
@@ -775,6 +787,7 @@ function onMsg(m) {
     case 'hon': { const h = heals[m.i]; if (h) { h.pending = 0; setHeal(m.i, true); } break; }
     case 'rtc': onRtc(m.from, m.d); break;
     case 'chat': {
+      if (voice.blocked.has(m.id)) break;
       const nm = names.get(m.id) || { n: '?', c: 0 };
       feed(`<b style="color:${ELF_CSS[nm.c % 6]}">${esc(nm.n)}</b> ${esc(m.s)}`);
       const r = remotes.get(m.id); if (r) { r.bubble = m.s; r.bubbleT = 5; }
@@ -855,7 +868,7 @@ function killEnemy(e) {
 const VOICE_RANGE = 40, VOICE_DROP = 55, VOICE_MAX_PEERS = 8;
 const RTC_CFG = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
 const voice = { on: false, micOn: store.get('snowball-mic', '1') === '1', hearOn: store.get('snowball-hear', '1') === '1', stream: null,
-  peers: new Map(), pendingIce: new Map(), analyser: null, buf: null, talking: false, talkT: 0, checkT: 0, connected: 0, busy: false };
+  peers: new Map(), pendingIce: new Map(), muted: new Set(), blocked: new Set(), analyser: null, buf: null, talking: false, talkT: 0, checkT: 0, connected: 0, busy: false };
 const voiceSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection);
 async function setVoice(on) {
   if (on === voice.on || voice.busy) return;
@@ -873,7 +886,7 @@ async function setVoice(on) {
     try { const src = ac.createMediaStreamSource(voice.stream); voice.analyser = ac.createAnalyser(); voice.analyser.fftSize = 512; voice.buf = new Uint8Array(voice.analyser.fftSize); src.connect(voice.analyser); } catch (e) { voice.analyser = null; }
     applyMic();
     send({ t: 'voice', on: 1 });
-    toast('🎙️ 보이스 채팅 켜짐', '근처에 있는 친구들과 대화할 수 있어요 · V로 마이크 끄기', 2.5);
+    toast('🎙️ 보이스 채팅 켜짐', '근처 친구들과 대화해요 · 이어폰 권장 · V로 마이크 끄기', 3);
   } else {
     voice.on = false;
     send({ t: 'voice', on: 0 });
@@ -920,7 +933,7 @@ async function flushIce(peer) {
   for (const c of list) { try { await peer.pc.addIceCandidate(c); } catch (e) {} }
 }
 async function onRtc(from, d) {
-  if (!voice.on || !d) return;
+  if (!voice.on || !d || voice.blocked.has(from)) return;
   let peer = voice.peers.get(from);
   try {
     if (d.sdp && d.sdp.type === 'offer') {
@@ -952,19 +965,19 @@ function voiceTick(dt) {
   for (const peer of voice.peers.values()) {
     const r = remotes.get(peer.id);
     const d = r ? Math.hypot(r.x - me.x, r.z - me.z) : 999;
-    peer.el.volume = voice.hearOn ? clamp(1 - (d - 8) / (VOICE_RANGE - 8), 0, 1) : 0;
+    peer.el.volume = voice.hearOn && !voice.muted.has(peer.id) && !voice.blocked.has(peer.id) ? clamp(1 - (d - 8) / (VOICE_RANGE - 8), 0, 1) : 0;
     if (peer.connected) n++;
   }
   voice.connected = n;
   // 0.5초마다 연결 대상 정리: 가까운 보이스 사용자와 연결, 멀어지면 끊기
   voice.checkT -= dt; if (voice.checkT > 0) return; voice.checkT = 0.5;
-  const cand = [...remotes.values()].filter(r => r.voice).map(r => ({ r, d: Math.hypot(r.x - me.x, r.z - me.z) })).sort((a, b) => a.d - b.d);
+  const cand = [...remotes.values()].filter(r => r.voice && !voice.blocked.has(r.id)).map(r => ({ r, d: Math.hypot(r.x - me.x, r.z - me.z) })).sort((a, b) => a.d - b.d);
   const want = new Set(cand.filter(c => c.d < VOICE_RANGE).slice(0, VOICE_MAX_PEERS).map(c => c.r.id));
   for (const c of cand) if (want.has(c.r.id) && !voice.peers.has(c.r.id) && myId < c.r.id) createPeer(c.r.id, true);
   for (const [id, peer] of voice.peers) {
     const r = remotes.get(id);
     const d = r ? Math.hypot(r.x - me.x, r.z - me.z) : 999;
-    if (!r || !r.voice || d > VOICE_DROP || (!peer.connected && time - peer.made > 15)) closePeer(id);
+    if (!r || !r.voice || voice.blocked.has(id) || d > VOICE_DROP || (!peer.connected && time - peer.made > 15)) closePeer(id);
   }
 }
 
@@ -980,7 +993,31 @@ function syncSettings() {
     : voice.busy ? '마이크 권한을 기다리는 중이에요…'
     : voice.on ? `지금 근처 ${voice.connected}명과 연결돼 있어요. 멀어질수록 목소리가 작아져요.`
     : '보이스 채팅을 켜면 마이크 권한을 물어봐요. 근처 플레이어끼리만 연결돼요.';
+  renderPlayerList();
 }
+let plistKey = '';
+function renderPlayerList() {
+  const list = [...remotes.values()].sort((a, b) => a.n.localeCompare(b.n));
+  const key = list.map(r => `${r.id}:${r.n}:${r.voice ? 1 : 0}:${voice.muted.has(r.id) ? 1 : 0}:${voice.blocked.has(r.id) ? 1 : 0}`).join('|');
+  if (key === plistKey) return; plistKey = key;
+  $('plistSet').innerHTML = list.length ? list.map(r => {
+    const muted = voice.muted.has(r.id), blocked = voice.blocked.has(r.id);
+    const d = Math.round(Math.hypot(r.x - me.x, r.z - me.z));
+    return `<div class="prow"><b style="color:${ELF_CSS[r.c % 6]}">${esc(r.n)}</b><small>${r.voice ? '🎙️ ' : ''}${d}m</small>
+      <button data-act="mute" data-id="${r.id}" class="${muted ? 'on' : ''}" aria-pressed="${muted}">${muted ? '🔇 음소거됨' : '음소거'}</button>
+      <button data-act="block" data-id="${r.id}" class="${blocked ? 'on' : ''}" aria-pressed="${blocked}">${blocked ? '🚫 차단됨' : '차단'}</button></div>`;
+  }).join('') : '<p class="empty">지금은 나 혼자 있어요.</p>';
+}
+$('plistSet').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const id = +b.dataset.id, r = remotes.get(id), set = b.dataset.act === 'mute' ? voice.muted : voice.blocked;
+  if (set.has(id)) set.delete(id); else set.add(id);
+  if (b.dataset.act === 'block' && voice.blocked.has(id)) closePeer(id);
+  const name = r ? r.n : '플레이어';
+  if (b.dataset.act === 'mute') toast(voice.muted.has(id) ? `🔇 ${esc(name)} 음소거` : `${esc(name)} 음소거 해제`, '', 1.5);
+  else toast(voice.blocked.has(id) ? `🚫 ${esc(name)} 차단` : `${esc(name)} 차단 해제`, voice.blocked.has(id) ? '목소리와 채팅이 보이지 않아요' : '', 2);
+  plistKey = ''; renderPlayerList();
+});
 function toggleSettings(open) {
   const el = $('settings'), want = open === undefined ? !el.classList.contains('open') : open;
   if (want && state !== 'play') return;
@@ -1490,7 +1527,7 @@ function render(dt) {
     const s = toScreen(new THREE.Vector3(r.x, r.y + 3.4, r.z));
     r.tag.style.display = s.ok && state === 'play' ? '' : 'none';
     r.tag.style.left = s.x + 'px'; r.tag.style.top = s.y + 'px';
-    setTag(r.tag, (r.flags & 16 ? '🔊 ' : r.voice ? '🎙️ ' : '') + (r.dead ? `${r.n} 💤` : r.n), ELF_CSS[r.c % 6], r.bubbleT > 0 ? r.bubble : '');
+    setTag(r.tag, (voice.blocked.has(r.id) ? '🚫 ' : voice.muted.has(r.id) && r.voice ? '🔇 ' : r.flags & 16 ? '🔊 ' : r.voice ? '🎙️ ' : '') + (r.dead ? `${r.n} 💤` : r.n), ELF_CSS[r.c % 6], r.bubbleT > 0 ? r.bubble : '');
   }
   if (!myTag) { myTag = document.createElement('div'); myTag.className = 'tag'; $('labels').appendChild(myTag); }
   if (myBubbleT > 0 && state === 'play') {
