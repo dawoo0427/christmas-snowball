@@ -1,0 +1,1234 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>크리스마스 눈싸움 3D</title>
+<style>
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; overflow:hidden; background:#0d1630; color:#f4f7ff;
+    font-family:"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; touch-action:none; user-select:none; -webkit-user-select:none; }
+  canvas#game { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
+  .panel { position:fixed; pointer-events:none; text-shadow:0 2px 4px #0009; }
+  #stats { left:16px; top:14px; }
+  #hearts { font-size:26px; letter-spacing:2px; color:#ff4d6d; }
+  #hearts .off { opacity:.25; color:#fff; }
+  #ammo { margin-top:4px; display:flex; gap:5px; align-items:center; }
+  #ammo i { width:13px; height:13px; border-radius:50%; background:#fff; box-shadow:0 0 4px #9cf; display:inline-block; }
+  #ammo i.off { background:#ffffff30; box-shadow:none; }
+  #ammo span { font-size:13px; margin-left:6px; color:#cfe0ff; }
+  #buffs { margin-top:6px; font-size:14px; font-weight:bold; display:flex; flex-direction:column; gap:2px; }
+  #objective { left:50%; top:12px; transform:translateX(-50%); text-align:center; background:#0b1430b0; padding:8px 18px; border-radius:12px; border:1px solid #ffffff25; }
+  #objective b { color:#ffd34d; }
+  #objective small { display:block; color:#cfe0ff; font-size:12px; margin-top:2px; }
+  #scorebox { right:16px; top:204px; text-align:right; }
+  #score { font-size:26px; font-weight:bold; }
+  #combo { color:#7dffb0; font-weight:bold; font-size:18px; min-height:22px; }
+  #mini { position:fixed; right:14px; top:12px; width:180px; height:180px; border-radius:12px; border:2px solid #ffffff50; background:#0b1430; pointer-events:none; }
+  #toast { left:50%; top:28%; transform:translateX(-50%); text-align:center; font-size:38px; font-weight:900; color:#ffd34d; opacity:0; transition:opacity .3s; white-space:nowrap; }
+  #toast small { display:block; font-size:18px; color:#fff; font-weight:bold; margin-top:4px; }
+  #help { left:16px; bottom:12px; font-size:12px; color:#cfe0ffcc; line-height:1.6; }
+  #hurt { position:fixed; inset:0; pointer-events:none; box-shadow: inset 0 0 160px #ff2040; opacity:0; transition:opacity .15s; }
+  #labels { position:fixed; inset:0; pointer-events:none; overflow:hidden; }
+  .hp { position:absolute; width:46px; height:6px; margin-left:-23px; background:#0009; border-radius:3px; overflow:hidden; }
+  .hp i { display:block; height:100%; background:linear-gradient(90deg,#ff5252,#ff8a65); }
+  .hp.boss { width:110px; margin-left:-55px; height:9px; }
+  .pop { position:absolute; transform:translate(-50%,-50%); font-weight:900; font-size:20px; text-shadow:0 2px 3px #000a; white-space:nowrap; }
+  #overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#050a1ccc; z-index:5; text-align:center; padding:16px; overflow:auto; }
+  #overlay.hidden { display:none; }
+  #overlay h1 { font-size:clamp(28px,6vw,54px); margin:0 0 6px; }
+  #overlay h2 { color:#ffd34d; font-size:clamp(15px,2.4vw,21px); margin:0 0 20px; line-height:1.5; }
+  #overlay .keys { display:grid; grid-template-columns:auto auto; gap:6px 18px; text-align:left; margin:0 auto 22px; width:max-content; max-width:100%; font-size:15px; color:#e6eeff; }
+  #overlay .keys b { color:#7dd3ff; }
+  #overlay button { font-size:20px; font-weight:bold; padding:12px 34px; border-radius:30px; border:none; background:#e53935; color:#fff; cursor:pointer; box-shadow:0 4px 0 #8e1c1a; }
+  #overlay button:active { transform:translateY(3px); box-shadow:0 1px 0 #8e1c1a; }
+  #overlay .stat { font-size:20px; margin:6px 0; }
+  #touch { display:none; }
+  @media (pointer:coarse) {
+    #help { display:none; }
+    #touch { display:block; }
+    #stick { position:fixed; left:24px; bottom:24px; width:130px; height:130px; border-radius:50%; background:#ffffff18; border:2px solid #ffffff40; }
+    #knob { position:absolute; left:40px; top:40px; width:50px; height:50px; border-radius:50%; background:#ffffff60; }
+    #tbtns { position:fixed; right:18px; bottom:24px; display:flex; gap:10px; }
+    #tbtns button { width:60px; height:60px; border-radius:50%; border:2px solid #ffffff70; background:#ffffff22; color:#fff; font-weight:bold; font-size:15px; }
+    #mini { width:120px; height:120px; }
+    #scorebox { top:140px; }
+    #overlay .keys { font-size:13px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="labels"></div>
+<div id="hurt"></div>
+<div class="panel" id="stats"><div id="hearts"></div><div id="ammo"></div><div id="buffs"></div></div>
+<div class="panel" id="objective"></div>
+<canvas id="mini" width="180" height="180"></canvas>
+<div class="panel" id="scorebox"><div id="score">0</div><div id="combo"></div></div>
+<div class="panel" id="toast"></div>
+<div class="panel" id="help">
+  WASD 이동 · Shift 대시 · Space 점프 · 마우스 조준<br>
+  좌클릭 던지기(꾹 누르면 강한 눈덩이) · R 재장전<br>
+  Q/E 또는 우클릭 드래그 카메라 회전 · 휠 줌 · M 음악 · P 일시정지
+</div>
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <div id="tbtns"><button data-b="reload">R</button><button data-b="dash">대시</button><button data-b="jump">점프</button></div>
+</div>
+<div id="overlay"></div>
+
+<script src="lib/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+// ============================================================
+//  기본 유틸
+// ============================================================
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const smooth = t => t * t * (3 - 2 * t);
+const angDiff = (a, b) => ((b - a + Math.PI) % TAU + TAU) % TAU - Math.PI;
+const angLerp = (a, b, t) => a + angDiff(a, b) * t;
+let seed = 20261225;
+function srand() { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
+const sr = (a, b) => a + srand() * (b - a);
+const $ = id => document.getElementById(id);
+
+// ============================================================
+//  월드 정의
+// ============================================================
+const G = 26;               // 중력
+const LIMIT = 112;          // 플레이 가능 범위
+const VILLAGE = { x: 0, z: 0, safe: 28 };
+const CAMPS = [
+  { x: 55,  z: -40, name: '얼음 언덕 캠프',    snow: 2, peng: 0 },
+  { x: -62, z: -42, name: '소나무 숲 캠프',    snow: 3, peng: 1 },
+  { x: -66, z: 52,  name: '꽁꽁 호수 캠프',    snow: 3, peng: 2 },
+  { x: 62,  z: 58,  name: '눈보라 골짜기 캠프', snow: 4, peng: 3 },
+  { x: 0,   z: -92, name: '눈사람 왕의 요새',  snow: 3, peng: 2, boss: true },
+];
+const LAKE = { x: -24, z: 70, r: 15 };
+
+function baseH(x, z) {
+  return 2.2 * Math.sin(x * 0.045) * Math.cos(z * 0.04) + 0.9 * Math.sin(x * 0.12 + z * 0.08)
+       + 1.1 * Math.cos(z * 0.1 - x * 0.035) + 0.45 * Math.sin(x * 0.3) * Math.sin(z * 0.27);
+}
+const FLATS = [
+  { x: 0, z: 0, inner: 32, outer: 44 },
+  ...CAMPS.map(c => ({ x: c.x, z: c.z, inner: c.boss ? 19 : 14, outer: c.boss ? 30 : 23 })),
+  { x: LAKE.x, z: LAKE.z, inner: LAKE.r + 1, outer: LAKE.r + 10, lower: -1.4 },
+];
+FLATS.forEach(f => f.h = baseH(f.x, f.z) + (f.lower || 0));
+function heightAt(x, z) {
+  let h = baseH(x, z);
+  for (const f of FLATS) {
+    const d = Math.hypot(x - f.x, z - f.z);
+    if (d < f.outer) { const t = smooth(clamp((d - f.inner) / (f.outer - f.inner), 0, 1)); h = f.h + (h - f.h) * t; }
+  }
+  const e = Math.max(Math.abs(x), Math.abs(z));
+  if (e > 108) { const k = e - 108; h += k * k * 0.06 + k * 0.35; }
+  return h;
+}
+const PATHS = CAMPS.map(c => [0, 0, c.x, c.z]);
+function pathDist(x, z) {
+  let best = 1e9;
+  for (const [ax, az, bx, bz] of PATHS) {
+    const dx = bx - ax, dz = bz - az, t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1);
+    best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
+  }
+  return best;
+}
+const onIce = (x, z) => Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r;
+
+// ============================================================
+//  충돌체 (공간 격자). 박스 rot = 메쉬 rotation.y 와 동일
+// ============================================================
+const CELL = 10, grid = new Map();
+function addCollider(c) {
+  c.base = heightAt(c.x, c.z) - 0.5;
+  const r = c.t === 'c' ? c.r : Math.hypot(c.hw, c.hd);
+  for (let ix = Math.floor((c.x - r - 2) / CELL); ix <= Math.floor((c.x + r + 2) / CELL); ix++)
+    for (let iz = Math.floor((c.z - r - 2) / CELL); iz <= Math.floor((c.z + r + 2) / CELL); iz++) {
+      const k = ix + ',' + iz; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(c);
+    }
+}
+const nearby = (x, z) => grid.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL)) || [];
+function pushOut(o, r) {
+  for (const c of nearby(o.x, o.z)) {
+    if (c.t === 'c') {
+      const dx = o.x - c.x, dz = o.z - c.z, d = Math.hypot(dx, dz), m = r + c.r;
+      if (d < m && d > 1e-5) { o.x = c.x + dx / d * m; o.z = c.z + dz / d * m; }
+    } else {
+      const cs = Math.cos(c.rot), sn = Math.sin(c.rot), dx = o.x - c.x, dz = o.z - c.z;
+      let lx = cs * dx - sn * dz, lz = sn * dx + cs * dz;
+      const qx = clamp(lx, -c.hw, c.hw), qz = clamp(lz, -c.hd, c.hd);
+      const ex = lx - qx, ez = lz - qz, d = Math.hypot(ex, ez);
+      if (d < r) {
+        if (d > 1e-5) { lx = qx + ex / d * r; lz = qz + ez / d * r; }
+        else { const px = c.hw - Math.abs(lx), pz = c.hd - Math.abs(lz); if (px < pz) lx = Math.sign(lx || 1) * (c.hw + r); else lz = Math.sign(lz || 1) * (c.hd + r); }
+        o.x = c.x + cs * lx + sn * lz; o.z = c.z - sn * lx + cs * lz;
+      }
+    }
+  }
+}
+function ballHitsCollider(b) {
+  for (const c of nearby(b.p.x, b.p.z)) {
+    if (b.p.y > c.base + c.h + b.r) continue;
+    if (c.t === 'c') { if (Math.hypot(b.p.x - c.x, b.p.z - c.z) < c.r + b.r) return true; }
+    else {
+      const cs = Math.cos(c.rot), sn = Math.sin(c.rot), dx = b.p.x - c.x, dz = b.p.z - c.z;
+      if (Math.abs(cs * dx - sn * dz) < c.hw + b.r && Math.abs(sn * dx + cs * dz) < c.hd + b.r) return true;
+    }
+  }
+  return false;
+}
+
+// ============================================================
+//  렌더러 / 씬
+// ============================================================
+const canvas = $('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+const scene = new THREE.Scene();
+const FOG = 0x101b3a;
+scene.background = new THREE.Color(FOG);
+scene.fog = new THREE.Fog(FOG, 45, 125);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 400);
+
+scene.add(new THREE.HemisphereLight(0x8aa4e8, 0x1c2240, 0.5));
+const moon = new THREE.DirectionalLight(0xc4d4ff, 0.75);
+moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048);
+Object.assign(moon.shadow.camera, { left: -38, right: 38, top: 38, bottom: -38, near: 1, far: 140 });
+moon.shadow.bias = -0.0008;
+scene.add(moon, moon.target);
+
+const matCache = new Map();
+function mat(color, o = {}) {
+  const key = color + JSON.stringify(o);
+  if (!matCache.has(key)) {
+    matCache.set(key, o.basic ? new THREE.MeshBasicMaterial({ color })
+      : new THREE.MeshStandardMaterial({ color, roughness: o.rough ?? 0.85, metalness: o.metal ?? 0, flatShading: o.flat ?? true,
+        emissive: o.em ?? 0x000000, emissiveIntensity: o.emI ?? 1 }));
+  }
+  return matCache.get(key);
+}
+function mk(geo, material, x = 0, y = 0, z = 0, parent, shadow = true) {
+  const m = new THREE.Mesh(geo, material); m.position.set(x, y, z);
+  m.castShadow = shadow; m.receiveShadow = true;
+  if (parent) parent.add(m);
+  return m;
+}
+const Sph = (r, w = 12, h = 9) => new THREE.SphereGeometry(r, w, h);
+const Cyl = (rt, rb, h, s = 10) => new THREE.CylinderGeometry(rt, rb, h, s);
+const Cone = (r, h, s = 8) => new THREE.ConeGeometry(r, h, s);
+const Box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+
+function radialTex(inner, mid) {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, inner); g.addColorStop(0.35, mid); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+}
+const glowTex = radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0.3)');
+const dotTex = radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0.9)');
+const glows = [];
+function glow(color, size, x, y, z, parent, twinkle = 0) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.55 }));
+  s.scale.set(size, size, 1); s.position.set(x, y, z); (parent || scene).add(s);
+  if (twinkle) glows.push({ s, base: size, ph: Math.random() * TAU, sp: twinkle });
+  return s;
+}
+
+// ============================================================
+//  지형
+// ============================================================
+function buildTerrain() {
+  const geo = new THREE.PlaneGeometry(300, 300, 150, 150); geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position, n = pos.count;
+  for (let i = 0; i < n; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
+  geo.computeVertexNormals();
+  const nor = geo.attributes.normal, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), z = pos.getZ(i), ny = nor.getY(i);
+    let c = [0.8, 0.86, 0.98];
+    const v = Math.sin(x * 1.7 + z * 2.3) * Math.cos(x * 2.9 - z * 1.1) * 0.025; c = c.map(k => k + v);
+    const pd = pathDist(x, z);
+    if (pd < 3.5) { const t = 1 - pd / 3.5; c = c.map((k, j) => lerp(k, [0.6, 0.64, 0.78][j], t * 0.85)); }
+    if (ny < 0.8) { const t = clamp((0.8 - ny) * 3, 0, 1); c = c.map((k, j) => lerp(k, [0.55, 0.6, 0.72][j], t)); }
+    col.set(c, i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
+  m.receiveShadow = true; scene.add(m);
+  // 얼음 호수
+  const ice = new THREE.Mesh(new THREE.CircleGeometry(LAKE.r + 0.8, 40), new THREE.MeshStandardMaterial({ color: 0x8fc8ee, roughness: 0.12, metalness: 0.35 }));
+  ice.rotation.x = -Math.PI / 2; ice.position.set(LAKE.x, FLATS[FLATS.length - 1].h + 0.06, LAKE.z); ice.receiveShadow = true; scene.add(ice);
+  for (let i = 0; i < 10; i++) {
+    const crack = mk(Box(sr(3, 7), 0.02, 0.08), mat(0xdff3ff, { basic: true }), LAKE.x + sr(-9, 9), ice.position.y + 0.02, LAKE.z + sr(-9, 9), scene, false);
+    crack.rotation.y = sr(0, TAU);
+  }
+}
+
+// ============================================================
+//  나무 / 바위 (인스턴싱)
+// ============================================================
+const trees = [];
+function buildForest() {
+  const spots = [];
+  const ok = (x, z, minD) => {
+    for (const f of FLATS) if (Math.hypot(x - f.x, z - f.z) < f.outer - 3) return false;
+    if (pathDist(x, z) < 5) return false;
+    for (const s of spots) if (Math.abs(s.x - x) < minD && Math.abs(s.z - z) < minD && Math.hypot(s.x - x, s.z - z) < minD) return false;
+    return true;
+  };
+  for (let i = 0; i < 2600 && spots.length < 460; i++) {
+    const x = sr(-140, 140), z = sr(-140, 140);
+    if (ok(x, z, 3.6)) spots.push({ x, z, s: sr(0.75, 1.55), r: sr(0, TAU), heavy: srand() < 0.3 });
+  }
+  const tier = (r, h, base) => { const g = Cone(r, h, 7); g.translate(0, base + h / 2, 0); return g; };
+  const trunkG = Cyl(0.3, 0.38, 1.4, 6); trunkG.translate(0, 0.7, 0);
+  const parts = [
+    { g: trunkG, m: mat(0x5a3a22) },
+    { g: tier(2.3, 2.4, 1.1), m: mat(0xffffff), tint: true },
+    { g: tier(1.8, 2.1, 2.3), m: mat(0xffffff), tint: true },
+    { g: tier(1.25, 1.8, 3.4), m: mat(0xffffff), tint: true },
+    { g: tier(0.58, 0.83, 4.38), m: mat(0xf4f8ff) },
+  ];
+  const meshes = parts.map(p => { const im = new THREE.InstancedMesh(p.g, p.m, spots.length); im.castShadow = true; im.receiveShadow = true; scene.add(im); return im; });
+  const M = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
+  spots.forEach((s, i) => {
+    const y = heightAt(s.x, s.z) - 0.25;
+    q.setFromAxisAngle(up, s.r);
+    M.compose(new THREE.Vector3(s.x, y, s.z), q, new THREE.Vector3(s.s, s.s, s.s));
+    meshes.forEach((im, k) => {
+      im.setMatrixAt(i, M);
+      if (parts[k].tint) {
+        if (s.heavy) col.setRGB(0.5 + k * 0.06, 0.68, 0.7); else col.setRGB(0.08 + srand() * 0.05, 0.3 + srand() * 0.08 + k * 0.02, 0.18 + srand() * 0.05);
+        im.setColorAt(i, col);
+      }
+    });
+    addCollider({ t: 'c', x: s.x, z: s.z, r: 0.55 * s.s + 0.3, h: 5.2 * s.s });
+    trees.push(s);
+  });
+  // 바위
+  const rocks = []; for (let i = 0; i < 400 && rocks.length < 70; i++) { const x = sr(-120, 120), z = sr(-120, 120); if (ok(x, z, 5)) rocks.push({ x, z, s: sr(0.6, 1.6) }); }
+  const rim = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), mat(0x8890a8), rocks.length);
+  const cap = new THREE.InstancedMesh(new THREE.SphereGeometry(0.85, 7, 4, 0, TAU, 0, Math.PI / 2.4), mat(0xf4f8ff), rocks.length);
+  rim.castShadow = cap.castShadow = true; rim.receiveShadow = cap.receiveShadow = true;
+  rocks.forEach((r, i) => {
+    const y = heightAt(r.x, r.z);
+    q.setFromEuler(new THREE.Euler(sr(0, 1), sr(0, TAU), 0));
+    M.compose(new THREE.Vector3(r.x, y + 0.2 * r.s, r.z), q, new THREE.Vector3(r.s * 1.2, r.s * 0.8, r.s)); rim.setMatrixAt(i, M);
+    M.compose(new THREE.Vector3(r.x, y + 0.55 * r.s, r.z), new THREE.Quaternion(), new THREE.Vector3(r.s * 1.15, r.s * 0.8, r.s)); cap.setMatrixAt(i, M);
+    addCollider({ t: 'c', x: r.x, z: r.z, r: r.s * 1.05, h: r.s * 1.3 });
+  });
+  scene.add(rim, cap);
+}
+
+// ============================================================
+//  마을
+// ============================================================
+const twinkleBulbs = [];
+let starMesh;
+function buildHouse(x, z, rot, wallCol) {
+  const g = new THREE.Group(); g.position.set(x, heightAt(x, z) - 0.3, z); g.rotation.y = rot; scene.add(g);
+  mk(Box(7, 4.3, 6), mat(wallCol), 0, 2.15, 0, g);
+  const roof = mk(Cyl(4.3, 4.3, 8, 3), mat(0xf2f6ff), 0, 5.6, 0, g); roof.rotation.z = Math.PI / 2; roof.scale.set(0.62, 1, 1);
+  const eave = mk(Cyl(4.05, 4.05, 7.8, 3), mat(0x7a2e22), 0, 5.4, 0, g); eave.rotation.z = Math.PI / 2; eave.scale.set(0.62, 1, 1);
+  mk(Box(1.5, 2.5, 0.2), mat(0x4a2a16), 0, 1.25, 3.02, g);
+  mk(Box(0.16, 0.16, 0.1), mat(0xffd34d, { metal: 0.6 }), 0.5, 1.3, 3.15, g);
+  const winMat = mat(0xffc766, { em: 0xffb347, emI: 1.4 });
+  for (const sx of [-2.2, 2.2]) { mk(Box(1.3, 1.1, 0.12), winMat, sx, 2.6, 3.02, g, false); glow(0xffb347, 2.2, sx, 2.6, 3.3, g); }
+  for (const sx of [-3.52, 3.52]) mk(Box(0.12, 1.1, 1.3), winMat, sx, 2.6, 0, g, false);
+  mk(Box(0.9, 2.4, 0.9), mat(0x8a3b2e), 2, 7.2, -1.2, g);
+  mk(new THREE.TorusGeometry(0.38, 0.12, 6, 12), mat(0x1f6b3a), 0, 3.05, 3.12, g);
+  mk(Box(0.22, 0.18, 0.1), mat(0xd32f2f), 0, 2.72, 3.2, g);
+  const cols = [0xff4d4d, 0xffd34d, 0x4dff88, 0x4dc3ff];
+  for (let i = 0; i < 9; i++) {
+    const b = mk(Sph(0.11, 6, 4), mat(cols[i % 4], { basic: true }).clone(), -3.6 + i * 0.9, 3.95, 3.45, g, false);
+    twinkleBulbs.push({ m: b, c: new THREE.Color(cols[i % 4]), ph: i * 0.7 });
+  }
+  addCollider({ t: 'b', x, z, hw: 3.6, hd: 3.2, rot, h: 8 });
+}
+function buildLamp(x, z, light) {
+  const y = heightAt(x, z);
+  mk(Cyl(0.1, 0.14, 4.4, 6), mat(0x22283a, { metal: 0.5, rough: 0.4 }), x, y + 2.2, z);
+  mk(Box(0.55, 0.6, 0.55), mat(0xffe0a0, { em: 0xffc060, emI: 2 }), x, y + 4.6, z, scene, false);
+  mk(Cone(0.5, 0.35, 4), mat(0x22283a), x, y + 5.08, z).rotation.y = Math.PI / 4;
+  glow(0xffc060, 3.5, x, y + 4.6, z, null, 0.6);
+  if (light) { const L = new THREE.PointLight(0xffb860, 1.1, 22, 1.6); L.position.set(x, y + 4.4, z); scene.add(L); }
+  addCollider({ t: 'c', x, z, r: 0.3, h: 5 });
+}
+function buildBigTree() {
+  const y = heightAt(0, 0);
+  const g = new THREE.Group(); g.position.set(0, y, 0); scene.add(g);
+  mk(Cyl(0.7, 0.9, 2.5, 8), mat(0x5a3a22), 0, 1.25, 0, g);
+  const tiers = [[5.2, 4.4, 2], [4.3, 4, 4.6], [3.4, 3.6, 7], [2.5, 3.2, 9.2], [1.6, 2.8, 11.2]];
+  tiers.forEach(([r, h, b]) => mk(Cone(r, h, 10), mat(0x1d6b3a), 0, b + h / 2, 0, g));
+  const cols = [0xff4d4d, 0xffd34d, 0x4dc3ff, 0xff7dd8, 0x7dffb0];
+  for (let i = 0; i < 90; i++) {
+    const k = Math.min(4, Math.floor(srand() * 5)), [r, h, b] = tiers[k];
+    const f = srand() * 0.85, yy = b + f * h, rr = r * (1 - f) + 0.08, a = srand() * TAU;
+    const c = cols[i % 5];
+    const bulb = mk(Sph(0.17, 6, 4), mat(c, { basic: true }).clone(), Math.cos(a) * rr, yy, Math.sin(a) * rr, g, false);
+    twinkleBulbs.push({ m: bulb, c: new THREE.Color(c), ph: srand() * TAU });
+  }
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.55 : 1.3; i ? shape.lineTo(Math.cos(a) * r, Math.sin(a) * r) : shape.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+  const sg = new THREE.ExtrudeGeometry(shape, { depth: 0.3, bevelEnabled: false }); sg.translate(0, 0, -0.15);
+  starMesh = mk(sg, mat(0xffd34d, { em: 0xffc020, emI: 1.5, metal: 0.4 }), 0, 15, 0, g, false);
+  glow(0xffd860, 9, 0, 15.1, 0, g, 1.2);
+  const L = new THREE.PointLight(0xffd080, 1.4, 34, 1.4); L.position.set(0, 13, 0); g.add(L);
+  const gc = [0xe53935, 0x1e88e5, 0x8e24aa, 0x43a047, 0xffb300];
+  for (let i = 0; i < 9; i++) {
+    const a = i / 9 * TAU + 0.3, r = sr(5.5, 7), s = sr(0.7, 1.3);
+    const bx = mk(Box(s, s * 0.8, s), mat(gc[i % 5]), Math.cos(a) * r, s * 0.4, Math.sin(a) * r, g); bx.rotation.y = sr(0, TAU);
+    mk(Box(s * 1.02, s * 0.82, s * 0.2), mat(0xffd34d, { metal: 0.3 }), 0, 0, 0, bx);
+  }
+  addCollider({ t: 'c', x: 0, z: 0, r: 4.8, h: 16 });
+}
+function buildVillage() {
+  buildBigTree();
+  const wallCols = [0x9b5a3c, 0x6d7fa6, 0x7c9a6a, 0xb07a4a, 0x8d5b8f];
+  const pathAngles = PATHS.map(([, , bx, bz]) => Math.atan2(bz, bx));
+  for (let i = 0; i < 10; i++) {
+    const a = i / 10 * TAU + 0.2, R = 24;
+    if (pathAngles.some(pa => Math.abs(angDiff(pa, a)) < 0.3)) continue;
+    const x = Math.cos(a) * R, z = Math.sin(a) * R;
+    buildHouse(x, z, Math.atan2(-x, -z), wallCols[i % wallCols.length]);
+  }
+  for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; buildLamp(Math.cos(a) * 12, Math.sin(a) * 12, i % 2 === 0); }
+  for (const [, , bx, bz] of PATHS) {
+    const L = Math.hypot(bx, bz), nx = bx / L, nz = bz / L;
+    for (let d = 34; d < L - 16; d += 20) buildLamp(nx * d - nz * 3.4, nz * d + nx * 3.4, false);
+  }
+  const fr = makeSnowman(0x2e7d32, false); fr.group.position.set(8, heightAt(8, 9), 9); fr.group.rotation.y = 0.8; scene.add(fr.group);
+  addCollider({ t: 'c', x: 8, z: 9, r: 1, h: 3 });
+}
+
+// ============================================================
+//  캐릭터 모델 (모두 +z 방향을 바라봄)
+// ============================================================
+function makeElf() {
+  const g = new THREE.Group();
+  const red = mat(0xd32f2f), green = mat(0x2e7d32), white = mat(0xf7f7ff), skin = mat(0xffd2b0), black = mat(0x1a1a22);
+  mk(Cyl(0.5, 0.65, 1.0), red, 0, 1.3, 0, g);
+  mk(Cyl(0.68, 0.68, 0.14), white, 0, 0.84, 0, g);
+  mk(Cyl(0.58, 0.6, 0.14), black, 0, 1.15, 0, g);
+  mk(Box(0.26, 0.2, 0.06), mat(0xffd34d, { metal: 0.6, rough: 0.4 }), 0, 1.15, 0.6, g);
+  mk(Cyl(0.42, 0.5, 0.12), white, 0, 1.82, 0, g);
+  mk(Sph(0.42, 14, 10), skin, 0, 2.2, 0, g);
+  for (const s of [-1, 1]) {
+    mk(Sph(0.06, 6, 4), black, s * 0.15, 2.27, 0.37, g);
+    mk(Sph(0.08, 6, 4), mat(0xf4a3a3), s * 0.24, 2.12, 0.33, g);
+    const ear = mk(Cone(0.1, 0.38, 6), skin, s * 0.44, 2.25, 0, g); ear.rotation.z = -s * 1.25;
+  }
+  mk(Sph(0.08, 6, 4), mat(0xffb4a0), 0, 2.18, 0.43, g);
+  const hat = mk(Cone(0.46, 1.05, 12), green, 0, 2.98, -0.08, g); hat.rotation.x = -0.25;
+  mk(Cyl(0.47, 0.47, 0.16, 12), white, 0, 2.5, 0, g);
+  mk(Sph(0.15, 8, 6), white, 0, 3.47, -0.3, g);
+  const limb = (x, y, len, r, m, endM, endG, endY, endZ) => {
+    const p = new THREE.Group(); p.position.set(x, y, 0); g.add(p);
+    mk(Cyl(r, r, len, 8), m, 0, -len / 2, 0, p); mk(endG, endM, 0, endY, endZ, p);
+    return p;
+  };
+  const boot = mat(0x5d3a1a);
+  const legL = limb(0.25, 0.8, 0.7, 0.16, green, boot, Box(0.3, 0.22, 0.45), -0.72, 0.08);
+  const legR = limb(-0.25, 0.8, 0.7, 0.16, green, boot, Box(0.3, 0.22, 0.45), -0.72, 0.08);
+  const armL = limb(0.62, 1.65, 0.65, 0.12, red, skin, Sph(0.14, 8, 6), -0.7, 0);
+  const armR = limb(-0.62, 1.65, 0.65, 0.12, red, skin, Sph(0.14, 8, 6), -0.7, 0);
+  const held = mk(Sph(0.28, 10, 8), mat(0xffffff, { rough: 0.6 }), 0, -0.9, 0, armR);
+  return { group: g, legL, legR, armL, armR, held };
+}
+function makeSnowman(scarf, angry = true, boss = false) {
+  const g = new THREE.Group();
+  const white = new THREE.MeshStandardMaterial({ color: 0xf2f6ff, roughness: 1, flatShading: true }), black = mat(0x15151c);
+  mk(Sph(0.95, 16, 12), white, 0, 0.85, 0, g); mk(Sph(0.68, 14, 10), white, 0, 2.0, 0, g); mk(Sph(0.46, 14, 10), white, 0, 2.85, 0, g);
+  for (const [y, z] of [[2.15, 0.64], [1.92, 0.66], [1.05, 0.9]]) mk(Sph(0.07, 6, 4), black, 0, y, z, g);
+  for (const s of [-1, 1]) {
+    mk(Sph(0.065, 6, 4), black, s * 0.16, 2.95, 0.4, g);
+    if (angry) { const b = mk(Box(0.2, 0.05, 0.05), black, s * 0.16, 3.07, 0.41, g); b.rotation.z = s * 0.45; }
+  }
+  for (let i = 0; i < 5; i++) mk(Sph(0.04, 4, 3), black, (i - 2) * 0.08, 2.7 + Math.abs(i - 2) * (angry ? -0.025 : 0.03), 0.42, g);
+  const carrot = mk(Cone(0.08, 0.5, 8), mat(0xff7a1a), 0, 2.85, 0.68, g); carrot.rotation.x = Math.PI / 2;
+  mk(Cyl(0.5, 0.53, 0.2, 12), mat(scarf), 0, 2.45, 0, g);
+  mk(Box(0.2, 0.55, 0.07), mat(scarf), 0.26, 2.2, 0.48, g).rotation.z = 0.15;
+  if (boss) {
+    const gold = mat(0xffd34d, { metal: 0.7, rough: 0.3, em: 0x553300 });
+    mk(new THREE.CylinderGeometry(0.4, 0.4, 0.3, 10, 1, true), gold, 0, 3.32, 0, g);
+    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; mk(Cone(0.09, 0.3, 4), gold, Math.cos(a) * 0.38, 3.6, Math.sin(a) * 0.38, g); }
+    mk(Sph(0.09, 6, 4), mat(0xff1744, { em: 0xaa0022 }), 0, 3.32, 0.41, g);
+  } else if (angry) {
+    mk(Cyl(0.55, 0.55, 0.06, 14), black, 0, 3.22, 0, g); mk(Cyl(0.35, 0.35, 0.55, 14), black, 0, 3.52, 0, g); mk(Cyl(0.36, 0.36, 0.1, 14), mat(0xb71c1c), 0, 3.32, 0, g);
+  } else {
+    mk(Cone(0.4, 0.7, 10), mat(0xd32f2f), 0, 3.5, 0, g); mk(Cyl(0.42, 0.42, 0.12, 10), mat(0xffffff), 0, 3.18, 0, g);
+  }
+  const arm = s => {
+    const p = new THREE.Group(); p.position.set(s * 0.62, 2.1, 0); p.rotation.z = s * 0.9; g.add(p);
+    mk(Cyl(0.05, 0.05, 1.1, 5), mat(0x5d3a1a), 0, -0.55, 0, p);
+    const f = mk(Cyl(0.03, 0.03, 0.3, 4), mat(0x5d3a1a), 0.08, -1.12, 0, p); f.rotation.z = 0.6;
+    return p;
+  };
+  const armL = arm(1), armR = arm(-1);
+  const held = mk(Sph(0.3, 10, 8), mat(0xffffff, { rough: 0.6 }), 0, -1.2, 0, armR); held.visible = false;
+  return { group: g, armL, armR, held, body: white };
+}
+function makePenguin() {
+  const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1d2433, roughness: 0.8, flatShading: true });
+  mk(Sph(0.55, 14, 10), dark, 0, 0.8, 0, inner).scale.set(1, 1.45, 0.9);
+  mk(Sph(0.45, 12, 8), mat(0xf7f7ff), 0, 0.75, 0.25, inner).scale.set(1, 1.3, 0.6);
+  for (const s of [-1, 1]) {
+    mk(Sph(0.09, 6, 4), mat(0xffffff), s * 0.15, 1.35, 0.38, inner); mk(Sph(0.05, 6, 4), mat(0x000000), s * 0.15, 1.35, 0.46, inner);
+    mk(Box(0.22, 0.06, 0.32), mat(0xffa726), s * 0.18, 0.03, 0.12, inner);
+    const fl = mk(Box(0.08, 0.6, 0.3), dark, s * 0.56, 0.85, 0, inner); fl.rotation.z = s * 0.35;
+  }
+  const beak = mk(Cone(0.08, 0.3, 6), mat(0xffa726), 0, 1.22, 0.52, inner); beak.rotation.x = Math.PI / 2;
+  const hat = mk(Cone(0.36, 0.62, 10), mat(0xd32f2f), 0, 1.9, -0.05, inner); hat.rotation.x = -0.35;
+  mk(Cyl(0.38, 0.38, 0.12, 10), mat(0xffffff), 0, 1.6, 0, inner);
+  mk(Sph(0.1, 6, 4), mat(0xffffff), 0, 2.2, -0.3, inner);
+  const held = mk(Sph(0.28, 10, 8), mat(0xffffff, { rough: 0.6 }), 0, 2.35, 0.2, inner); held.visible = false;
+  return { group: g, inner, held, body: dark };
+}
+function makeGift(color) {
+  const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
+  mk(Box(1, 1, 1), mat(color), 0, 0, 0, inner);
+  const gold = mat(0xffd34d, { metal: 0.5, rough: 0.35, em: 0x332200 });
+  mk(Box(1.04, 1.04, 0.2), gold, 0, 0, 0, inner); mk(Box(0.2, 1.04, 1.04), gold, 0, 0, 0, inner);
+  for (const s of [-1, 1]) { const b = mk(new THREE.TorusGeometry(0.18, 0.07, 6, 10), gold, s * 0.17, 0.62, 0, inner); b.rotation.y = Math.PI / 2; b.rotation.x = s * 0.5; }
+  glow(color, 2.6, 0, 0, 0, g);
+  return { group: g, inner };
+}
+
+// ============================================================
+//  캠프
+// ============================================================
+const camps = [];
+function buildCamp(def, idx) {
+  const y = heightAt(def.x, def.z);
+  const R = def.boss ? 15 : 10, n = def.boss ? 9 : 6;
+  const wallMat = mat(0xdfe8fb), topMat = mat(0xf6f9ff);
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU + sr(-0.12, 0.12) + idx * 0.4, len = def.boss ? 6.5 : 5;
+    const x = def.x + Math.cos(a) * R, z = def.z + Math.sin(a) * R, rot = Math.atan2(-Math.cos(a), -Math.sin(a));
+    const w = new THREE.Group(); w.position.set(x, heightAt(x, z) - 0.2, z); w.rotation.y = rot; scene.add(w);
+    mk(Box(len, 1.8, 1.1), wallMat, 0, 0.9, 0, w);
+    for (let k = 0; k < Math.round(len / 1.1); k++) mk(Box(0.95, 0.35, 1.0), topMat, -len / 2 + 0.55 + k * 1.1, 1.95, 0, w);
+    addCollider({ t: 'b', x, z, hw: len / 2, hd: 0.6, rot, h: 2.2 });
+  }
+  const ia = idx * 1.3 + 0.8, ix = def.x + Math.cos(ia) * (R - 4.5), iz = def.z + Math.sin(ia) * (R - 4.5);
+  const ig = new THREE.Group(); ig.position.set(ix, heightAt(ix, iz) - 0.1, iz); ig.rotation.y = Math.atan2(def.x - ix, def.z - iz); scene.add(ig);
+  mk(new THREE.SphereGeometry(2.4, 14, 8, 0, TAU, 0, Math.PI / 2), mat(0xeef4ff), 0, 0, 0, ig);
+  const door = mk(new THREE.CylinderGeometry(0.9, 0.9, 1.6, 10, 1, false, 0, Math.PI), mat(0xe2ebfb), 0, 0, 2.1, ig); door.rotation.x = Math.PI / 2; door.rotation.z = Math.PI / 2;
+  mk(Box(1.2, 1.1, 0.1), mat(0x1a2238), 0, 0.5, 2.9, ig, false);
+  addCollider({ t: 'c', x: ix, z: iz, r: 2.5, h: 2.6 });
+  if (def.boss) {
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * TAU + Math.PI / 4, tx = def.x + Math.cos(a) * (R + 2), tz = def.z + Math.sin(a) * (R + 2), ty = heightAt(tx, tz);
+      mk(Cyl(1.2, 1.6, 7, 8), mat(0xa9d8ff, { em: 0x204060, rough: 0.3 }), tx, ty + 3.5, tz);
+      mk(Cone(1.6, 2.4, 8), mat(0x7fb8ef, { rough: 0.3 }), tx, ty + 8.2, tz);
+      glow(0x66ccff, 6, tx, ty + 7, tz, null, 0.8);
+      addCollider({ t: 'c', x: tx, z: tz, r: 1.6, h: 9 });
+    }
+  }
+  const flag = new THREE.Group(); flag.position.set(def.x, y, def.z); scene.add(flag);
+  mk(Cyl(0.09, 0.09, 5.2, 6), mat(0x2a2a33), 0, 2.6, 0, flag);
+  const cloth = new THREE.Group(); cloth.position.set(0, 4.5, 0); flag.add(cloth);
+  mk(Box(1.9, 1.15, 0.06), mat(0x3a1a4a), 0.98, 0, 0, cloth);
+  mk(Box(0.5, 0.5, 0.08), mat(0xff3b3b, { em: 0x440000 }), 0.98, 0, 0, cloth);
+  const lib = new THREE.Group(); lib.position.set(def.x, y, def.z); lib.visible = false; scene.add(lib);
+  mk(Cyl(0.25, 0.3, 1, 6), mat(0x5a3a22), 0, 0.5, 0, lib);
+  [[2.2, 2.4, 0.8], [1.7, 2.1, 2.2], [1.1, 1.8, 3.4]].forEach(([r, h, b]) => mk(Cone(r, h, 9), mat(0x1d6b3a), 0, b + h / 2, 0, lib));
+  for (let i = 0; i < 18; i++) { const f = srand(), a = srand() * TAU, rr = 2.1 * (1 - f * 0.8) + 0.1; mk(Sph(0.13, 6, 4), mat([0xff4d4d, 0xffd34d, 0x4dc3ff, 0xff7dd8][i % 4], { basic: true }), Math.cos(a) * rr, 1 + f * 3.8, Math.sin(a) * rr, lib, false); }
+  mk(Sph(0.32, 8, 6), mat(0xffd34d, { em: 0xffc020, emI: 2 }), 0, 5.4, 0, lib, false);
+  glow(0xffd860, 6, 0, 5.4, 0, lib, 1);
+  const light = new THREE.PointLight(0xffcf80, 0, 24, 1.5); light.position.set(def.x, y + 4, def.z); scene.add(light);
+  addCollider({ t: 'c', x: def.x, z: def.z, r: 0.6, h: 5 });
+  camps.push({ def, idx, flag, cloth, lib, light, alive: 0, liberated: false, R });
+}
+
+// ============================================================
+//  이펙트: 파티클, 눈, 궤적, 링
+// ============================================================
+const PMAX = 1500;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(PMAX * 3).fill(-999), pCol = new Float32Array(PMAX * 3).fill(1);
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+const pts = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.42, map: dotTex, vertexColors: true, transparent: true, depthWrite: false }));
+pts.frustumCulled = false; scene.add(pts);
+const parts = []; let pHead = 0;
+function burst(x, y, z, n, color = 0xffffff, sp = 7, up = 4) {
+  const c = new THREE.Color(color);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU, b = Math.random() * Math.PI - Math.PI / 2, s = rand(sp * 0.3, sp);
+    parts[pHead] = { x, y, z, vx: Math.cos(a) * Math.cos(b) * s, vy: Math.abs(Math.sin(b)) * s + up, vz: Math.sin(a) * Math.cos(b) * s, life: rand(0.4, 1), r: c.r, g: c.g, b: c.b };
+    pHead = (pHead + 1) % PMAX;
+  }
+}
+const SNOW = 2200, sGeo = new THREE.BufferGeometry(), sPos = new Float32Array(SNOW * 3), sVel = [];
+for (let i = 0; i < SNOW; i++) { sPos.set([rand(-50, 50), rand(0, 35), rand(-50, 50)], i * 3); sVel.push({ v: rand(2, 4.5), w: rand(0, TAU) }); }
+sGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+const snowPts = new THREE.Points(sGeo, new THREE.PointsMaterial({ size: 0.28, map: dotTex, color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }));
+snowPts.frustumCulled = false; scene.add(snowPts);
+
+const ARC = 30, aGeo = new THREE.BufferGeometry(), aPos = new Float32Array(ARC * 3);
+aGeo.setAttribute('position', new THREE.BufferAttribute(aPos, 3));
+const arcMat = new THREE.PointsMaterial({ size: 0.32, map: dotTex, color: 0x2f7bff, transparent: true, opacity: 0.8, depthWrite: false });
+const arcPts = new THREE.Points(aGeo, arcMat); arcPts.frustumCulled = false; scene.add(arcPts);
+
+function ring(color, inner, outer) {
+  const m = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 36), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
+  m.rotation.x = -Math.PI / 2; m.renderOrder = 2; scene.add(m); return m;
+}
+const aimRing = ring(0x2f7bff, 0.72, 0.98);
+const aimFill = ring(0xffd34d, 0, 0.7);
+const warnPool = [];
+function getWarn() { let w = warnPool.find(w => !w.visible); if (!w) { w = ring(0xff3355, 0.55, 1); warnPool.push(w); } w.visible = true; return w; }
+
+// ============================================================
+//  사운드
+// ============================================================
+let ac = null, musicOn = true;
+function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); }
+function tone(f, dur, type = 'sine', vol = 0.15, slide = 0, when = 0) {
+  if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = when || ac.currentTime;
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+const seq = (notes, gap, type = 'sine', vol = 0.08, dur = 0.14) => { if (ac) notes.forEach((f, i) => tone(f, dur, type, vol, 0, ac.currentTime + i * gap)); };
+const sfx = {
+  throw: () => tone(520, 0.12, 'triangle', 0.07, -320),
+  hit: () => { tone(150, 0.15, 'square', 0.08, -80); tone(900, 0.06, 'sine', 0.05); },
+  hurt: () => tone(230, 0.3, 'sawtooth', 0.09, -150),
+  splat: () => tone(200, 0.06, 'triangle', 0.03, -100),
+  pop: () => seq([523, 659, 784], 0.06),
+  gift: () => seq([784, 988, 1175, 1568], 0.07),
+  win: () => seq([523, 659, 784, 1047, 784, 1047], 0.12, 'triangle', 0.09, 0.25),
+  reload: () => tone(300, 0.12, 'sine', 0.05, 220),
+  dash: () => tone(700, 0.15, 'sine', 0.04, -500),
+};
+// 징글벨 (퍼블릭 도메인 멜로디)
+const NOTE = { C: 523.25, D: 587.33, E: 659.25, F: 698.46, G: 783.99 };
+const SONG = 'E1E1E2E1E1E2E1G1C1.5D.5E4F1F1F1.5F.5F1E1E1E.5E.5E1D1D1E1D2G2E1E1E2E1E1E2E1G1C1.5D.5E4F1F1F1.5F.5F1E1E1E.5E.5G1G1F1D1C4R4'
+  .match(/[A-GR][\d.]+/g).map(s => [s[0], parseFloat(s.slice(1))]);
+let songIdx = 0, songT = 0;
+setInterval(() => {
+  if (!ac || !musicOn || state !== 'play') return;
+  const beat = 0.24;
+  if (songT < ac.currentTime) songT = ac.currentTime + 0.05;
+  while (songT < ac.currentTime + 0.4) {
+    const [n, d] = SONG[songIdx];
+    if (n !== 'R') { tone(NOTE[n], 0.5, 'sine', 0.035, 0, songT); tone(NOTE[n] * 2, 0.25, 'sine', 0.012, 0, songT); }
+    songT += d * beat; songIdx = (songIdx + 1) % SONG.length;
+  }
+}, 100);
+
+// ============================================================
+//  게임 상태
+// ============================================================
+const TYPES = {
+  snowman: { hp: 3, r: 0.95, h: 3.3, speed: 4.2, cool: [1.8, 3.0], wind: 0.55, range: 13, maxRange: 26, err: 1.0, pts: 100, scale: 1 },
+  penguin: { hp: 2, r: 0.65, h: 1.9, speed: 8.5, cool: [1.3, 2.1], wind: 0.4, range: 10, maxRange: 22, err: 0.9, pts: 150, scale: 1 },
+  boss:    { hp: 32, r: 2.0, h: 7.4, speed: 3.0, cool: [1.5, 2.3], wind: 0.8, range: 15, maxRange: 34, err: 0.8, pts: 2000, scale: 2.2 },
+};
+let state = 'title', score = 0, combo = 0, bestCombo = 0, playTime = 0, shake = 0, patrolT = 10;
+let best = 0; try { best = +localStorage.getItem('snowball3d-best') || 0; } catch (e) {}
+let elf, player, enemies = [], balls = [], gifts = [], popups = [];
+function newPlayer() {
+  return { x: 0, z: 12, y: heightAt(0, 12), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: 6, maxHp: 6, ammo: 10, maxAmmo: 10,
+    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
+    walk: 0, throwAnim: 0, regenT: 0, inVillage: true, kills: 0 };
+}
+
+function spawnEnemy(type, x, z, camp) {
+  const T = TYPES[type];
+  const model = type === 'penguin' ? makePenguin() : makeSnowman(type === 'boss' ? 0x6a1b9a : 0x1565c0, true, type === 'boss');
+  model.group.scale.setScalar(T.scale); scene.add(model.group);
+  const e = { type, T, model, x, z, y: heightAt(x, z), hp: T.hp, max: T.hp, camp, home: { x, z }, aggro: false, cool: rand(1, 2.5), wind: 0,
+    flash: 0, kx: 0, kz: 0, face: rand(0, TAU), walk: 0, strafe: 0, strafeT: 0, wanderT: 0, tx: x, tz: z, shots: 0, bar: null };
+  enemies.push(e); if (camp) camp.alive++;
+  return e;
+}
+function removeEnemy(e) { scene.remove(e.model.group); if (e.bar) { e.bar.remove(); e.bar = null; } }
+function populateCamps() {
+  for (const c of camps) {
+    const d = c.def; c.alive = 0; c.liberated = false; c.flag.visible = true; c.lib.visible = false; c.light.intensity = 0;
+    const list = [];
+    for (let i = 0; i < d.snow; i++) list.push('snowman');
+    for (let i = 0; i < d.peng; i++) list.push('penguin');
+    if (d.boss) list.push('boss');
+    list.forEach((t, i) => { const a = i / list.length * TAU + 0.4, r = t === 'boss' ? 4 : rand(4, 7.5); spawnEnemy(t, d.x + Math.cos(a) * r, d.z + Math.sin(a) * r, c); });
+  }
+}
+function enemyHand(e) { e.model.group.updateMatrixWorld(true); return e.model.held.getWorldPosition(new THREE.Vector3()); }
+
+const GIFT_TYPES = [
+  { kind: 'heal', color: 0xe53935, label: '체력 +2', c: '#ff8fa3' },
+  { kind: 'triple', color: 0x1e88e5, label: '트리플 샷!', c: '#7dd3ff' },
+  { kind: 'giant', color: 0x8e24aa, label: '왕눈덩이!', c: '#d0a8ff' },
+  { kind: 'fast', color: 0x43a047, label: '스피드 업!', c: '#8dffa8' },
+];
+function openSpot(minFromPlayer = 0) {
+  for (let k = 0; k < 200; k++) {
+    const x = rand(-100, 100), z = rand(-100, 100);
+    if (Math.hypot(x, z) < 16) continue;
+    if (camps.some(c => Math.hypot(x - c.def.x, z - c.def.z) < c.R + 3)) continue;
+    if (player && Math.hypot(x - player.x, z - player.z) < minFromPlayer) continue;
+    const o = { x, z }; pushOut(o, 1.5); if (Math.hypot(o.x - x, o.z - z) > 0.01) continue;
+    return { x, z };
+  }
+  return { x: rand(-30, 30), z: rand(30, 40) };
+}
+function spawnGift(x, z) {
+  const type = GIFT_TYPES[Math.floor(Math.random() * GIFT_TYPES.length)];
+  const m = makeGift(type.color); scene.add(m.group);
+  if (x === undefined) ({ x, z } = openSpot(25));
+  gifts.push({ ...type, model: m, x, z, t: rand(0, 5), respawn: 0 });
+}
+
+function startGame() {
+  for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = '';
+  enemies.forEach(removeEnemy); enemies = [];
+  balls.forEach(b => scene.remove(b.mesh)); balls = [];
+  gifts.forEach(g => scene.remove(g.model.group)); gifts = [];
+  warnPool.forEach(w => w.visible = false);
+  player = newPlayer(); score = 0; combo = 0; bestCombo = 0; playTime = 0; patrolT = 8;
+  populateCamps();
+  for (let i = 0; i < 16; i++) spawnGift();
+  camYaw = camYawT = 0;
+  state = 'play'; overlay(null); audio();
+  toast('눈마을을 지켜라!', '못된 눈사람들의 캠프 5곳을 해방하세요');
+}
+
+// ============================================================
+//  입력
+// ============================================================
+const keys = {};
+const mouse = { nx: 0, ny: 0, has: false };
+let camYaw = 0, camYawT = 0, camDist = 30, rDrag = null;
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase(); keys[k] = true; audio();
+  if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
+  if (e.repeat) return;
+  if (k === 'r') startReload();
+  if (k === 'shift') dash();
+  if (k === 'm') { musicOn = !musicOn; toast(musicOn ? '♪ 음악 켜짐' : '음악 꺼짐', '', 1); }
+  if (k === 'enter' && state !== 'play') { if (state === 'pause') resume(); else startGame(); }
+  if ((k === 'p' || k === 'escape') && (state === 'play' || state === 'pause')) { if (state === 'play') pause(); else resume(); }
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (state === 'play') pause(); });
+function setMouse(e) { mouse.nx = e.clientX / innerWidth * 2 - 1; mouse.ny = -(e.clientY / innerHeight) * 2 + 1; mouse.has = true; }
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+let stickId = null, stickO = null, stick = { x: 0, z: 0 }, aimId = null;
+canvas.addEventListener('pointerdown', e => {
+  audio(); canvas.setPointerCapture(e.pointerId);
+  if (e.pointerType === 'touch' && e.clientX < innerWidth * 0.4 && stickId === null) { stickId = e.pointerId; stickO = { x: e.clientX, y: e.clientY }; return; }
+  if (e.button === 2) { rDrag = e.clientX; return; }
+  setMouse(e); if (e.pointerType === 'touch') aimId = e.pointerId;
+  if (state === 'play' && player.ammo > 0 && player.reloadT <= 0) { player.charging = true; player.charge = 0; }
+});
+canvas.addEventListener('pointermove', e => {
+  if (e.pointerId === stickId) {
+    let dx = e.clientX - stickO.x, dy = e.clientY - stickO.y; const d = Math.hypot(dx, dy), m = 55;
+    if (d > m) { dx *= m / d; dy *= m / d; } stick = { x: dx / m, z: dy / m };
+    $('knob').style.transform = `translate(${dx}px,${dy}px)`; return;
+  }
+  if (rDrag !== null) { camYawT -= (e.clientX - rDrag) * 0.006; rDrag = e.clientX; }
+  if (e.pointerType !== 'touch' || e.pointerId === aimId) setMouse(e);
+});
+function pointerEnd(e) {
+  if (e.pointerId === stickId) { stickId = null; stick = { x: 0, z: 0 }; $('knob').style.transform = ''; return; }
+  if (e.button === 2) { rDrag = null; return; }
+  if (player && player.charging) throwPlayer();
+  if (e.pointerId === aimId) aimId = null;
+}
+canvas.addEventListener('pointerup', pointerEnd);
+canvas.addEventListener('pointercancel', e => { rDrag = null; pointerEnd(e); });
+canvas.addEventListener('wheel', e => { camDist = clamp(camDist + e.deltaY * 0.02, 16, 48); e.preventDefault(); }, { passive: false });
+document.querySelectorAll('#tbtns button').forEach(b => b.addEventListener('pointerdown', e => {
+  e.preventDefault(); e.stopPropagation(); audio();
+  const k = b.dataset.b; if (k === 'reload') startReload(); if (k === 'dash') dash(); if (k === 'jump') jump();
+}));
+
+// ============================================================
+//  플레이어 행동
+// ============================================================
+function startReload() {
+  if (state !== 'play' || player.reloadT > 0 || player.ammo >= player.maxAmmo) return;
+  player.reloadT = 1.0; player.charging = false; sfx.reload();
+}
+function dash() {
+  if (state !== 'play' || player.dashCD > 0) return;
+  let dx = player.vx, dz = player.vz, d = Math.hypot(dx, dz);
+  if (d < 0.5) { dx = Math.sin(player.face); dz = Math.cos(player.face); d = 1; }
+  player.dx = dx / d; player.dz = dz / d; player.dashT = 0.18; player.dashCD = 0.9; player.inv = Math.max(player.inv, 0.25);
+  burst(player.x, player.y + 0.3, player.z, 10, 0xffffff, 4, 1); sfx.dash();
+}
+function jump() { if (state === 'play' && player.onGround) { player.vy = 9.5; player.onGround = false; } }
+const raycaster = new THREE.Raycaster();
+const aim = new THREE.Vector3();
+let aimTarget = null;
+function updateAim() {
+  const p = player;
+  if (!mouse.has) { aim.set(p.x + Math.sin(p.face) * 10, 0, p.z + Math.cos(p.face) * 10); aim.y = heightAt(aim.x, aim.z); }
+  else {
+    raycaster.setFromCamera({ x: mouse.nx, y: mouse.ny }, camera);
+    const o = raycaster.ray.origin, d = raycaster.ray.direction;
+    let prev = 0, hit = null;
+    for (let t = 1; t < 300; t += 1.5) {
+      if (o.y + d.y * t < heightAt(o.x + d.x * t, o.z + d.z * t)) {
+        let a = prev, b = t;
+        for (let k = 0; k < 12; k++) { const m = (a + b) / 2; if (o.y + d.y * m < heightAt(o.x + d.x * m, o.z + d.z * m)) b = m; else a = m; }
+        hit = b; break;
+      }
+      prev = t;
+    }
+    if (hit !== null) aim.set(o.x + d.x * hit, o.y + d.y * hit, o.z + d.z * hit);
+  }
+  const dx = aim.x - p.x, dz = aim.z - p.z, dist = Math.hypot(dx, dz), MAXR = 32;
+  if (dist > MAXR) { aim.x = p.x + dx / dist * MAXR; aim.z = p.z + dz / dist * MAXR; aim.y = heightAt(aim.x, aim.z); }
+  aimTarget = null; let bestD = 1e9;
+  for (const e of enemies) { const d = Math.hypot(e.x - aim.x, e.z - aim.z); if (d < e.T.r + 1.3 && d < bestD && e.model.group.visible) { bestD = d; aimTarget = e; } }
+}
+function throwOrigin() { const p = player; return new THREE.Vector3(p.x - Math.cos(p.face) * 0.55, p.y + 2.2, p.z + Math.sin(p.face) * 0.55); }
+function targetPoint() {
+  if (aimTarget) return new THREE.Vector3(aimTarget.x, aimTarget.y + aimTarget.T.h * 0.5, aimTarget.z);
+  return new THREE.Vector3(aim.x, aim.y + 0.9, aim.z);
+}
+const lob = (o, t, T) => new THREE.Vector3((t.x - o.x) / T, (t.y - o.y + 0.5 * G * T * T) / T, (t.z - o.z) / T);
+const flightTime = (o, t) => 0.28 + Math.hypot(t.x - o.x, t.z - o.z) / 36;
+function throwPlayer() {
+  const p = player; p.charging = false;
+  if (state !== 'play' || p.ammo <= 0 || p.reloadT > 0 || p.cd > 0) return;
+  const charged = p.charge >= 0.55;
+  const o = throwOrigin(), t = targetPoint(), T = flightTime(o, t);
+  const angs = p.triple > 0 ? [-0.16, 0, 0.16] : [0];
+  const big = (charged ? 1 : 0) + (p.giant > 0 ? 1 : 0);
+  for (const a of angs) {
+    const dx = t.x - p.x, dz = t.z - p.z, c = Math.cos(a), s = Math.sin(a);
+    const tt = new THREE.Vector3(p.x + dx * c + dz * s, t.y, p.z - dx * s + dz * c);
+    makeBall(o, lob(o, tt, T), 'p', 1 + big, 0.28 + big * 0.14);
+  }
+  p.ammo--; p.cd = 0.16; p.throwAnim = 0.25; sfx.throw();
+  if (p.ammo === 0) startReload();
+}
+const ballGeo = Sph(1, 12, 9);
+const ballMatP = mat(0xffffff, { rough: 0.6 }), ballMatE = mat(0xc9dcff, { rough: 0.6, em: 0x1a2a55 });
+function makeBall(o, v, owner, dmg, r, warn, T = 0) {
+  const mesh = new THREE.Mesh(ballGeo, owner === 'p' ? ballMatP : ballMatE); mesh.scale.setScalar(r); mesh.castShadow = true; mesh.position.copy(o); scene.add(mesh);
+  balls.push({ p: o.clone(), v, owner, dmg, r, mesh, warn, t: 0, T });
+}
+function enemyThrow(e) {
+  const o = enemyHand(e), p = player, shots = [];
+  if (e.type === 'boss' && e.shots % 3 === 2) { for (let i = 0; i < 6; i++) shots.push({ dx: rand(-5, 5), dz: rand(-5, 5), lead: 0.3, slow: 1.3 }); }
+  else if (e.type === 'boss') shots.push({ dx: 0, dz: 0, lead: 0.6 }, { dx: 2.5, dz: 2.5, lead: 0.6 }, { dx: -2.5, dz: -2.5, lead: 0.6 });
+  else shots.push({ dx: 0, dz: 0, lead: 0.55 });
+  e.shots++;
+  const skill = 0.8 + camps.filter(c => c.liberated).length * 0.08;
+  for (const s of shots) {
+    const d = Math.hypot(p.x - e.x, p.z - e.z), T = clamp(0.65 + d / 19, 0.75, 1.9) * (s.slow || 1);
+    const err = e.T.err / skill;
+    const tx = p.x + p.vx * T * s.lead + s.dx + rand(-err, err), tz = p.z + p.vz * T * s.lead + s.dz + rand(-err, err);
+    const ty = heightAt(tx, tz) + 1.0;
+    const w = getWarn(); w.position.set(tx, ty - 0.9, tz); w.scale.setScalar(0.01); w.material.opacity = 0.2;
+    makeBall(o, lob(o, new THREE.Vector3(tx, ty, tz), T), 'e', 1, e.type === 'boss' ? 0.45 : 0.3, w, T);
+  }
+  sfx.throw();
+}
+
+// ============================================================
+//  HUD
+// ============================================================
+let toastTimer = 0;
+function toast(t, sub = '', dur = 2.6) { const el = $('toast'); el.innerHTML = t + (sub ? `<small>${sub}</small>` : ''); el.style.opacity = 1; toastTimer = dur; }
+function popup(x, y, z, text, color = '#fff') {
+  const el = document.createElement('div'); el.className = 'pop'; el.textContent = text; el.style.color = color; $('labels').appendChild(el);
+  popups.push({ el, p: new THREE.Vector3(x, y, z), t: 1.1 });
+}
+const tmpV = new THREE.Vector3();
+function toScreen(v) { tmpV.copy(v).project(camera); return { x: (tmpV.x * 0.5 + 0.5) * innerWidth, y: (-tmpV.y * 0.5 + 0.5) * innerHeight, ok: tmpV.z < 1 && Math.abs(tmpV.x) < 1.1 && Math.abs(tmpV.y) < 1.1 }; }
+const comboMult = () => Math.min(4, 1 + Math.floor(combo / 3) * 0.5);
+let hudCache = '';
+function updateHUD() {
+  const p = player;
+  const h = '♥'.repeat(p.hp) + `<span class="off">${'♥'.repeat(Math.max(0, p.maxHp - p.hp))}</span>`;
+  const ammo = Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('') + (p.reloadT > 0 ? '<span>눈 뭉치는 중…</span>' : '');
+  const buffs = [p.triple > 0 && `<span style="color:#7dd3ff">트리플 샷 ${p.triple.toFixed(0)}s</span>`, p.giant > 0 && `<span style="color:#d0a8ff">왕눈덩이 ${p.giant.toFixed(0)}s</span>`,
+    p.fast > 0 && `<span style="color:#8dffa8">스피드 ${p.fast.toFixed(0)}s</span>`, p.inVillage && `<span style="color:#ffd34d">🏠 마을 (안전지대)${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>`].filter(Boolean).join('');
+  const lib = camps.filter(c => c.liberated).length;
+  let near = null, nd = 1e9; for (const c of camps) if (!c.liberated) { const d = Math.hypot(c.def.x - p.x, c.def.z - p.z); if (d < nd) { nd = d; near = c; } }
+  const obj = `🎯 캠프 해방 <b>${lib} / ${camps.length}</b>` + (near ? `<small>가장 가까운 곳: ${near.def.name} · ${Math.round(nd)}m · 남은 적 ${near.alive}</small>` : '');
+  const sc = `${score.toLocaleString()}점`, cb = combo >= 3 ? `${combo} 콤보 x${comboMult().toFixed(1)}` : '';
+  const key = h + ammo + buffs + obj + sc + cb;
+  if (key !== hudCache) { hudCache = key; $('hearts').innerHTML = h; $('ammo').innerHTML = ammo; $('buffs').innerHTML = buffs; $('objective').innerHTML = obj; $('score').textContent = sc; $('combo').textContent = cb; }
+}
+const mini = $('mini'), mctx = mini.getContext('2d'), MS = 180, WR = 125;
+const mbg = document.createElement('canvas'); mbg.width = mbg.height = MS;
+const toMini = (x, z) => [(x / WR * 0.5 + 0.5) * MS, (z / WR * 0.5 + 0.5) * MS];
+function buildMinimapBg() {
+  const x = mbg.getContext('2d'), img = x.createImageData(MS, MS);
+  for (let j = 0; j < MS; j++) for (let i = 0; i < MS; i++) {
+    const wx = (i / MS * 2 - 1) * WR, wz = (j / MS * 2 - 1) * WR, h = heightAt(wx, wz);
+    let c = [40 + h * 6, 56 + h * 7, 96 + h * 8];
+    if (pathDist(wx, wz) < 2.5) c = [130, 140, 170];
+    if (onIce(wx, wz)) c = [90, 160, 210];
+    if (Math.max(Math.abs(wx), Math.abs(wz)) > LIMIT) c = c.map(k => k * 0.5);
+    img.data.set([c[0], c[1], c[2], 255], (j * MS + i) * 4);
+  }
+  x.putImageData(img, 0, 0);
+  x.fillStyle = '#1d5a35'; for (const t of trees) { const [px, pz] = toMini(t.x, t.z); x.fillRect(px - 1, pz - 1, 2, 2); }
+  x.strokeStyle = '#ffd34d80'; x.setLineDash([3, 3]); x.beginPath(); x.arc(MS / 2, MS / 2, VILLAGE.safe / WR * MS / 2, 0, TAU); x.stroke();
+  x.fillStyle = '#ffd34d'; x.beginPath(); x.arc(MS / 2, MS / 2, 3, 0, TAU); x.fill();
+}
+function drawMinimap() {
+  mctx.clearRect(0, 0, MS, MS); mctx.drawImage(mbg, 0, 0);
+  mctx.textAlign = 'center'; mctx.font = 'bold 9px sans-serif';
+  for (const c of camps) {
+    const [x, z] = toMini(c.def.x, c.def.z);
+    mctx.fillStyle = c.liberated ? '#4dff88' : (c.def.boss ? '#ff3b6b' : '#ff7043');
+    mctx.beginPath(); mctx.arc(x, z, c.def.boss ? 7 : 5.5, 0, TAU); mctx.fill();
+    mctx.fillStyle = '#000'; mctx.fillText(c.liberated ? '✓' : (c.def.boss ? '♛' : c.alive), x, z + 3);
+  }
+  mctx.fillStyle = '#ffd34d'; for (const g of gifts) if (g.respawn <= 0) { const [x, z] = toMini(g.x, g.z); mctx.fillRect(x - 1.5, z - 1.5, 3, 3); }
+  mctx.fillStyle = '#ff5252'; for (const e of enemies) if (e.aggro || !e.camp) { const [x, z] = toMini(e.x, e.z); mctx.fillRect(x - 1.5, z - 1.5, 3, 3); }
+  const [px, pz] = toMini(player.x, player.z);
+  mctx.save(); mctx.translate(px, pz);
+  mctx.fillStyle = '#ffffff30'; mctx.beginPath(); mctx.moveTo(0, 0); mctx.arc(0, 0, 22, -Math.PI / 2 - camYaw - 0.5, -Math.PI / 2 - camYaw + 0.5); mctx.fill();
+  mctx.rotate(-player.face + Math.PI); mctx.fillStyle = '#fff'; mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4, 4); mctx.lineTo(-4, 4); mctx.fill();
+  mctx.restore();
+}
+
+// ============================================================
+//  오버레이 화면
+// ============================================================
+function overlay(kind) {
+  const el = $('overlay');
+  if (!kind) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const keysHtml = `<div class="keys">
+    <b>WASD</b><span>이동 (카메라 기준)</span><b>마우스</b><span>조준 · 적 근처를 가리키면 자동 조준</span>
+    <b>좌클릭</b><span>던지기 · 꾹 누르면 강한 눈덩이</span><b>Shift / Space</b><span>대시(잠깐 무적) / 점프</span>
+    <b>R</b><span>눈 뭉치기(재장전)</span><b>Q · E / 우클릭 드래그</b><span>카메라 회전 · 휠로 줌</span>
+    <b>빨간 원</b><span>적 눈덩이가 떨어질 곳! 피하세요</span><b>🏠 마을</b><span>안전지대 · 체력/눈덩이 회복</span></div>`;
+  if (kind === 'title') el.innerHTML = `<div><h1>🎄 크리스마스 눈싸움 3D 🎄</h1><h2>못된 눈사람 군단이 눈마을 주변에 캠프를 세웠어요.<br>캠프 5곳을 모두 해방하고 크리스마스를 지켜주세요!</h2>${keysHtml}
+    <button id="go">시작하기</button>${best ? `<p style="color:#cfe0ff">최고 기록 ${best.toLocaleString()}점</p>` : ''}</div>`;
+  if (kind === 'pause') el.innerHTML = `<div><h1>일시정지</h1>${keysHtml}<button id="go">계속하기</button></div>`;
+  if (kind === 'over' || kind === 'win') {
+    const m = Math.floor(playTime / 60), s = Math.floor(playTime % 60);
+    el.innerHTML = `<div><h1 style="color:${kind === 'win' ? '#ffd34d' : '#ff6b6b'}">${kind === 'win' ? '🎅 크리스마스를 지켰어요! 🎁' : '게임 오버'}</h1>
+      <h2>${kind === 'win' ? '모든 캠프가 해방되어 마을에 평화가 찾아왔어요' : '눈사람들에게 당했어요… 다시 도전!'}</h2>
+      <div class="stat">점수 <b>${score.toLocaleString()}</b>점</div><div class="stat">해방한 캠프 ${camps.filter(c => c.liberated).length} / ${camps.length} · 처치 ${player.kills} · 최고 콤보 ${bestCombo}</div>
+      <div class="stat">플레이 시간 ${m}분 ${s}초</div><div class="stat" style="color:#cfe0ff">최고 기록 ${best.toLocaleString()}점 ${score >= best && score > 0 ? '🎉 신기록!' : ''}</div><br>
+      <button id="go">다시 하기</button></div>`;
+  }
+  $('go').onclick = () => { audio(); if (state === 'pause') resume(); else startGame(); };
+}
+function pause() { state = 'pause'; player.charging = false; overlay('pause'); }
+function resume() { state = 'play'; overlay(null); }
+function endGame(win) {
+  state = win ? 'win' : 'over';
+  if (score > best) { best = score; try { localStorage.setItem('snowball3d-best', best); } catch (e) {} }
+  if (win) sfx.win();
+  setTimeout(() => overlay(state), win ? 1500 : 900);
+}
+
+// ============================================================
+//  업데이트
+// ============================================================
+function update(dt) {
+  const p = player;
+  playTime += dt;
+  if (keys['q']) camYawT += dt * 1.8;
+  if (keys['e']) camYawT -= dt * 1.8;
+  // 이동 (카메라 기준)
+  let ix = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0) + stick.x;
+  let iz = (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0) + stick.z;
+  const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
+  const cs = Math.cos(camYaw), sn = Math.sin(camYaw);
+  const wx = ix * cs + iz * sn, wz = -ix * sn + iz * cs;
+  const speed = (p.fast > 0 ? 12 : 8.5) * (p.charging ? 0.6 : 1);
+  const accel = onIce(p.x, p.z) && p.onGround ? 1.6 : 14;
+  p.vx = lerp(p.vx, wx * speed, Math.min(1, accel * dt)); p.vz = lerp(p.vz, wz * speed, Math.min(1, accel * dt));
+  if (p.dashT > 0) { p.dashT -= dt; p.vx = p.dx * 28; p.vz = p.dz * 28; if (Math.random() < 0.6) burst(p.x, p.y + 0.2, p.z, 1, 0xffffff, 2, 1); }
+  p.x = clamp(p.x + p.vx * dt, -LIMIT, LIMIT); p.z = clamp(p.z + p.vz * dt, -LIMIT, LIMIT);
+  pushOut(p, 0.6);
+  if (keys[' ']) jump();
+  const gh = heightAt(p.x, p.z);
+  if (!p.onGround) { p.vy -= G * dt; p.y += p.vy * dt; if (p.y <= gh) { p.y = gh; p.vy = 0; p.onGround = true; burst(p.x, gh + 0.1, p.z, 6, 0xffffff, 3, 1); } }
+  else p.y = gh;
+  const mv = Math.hypot(p.vx, p.vz); if (mv > 0.5) p.walk += dt * mv * 1.3;
+  // 조준
+  updateAim();
+  p.face = angLerp(p.face, Math.atan2(aim.x - p.x, aim.z - p.z), Math.min(1, dt * 14));
+  if (p.charging) p.charge = Math.min(1, p.charge + dt);
+  p.cd = Math.max(0, p.cd - dt); p.dashCD = Math.max(0, p.dashCD - dt);
+  if (p.reloadT > 0) { p.reloadT -= dt; if (p.reloadT <= 0) p.ammo = p.maxAmmo; }
+  p.inv = Math.max(0, p.inv - dt); p.triple = Math.max(0, p.triple - dt); p.giant = Math.max(0, p.giant - dt); p.fast = Math.max(0, p.fast - dt);
+  p.throwAnim = Math.max(0, p.throwAnim - dt);
+  // 마을 = 안전지대 + 회복
+  p.inVillage = Math.hypot(p.x, p.z) < VILLAGE.safe;
+  if (p.inVillage) {
+    p.regenT += dt;
+    if (p.regenT > 3 && p.hp < p.maxHp) { p.regenT = 0; p.hp++; popup(p.x, p.y + 3, p.z, '+♥', '#ff8fa3'); }
+    if (p.ammo < p.maxAmmo && p.reloadT <= 0 && !p.charging && p.cd <= 0) p.ammo = p.maxAmmo;
+  } else p.regenT = 0;
+
+  // 순찰 펭귄
+  patrolT -= dt;
+  if (patrolT <= 0) {
+    patrolT = 14;
+    if (enemies.filter(e => !e.camp).length < 5) { const s = openSpot(55); if (Math.hypot(s.x, s.z) > 45) spawnEnemy('penguin', s.x, s.z, null); }
+  }
+  // 적
+  for (const e of enemies) updateEnemy(e, dt);
+  for (let i = 0; i < enemies.length; i++) for (let j = i + 1; j < enemies.length; j++) {
+    const a = enemies[i], b = enemies[j], dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), m = a.T.r + b.T.r;
+    if (d < m && d > 1e-4) { const k = (m - d) / 2 / d; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; }
+  }
+  // 눈덩이
+  for (const b of balls) {
+    b.t += dt; b.v.y -= G * dt; b.p.addScaledVector(b.v, dt); b.mesh.position.copy(b.p);
+    if (b.warn) { const k = clamp(b.t / b.T, 0, 1); b.warn.scale.setScalar(0.3 + k * (b.r > 0.4 ? 1.6 : 1.2)); b.warn.material.opacity = 0.25 + k * 0.6; }
+    if (b.p.y < heightAt(b.p.x, b.p.z) || ballHitsCollider(b)) { splat(b); continue; }
+    if (b.owner === 'p') {
+      for (const e of enemies) {
+        if (e.hp <= 0) continue;
+        if (Math.hypot(b.p.x - e.x, b.p.z - e.z) < e.T.r + b.r && b.p.y > e.y - 0.2 && b.p.y < e.y + e.T.h) { hitEnemy(e, b); break; }
+      }
+    } else if (p.inv <= 0 && Math.hypot(b.p.x - p.x, b.p.z - p.z) < 0.65 + b.r && b.p.y > p.y - 0.2 && b.p.y < p.y + 2.5) {
+      b.dead = true; p.hp -= b.dmg; p.inv = 0.9; combo = 0; shake = 0.6; sfx.hurt();
+      burst(b.p.x, b.p.y, b.p.z, 18, 0xffffff, 7); popup(p.x, p.y + 3, p.z, '아야!', '#ff6b6b');
+      $('hurt').style.opacity = 1; setTimeout(() => $('hurt').style.opacity = 0, 160);
+      if (p.hp <= 0 && state === 'play') { p.hp = 0; endGame(false); }
+    }
+  }
+  balls = balls.filter(b => { if (b.dead) { scene.remove(b.mesh); if (b.warn) b.warn.visible = false; } return !b.dead; });
+  for (const e of enemies) if (e.hp <= 0) removeEnemy(e);
+  enemies = enemies.filter(e => e.hp > 0);
+  // 선물
+  for (const g of gifts) {
+    if (g.respawn > 0) { g.respawn -= dt; if (g.respawn <= 0) { const s = openSpot(30); g.x = s.x; g.z = s.z; g.model.group.visible = true; } continue; }
+    g.t += dt;
+    if (Math.hypot(g.x - p.x, g.z - p.z) < 1.8) {
+      sfx.gift(); burst(g.x, g.model.group.position.y, g.z, 26, g.color, 7);
+      popup(g.x, p.y + 3.2, g.z, g.label, g.c);
+      if (g.kind === 'heal') p.hp = Math.min(p.maxHp, p.hp + 2);
+      if (g.kind === 'triple') p.triple = 15;
+      if (g.kind === 'giant') p.giant = 15;
+      if (g.kind === 'fast') p.fast = 15;
+      score += 50; g.respawn = 40; g.model.group.visible = false;
+    }
+  }
+  if (state === 'play' && camps.every(c => c.liberated)) endGame(true);
+}
+function splat(b) {
+  b.dead = true; burst(b.p.x, b.p.y, b.p.z, b.r > 0.4 ? 16 : 8, 0xeef4ff, 5, 2); sfx.splat();
+  if (b.owner === 'p') combo = 0;
+}
+function hitEnemy(e, b) {
+  b.dead = true; e.hp -= b.dmg; e.flash = 0.15; e.aggro = true;
+  const vl = Math.hypot(b.v.x, b.v.z) || 1; e.kx = b.v.x / vl * 10 / e.T.scale; e.kz = b.v.z / vl * 10 / e.T.scale;
+  combo++; bestCombo = Math.max(bestCombo, combo);
+  burst(b.p.x, b.p.y, b.p.z, 14, 0xffffff, 7); sfx.hit(); shake = Math.max(shake, 0.2);
+  if (e.camp) for (const o of enemies) if (o.camp === e.camp) o.aggro = true;
+  if (e.hp <= 0) {
+    const pts = Math.round((e.camp ? e.T.pts : 75) * comboMult()); score += pts; player.kills++;
+    popup(e.x, e.y + e.T.h + 0.5, e.z, `+${pts}`, '#ffd34d');
+    burst(e.x, e.y + e.T.h * 0.5, e.z, e.type === 'boss' ? 80 : 36, 0xffffff, e.type === 'boss' ? 14 : 9, 4);
+    burst(e.x, e.y + e.T.h * 0.7, e.z, 8, e.type === 'penguin' ? 0x1d2433 : 0xff7a1a, 6); sfx.pop();
+    if (e.type === 'boss') shake = 1.2;
+    if (e.camp) { e.camp.alive--; if (e.camp.alive <= 0) liberate(e.camp); }
+  } else { score += 10; popup(e.x, e.y + e.T.h + 0.5, e.z, combo >= 3 ? `${combo} 콤보!` : '명중!', combo >= 3 ? '#7dffb0' : '#ffffff'); }
+}
+function liberate(c) {
+  c.liberated = true; c.flag.visible = false; c.lib.visible = true; c.light.intensity = 1.4;
+  score += c.def.boss ? 5000 : 1000; player.hp = player.maxHp;
+  burst(c.def.x, heightAt(c.def.x, c.def.z) + 4, c.def.z, 90, 0xffd34d, 12, 6);
+  sfx.win();
+  const left = camps.filter(k => !k.liberated).length;
+  toast(`${c.def.name} 해방!`, left ? `+${c.def.boss ? 5000 : 1000}점 · 체력 회복 · 남은 캠프 ${left}곳` : '모든 캠프를 해방했어요!', 3);
+  spawnGift(c.def.x + 3, c.def.z + 3);
+}
+function updateEnemy(e, dt) {
+  const T = e.T, p = player, m = e.model;
+  const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx, dz) || 1;
+  e.flash = Math.max(0, e.flash - dt);
+  e.x += e.kx * dt; e.z += e.kz * dt; const damp = Math.pow(0.004, dt); e.kx *= damp; e.kz *= damp;
+  const far = d > 90;
+  const aggroR = e.type === 'boss' ? 34 : 26;
+  if (!p.inVillage && d < aggroR) e.aggro = true;
+  if (d > aggroR + 18 || p.inVillage) e.aggro = false;
+  if (e.camp && Math.hypot(e.x - e.home.x, e.z - e.home.z) > 34) e.aggro = false;
+  let mx = 0, mz = 0, spd = T.speed;
+  if (e.aggro) {
+    e.faceT = Math.atan2(dx, dz);
+    if (d > T.range + 3) { mx = dx / d; mz = dz / d; } else if (d < T.range - 4) { mx = -dx / d; mz = -dz / d; }
+    e.strafeT -= dt; if (e.strafeT <= 0) { e.strafe = [-1, 0, 1][Math.floor(Math.random() * 3)]; e.strafeT = rand(1, 2.5); }
+    mx += -dz / d * e.strafe * 0.7; mz += dx / d * e.strafe * 0.7;
+    if (e.wind > 0) { e.wind -= dt; mx *= 0.2; mz *= 0.2; if (e.wind <= 0) { enemyThrow(e); e.cool = rand(...T.cool); } }
+    else { e.cool -= dt; if (e.cool <= 0 && d < T.maxRange) e.wind = T.wind; }
+  } else if (!far) {
+    e.wind = 0;
+    e.wanderT -= dt;
+    if (e.wanderT <= 0) { e.wanderT = rand(2, 5); const a = rand(0, TAU), r = rand(0, e.camp ? 6 : 12); e.tx = e.home.x + Math.cos(a) * r; e.tz = e.home.z + Math.sin(a) * r; }
+    const tx = e.tx - e.x, tz = e.tz - e.z, td = Math.hypot(tx, tz);
+    if (td > 0.6) { mx = tx / td; mz = tz / td; spd *= 0.45; e.faceT = Math.atan2(tx, tz); }
+  }
+  const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
+  e.x += mx * spd * dt; e.z += mz * spd * dt;
+  if (ml > 0.1) e.walk += dt * spd * 1.6;
+  const vd = Math.hypot(e.x, e.z), wall = VILLAGE.safe + 3;
+  if (vd < wall) { e.x = e.x / vd * wall; e.z = e.z / vd * wall; }
+  e.x = clamp(e.x, -LIMIT, LIMIT); e.z = clamp(e.z, -LIMIT, LIMIT);
+  if (!far) pushOut(e, T.r);
+  e.y = heightAt(e.x, e.z);
+  if (e.faceT !== undefined) e.face = angLerp(e.face, e.faceT, Math.min(1, dt * 6));
+  const g = m.group; g.visible = !far; if (far) return;
+  g.position.set(e.x, e.y, e.z); g.rotation.y = e.face;
+  if (e.type === 'penguin') {
+    m.inner.rotation.z = Math.sin(e.walk * 2) * 0.18; m.inner.rotation.x = e.wind > 0 ? -0.35 : 0;
+  } else {
+    m.armR.rotation.x = lerp(m.armR.rotation.x, e.wind > 0 ? 2.4 : Math.sin(e.walk) * 0.3, Math.min(1, dt * 10));
+    m.armL.rotation.x = -Math.sin(e.walk) * 0.3;
+    g.position.y += Math.abs(Math.sin(e.walk * 1.5)) * 0.12;
+  }
+  m.held.visible = e.wind > 0;
+  m.body.emissive.setHex(e.flash > 0 ? 0xff4444 : 0x000000);
+}
+
+// ============================================================
+//  렌더
+// ============================================================
+function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize);
+let last = performance.now(), time = 0;
+const camPos = new THREE.Vector3(0, 30, 40), camLook = new THREE.Vector3();
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000); last = now; time += dt;
+  if (state === 'play') update(dt);
+  else if (state === 'title') camYawT += dt * 0.12;
+  render(dt);
+  requestAnimationFrame(frame);
+}
+function render(dt) {
+  const p = player;
+  const g = elf.group; g.position.set(p.x, p.y, p.z); g.rotation.y = p.face;
+  g.visible = !(p.inv > 0 && p.dashT <= 0 && Math.floor(p.inv * 14) % 2);
+  const sw = Math.sin(p.walk) * (Math.hypot(p.vx, p.vz) > 0.5 && p.onGround ? 0.7 : 0);
+  elf.legL.rotation.x = sw; elf.legR.rotation.x = -sw;
+  elf.armL.rotation.x = -sw * 0.6; elf.armL.rotation.z = 0.15; elf.armR.rotation.z = -0.15;
+  const armTarget = p.charging ? 2.5 : (p.throwAnim > 0 ? -1.4 : sw * 0.6);
+  elf.armR.rotation.x = lerp(elf.armR.rotation.x, armTarget, Math.min(1, dt * (p.throwAnim > 0 ? 30 : 12)));
+  if (p.reloadT > 0) { elf.armR.rotation.x = elf.armL.rotation.x = -0.9 + Math.sin(time * 18) * 0.3; }
+  elf.held.visible = p.ammo > 0 && p.reloadT <= 0 && p.throwAnim <= 0;
+  elf.held.scale.setScalar(1 + ((p.charging && p.charge >= 0.55 ? 1 : 0) + (p.giant > 0 ? 1 : 0)) * 0.5);
+
+  // 카메라: 3인칭 탑뷰
+  camYaw = angLerp(camYaw, camYawT, Math.min(1, dt * 8));
+  const pitch = 0.95;
+  const target = new THREE.Vector3(p.x, p.y + 1.2, p.z);
+  const want = new THREE.Vector3(Math.sin(camYaw) * Math.cos(pitch) * camDist, Math.sin(pitch) * camDist, Math.cos(camYaw) * Math.cos(pitch) * camDist).add(target);
+  camPos.lerp(want, Math.min(1, dt * 6)); camLook.lerp(target, Math.min(1, dt * 10));
+  camera.position.copy(camPos);
+  if (shake > 0.01) { camera.position.x += rand(-shake, shake); camera.position.y += rand(-shake, shake); shake *= Math.pow(0.02, dt); }
+  camera.lookAt(camLook);
+  moon.position.set(p.x + 28, p.y + 55, p.z + 22); moon.target.position.set(p.x, p.y, p.z);
+
+  // 조준 표시
+  const showAim = state === 'play' && p.ammo > 0 && p.reloadT <= 0;
+  aimRing.visible = aimFill.visible = arcPts.visible = showAim;
+  if (showAim) {
+    const tp = targetPoint();
+    aimRing.position.set(aimTarget ? aimTarget.x : aim.x, (aimTarget ? aimTarget.y : aim.y) + 0.1, aimTarget ? aimTarget.z : aim.z);
+    aimRing.scale.setScalar(aimTarget ? aimTarget.T.r + 0.5 : 1);
+    aimRing.material.color.setHex(aimTarget ? 0xff3b3b : 0x2f7bff);
+    aimFill.position.copy(aimRing.position); aimFill.position.y += 0.01;
+    const ch = p.charging ? Math.min(1, p.charge / 0.55) : 0;
+    aimFill.scale.setScalar(Math.max(0.01, ch * aimRing.scale.x)); aimFill.material.color.setHex(ch >= 1 ? 0xffb300 : 0x5aa0ff); aimFill.material.opacity = 0.55;
+    const o = throwOrigin(), T = flightTime(o, tp), v = lob(o, tp, T);
+    for (let i = 0; i < ARC; i++) { const t = i / (ARC - 1) * T; aPos[i * 3] = o.x + v.x * t; aPos[i * 3 + 1] = o.y + v.y * t - 0.5 * G * t * t; aPos[i * 3 + 2] = o.z + v.z * t; }
+    aGeo.attributes.position.needsUpdate = true; arcMat.opacity = p.charging ? 0.95 : 0.5;
+  }
+
+  for (const gf of gifts) { if (gf.respawn > 0) continue; gf.model.group.position.set(gf.x, heightAt(gf.x, gf.z) + 1.0 + Math.sin(gf.t * 2.5) * 0.25, gf.z); gf.model.inner.rotation.y = gf.t * 1.5; }
+  for (const b of twinkleBulbs) b.m.material.color.copy(b.c).multiplyScalar(0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 3 + b.ph)));
+  for (const gl of glows) gl.s.scale.setScalar(gl.base * (0.85 + 0.15 * Math.sin(time * 3 * gl.sp + gl.ph)));
+  if (starMesh) starMesh.rotation.y = time * 0.8;
+  for (const c of camps) if (!c.liberated) c.cloth.rotation.y = Math.sin(time * 3 + c.idx) * 0.3;
+
+  for (let i = 0; i < PMAX; i++) {
+    const q = parts[i];
+    if (!q || q.life <= 0) { pPos[i * 3 + 1] = -999; continue; }
+    q.life -= dt; q.vy -= 18 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.z += q.vz * dt;
+    pPos[i * 3] = q.x; pPos[i * 3 + 1] = q.y; pPos[i * 3 + 2] = q.z; pCol[i * 3] = q.r; pCol[i * 3 + 1] = q.g; pCol[i * 3 + 2] = q.b;
+  }
+  pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
+  for (let i = 0; i < SNOW; i++) {
+    const v = sVel[i]; v.w += dt;
+    let x = sPos[i * 3] + Math.sin(v.w) * 0.8 * dt, y = sPos[i * 3 + 1] - v.v * dt, z = sPos[i * 3 + 2];
+    if (x - p.x > 50) x -= 100; if (x - p.x < -50) x += 100; if (z - p.z > 50) z -= 100; if (z - p.z < -50) z += 100;
+    if (y < p.y - 5) y += 38;
+    sPos[i * 3] = x; sPos[i * 3 + 1] = y; sPos[i * 3 + 2] = z;
+  }
+  sGeo.attributes.position.needsUpdate = true;
+
+  for (const e of enemies) {
+    if (state === 'play' && e.hp < e.max && e.model.group.visible) {
+      const s = toScreen(new THREE.Vector3(e.x, e.y + e.T.h + 0.8, e.z));
+      if (s.ok) {
+        if (!e.bar) { e.bar = document.createElement('div'); e.bar.className = 'hp' + (e.type === 'boss' ? ' boss' : ''); e.bar.innerHTML = '<i></i>'; $('labels').appendChild(e.bar); }
+        e.bar.style.left = s.x + 'px'; e.bar.style.top = s.y + 'px'; e.bar.firstChild.style.width = (e.hp / e.max * 100) + '%'; e.bar.style.display = '';
+        continue;
+      }
+    }
+    if (e.bar) e.bar.style.display = 'none';
+  }
+  for (const u of popups) {
+    u.t -= dt; u.p.y += dt * 2;
+    const s = toScreen(u.p); u.el.style.left = s.x + 'px'; u.el.style.top = s.y + 'px'; u.el.style.opacity = Math.min(1, u.t * 2);
+    if (u.t <= 0) u.el.remove();
+  }
+  popups = popups.filter(u => u.t > 0);
+  if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) $('toast').style.opacity = 0; }
+
+  if (state !== 'title') { updateHUD(); drawMinimap(); }
+  renderer.render(scene, camera);
+}
+
+// ============================================================
+//  초기화
+// ============================================================
+buildTerrain();
+buildVillage();
+CAMPS.forEach(buildCamp);
+buildForest();
+buildMinimapBg();
+elf = makeElf(); scene.add(elf.group);
+player = newPlayer();
+populateCamps();
+for (let i = 0; i < 16; i++) spawnGift();
+resize();
+for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = 'hidden';
+overlay('title');
+requestAnimationFrame(frame);
+window.__game = {
+  get state() { return state; }, get score() { return score; }, get player() { return player; }, get enemies() { return enemies; }, get camps() { return camps; },
+  startGame, teleport(x, z) { player.x = x; player.z = z; }, screen(x, y, z) { return toScreen(new THREE.Vector3(x, y, z)); },
+  sim(sec, fn) { for (let t = 0; t < sec && state === 'play'; t += 1 / 30) { if (fn) fn(); update(1 / 30); } },
+  aimAt(x, z) { mouse.has = false; player.face = Math.atan2(x - player.x, z - player.z); }, throwNow() { player.charge = 0; player.cd = 0; throwPlayer(); }, info: () => renderer.info.render,
+};
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "christmas-snowball-3d",
+  "version": "1.0.0",
+  "description": "누구나 접속하는 크리스마스 3D 오픈월드 눈싸움 (게임 서버 + 웹 클라이언트)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "private": true
+}
