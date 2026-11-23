@@ -39,6 +39,9 @@
   #upBtn { background:#7e57c2e6 !important; box-shadow:0 3px 0 #4527a0 !important; }
   #fishBtn { background:#00838fe6 !important; box-shadow:0 3px 0 #005662 !important; }
   #fishBtn.on { background:#ff7043e6 !important; }
+  #yamBtn { background:#8e4e2fe6 !important; box-shadow:0 3px 0 #4e2414 !important; }
+  #yamBtn.on { background:#ffb74de6 !important; }
+  body.playing.fireseat #yamBtn { display:block; }
   #allyAsk { position:fixed; left:50%; top:calc(64px + env(safe-area-inset-top,0px)); transform:translateX(-50%); z-index:6; display:none; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center;
     background:#0b1430f0; border:2px solid #7dffb0; border-radius:16px; padding:10px 14px; font-family:var(--display); font-size:16px; max-width:calc(100vw - 32px); box-shadow:0 6px 20px #0008; }
   #allyAsk.open { display:flex; }
@@ -220,7 +223,7 @@
 </div>
 <button id="gear" aria-label="설정 열기" title="설정">⚙️</button>
 <div id="allyAsk" role="alertdialog" aria-live="assertive"><span id="allyAskText"></span><button data-ok="1">🤝 수락</button><button data-ok="0">거절</button></div>
-<div id="actBtns"><button id="igBtn" class="act" aria-label="이글루 짓기">🧊 이글루 짓기 <small>(B)</small></button><button id="fishBtn" class="act" aria-label="얼음낚시">🎣 얼음낚시 <small>(G)</small></button><button id="upBtn" class="act" aria-label="얼음성 업그레이드"></button><button id="sitBtn" class="act" aria-label="앉기 또는 눕기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button></div>
+<div id="actBtns"><button id="igBtn" class="act" aria-label="이글루 짓기">🧊 이글루 짓기 <small>(B)</small></button><button id="fishBtn" class="act" aria-label="얼음낚시">🎣 얼음낚시 <small>(G)</small></button><button id="upBtn" class="act" aria-label="얼음성 업그레이드"></button><button id="yamBtn" class="act" aria-label="군고구마 먹기">🍠 군고구마 <small>(Y)</small></button><button id="sitBtn" class="act" aria-label="앉기 또는 눕기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button></div>
 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <h3 id="setTitle">설정</h3>
   <label class="opt" for="optHear"><span>다른 사람 목소리 듣기<small>마이크 없이도 근처 플레이어 목소리가 들려요</small></span><input type="checkbox" id="optHear" checked></label>
@@ -808,6 +811,11 @@ function makeAvatar(look) {
   mk(Cyl(0.14, 0.14, 0.02, 14), toon(0x5d3a1a), 0, 0.17, 0, mug, false);
   const handle = mk(new THREE.TorusGeometry(0.1, 0.03, 6, 12, Math.PI), toon(0xfafafa), -0.17, 0, 0, mug, false); handle.rotation.z = Math.PI / 2;
   const steam = [0, 1, 2].map(i => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false })); sp.scale.setScalar(0.3); mug.add(sp); return sp; });
+  // 군고구마 (평소에는 숨김): 자주색 껍질 + 노란 속살
+  const yam = new THREE.Group(); yam.visible = false; bd.add(yam);
+  mk(Sph(0.15, 12, 10), toon(0x7b3f61), 0, 0, 0, yam, false).scale.set(1.8, 1, 1);
+  mk(Sph(0.13, 12, 10), toon(0xffc94d), 0.22, 0, 0, yam, false).scale.set(0.5, 0.95, 0.95);
+  const yamSteam = [0, 1].map(i => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false })); sp.scale.setScalar(0.25); yam.add(sp); return sp; });
   // 얼음낚시 도구: 낚싯대, 낚싯줄, 얼음 구멍 (평소에는 숨김)
   g.rotation.order = 'YXZ';
   const rod = new THREE.Group(); rod.position.set(0.15, 0.55, 0.35); rod.visible = false; g.add(rod);
@@ -818,7 +826,7 @@ function makeAvatar(look) {
   mk(new THREE.TorusGeometry(0.44, 0.06, 4, 18), toon(0xe3f2fd), 0, 0.42, 1.7, hole, false).rotation.x = Math.PI / 2;
   mk(Cyl(0.006, 0.006, 0.8, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0.13, 0.77, 1.71, hole, false);
   mk(Sph(0.05, 8, 6), toon(0xff5252), 0.13, 0.4, 1.71, hole, false);
-  return { group: g, bd, legL: legs[1], legR: legs[0], armL: arms[1], armR: arms[0], held, pom, mug, steam, rod, hole };
+  return { group: g, bd, legL: legs[1], legR: legs[0], armL: arms[1], armR: arms[0], held, pom, mug, steam, rod, hole, yam, yamSteam };
 }
 const makeElf = (ci = 0) => makeAvatar({ c: ci });
 function makeSnowman(kind = 'normal') {
@@ -1147,7 +1155,7 @@ function removeIgloo(id) {
 }
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
-    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, slowT: 0, tea: 0, rest: 0, restT: 0, sit: null, fish: false, fishJerk: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
+    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, slowT: 0, tea: 0, yam: 0, rest: 0, restT: 0, sit: null, fish: false, fishJerk: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
     walk: 0, throwAnim: 0, regenT: 0, inVillage: true, dead: false, respawnT: 0, squash: 0 };
 }
 
@@ -1617,6 +1625,8 @@ $('igBtn').addEventListener('click', e => { e.stopPropagation(); audio(); buildI
 $('igBtn').addEventListener('pointerdown', e => e.stopPropagation());
 $('upBtn').addEventListener('click', e => { e.stopPropagation(); audio(); upgradeIgloo(); });
 $('fishBtn').addEventListener('click', e => { e.stopPropagation(); audio(); startFish(); });
+$('yamBtn').addEventListener('click', e => { e.stopPropagation(); audio(); startYam(); });
+$('yamBtn').addEventListener('pointerdown', e => e.stopPropagation());
 for (const id of ['upBtn', 'fishBtn']) $(id).addEventListener('pointerdown', e => e.stopPropagation());
 function toggleSettings(open) {
   const el = $('settings'), want = open === undefined ? !el.classList.contains('open') : open;
@@ -1663,6 +1673,7 @@ addEventListener('keydown', e => {
     if (k === 'enter') { e.preventDefault(); openChat(); }
     if (k === 'v') toggleMic();
     if (k === 't') startTea();
+    if (k === 'y') startYam();
     if (k === 'f') toggleSit();
     if (k === 'b') buildIgloo();
     if (k === 'u') upgradeIgloo();
@@ -1805,9 +1816,19 @@ function startFish() {
   send({ t: 'fish', on: 1 }); toast('🎣 얼음낚시 시작!', '5초마다 무언가 걸려요. 움직이면 그만둬요', 2);
 }
 function stopFish() { if (!me || !me.fish) return; me.fish = false; send({ t: 'fish', on: 0 }); }
+// 군고구마: 모닥불 의자에 앉아 있을 때. 4.5초 동안 호호 불며 먹고, 다 먹으면 체력 +20
+const YAM_TIME = 4.5;
+function startYam() {
+  if (state !== 'play' || !me || me.dead) return;
+  if (me.yam > 0) { me.yam = 0; return; }
+  if (!me.sit || !me.sit.fire) { toast('🍠 모닥불 앞 통나무 의자에 앉아야 먹을 수 있어요', 'F 키로 앉기', 2); return; }
+  me.tea = 0; me.yam = YAM_TIME; me.yamBite = 0.8;
+  toast('🍠 군고구마 냠냠', '모닥불에 잘 익었어요', 1.6);
+}
 function startTea() {
   if (state !== 'play' || !me || me.dead) return;
   if (me.tea > 0) { me.tea = 0; return; }
+  me.yam = 0;
   if (!me.inVillage) { toast('☕ 티타임은 안전지대에서만', '마을의 초록 원 안으로 돌아오세요', 2); return; }
   me.tea = W.TEA_TIME; me.charging = false; me.teaStart = time;
 }
@@ -2128,6 +2149,14 @@ function updateMe(dt) {
   else p.face = angLerp(p.face, Math.atan2(p.vx, p.vz), Math.min(1, dt * 10));
   if (p.sit) p.face = p.sit.face;
   p.fishJerk = Math.max(0, p.fishJerk - dt);
+  if (p.yam > 0) {
+    if (!p.sit || !p.sit.fire) p.yam = 0;
+    else {
+      p.yam -= dt; p.yamBite -= dt;
+      if (p.yamBite <= 0) { p.yamBite = 1.1; popup(p.x, p.y + 2.6, p.z, '냠냠', '#ffcc80'); }
+      if (p.yam <= 0) { p.yam = 0; const add = Math.min(20, p.maxHp - p.hp); p.hp += add; popup(p.x, p.y + 3, p.z, add > 0 ? `🍠 +${add}` : '🍠 맛있다!', '#ffb74d'); sfx.pop(); }
+    }
+  }
   if (p.sit && p.sit.kind === 'lie') { p.zzT = (p.zzT || 0) - dt; if (p.zzT <= 0) { p.zzT = 2.2; popup(p.x - Math.sin(p.face) * 1.6, p.y + 1, p.z - Math.cos(p.face) * 1.6, 'Zz…', '#cfe0ff'); } }
   if (p.charging) p.charge = Math.min(1, p.charge + dt);
   p.cd = Math.max(0, p.cd - dt); p.dashCD = Math.max(0, p.dashCD - dt);
@@ -2264,7 +2293,7 @@ function step(dt) {
     net.sendT -= dt;
     if (net.sendT <= 0) {
       net.sendT = 1 / 15;
-      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0);
+      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0);
       send({ t: 'p', x: r2(p.x), z: r2(p.z), y: r2(p.y), f: r2(p.face), vx: r1(p.vx), vz: r1(p.vz), fl, hp: p.hp, d: p.dead ? 1 : 0 });
     }
     $('net').style.display = net.open && performance.now() - net.lastMsg > 2500 ? 'block' : 'none';
@@ -2315,6 +2344,19 @@ function animElf(m, x, y, z, face, moving, flags, walk, dt, squash = 0) {
       m.armL.rotation.x = lerp(m.armL.rotation.x, jerk ? -2.0 : -1.15, Math.min(1, dt * 12)); m.armL.rotation.z = -0.3;
       m.rod.rotation.x = lerp(m.rod.rotation.x, jerk ? 0.55 : 1.15 + Math.sin(time * 2.2) * 0.05, Math.min(1, dt * 10));
       m.held.visible = false;
+    }
+  }
+  // 군고구마: 두 손으로 들고 호호 불다가 한 입 (1.1초 주기)
+  if (m.yam) {
+    const eat = flags & 1024;
+    m.yam.visible = !!eat;
+    if (eat) {
+      const ph = (time % 1.1) / 1.1, k = ph < 0.3 ? smoothK(ph / 0.3) : ph < 0.55 ? 1 : ph < 0.8 ? 1 - smoothK((ph - 0.55) / 0.25) : 0;
+      m.held.visible = false;
+      m.yam.position.set(0, lerp(0.98, 1.3, k), lerp(0.55, 0.72, k)); m.yam.rotation.set(0, Math.PI / 2, lerp(0.15, -0.35, k));
+      m.armR.rotation.x = lerp(-1.35, -1.9, k); m.armR.rotation.z = lerp(0.35, 0.45, k);
+      m.armL.rotation.x = lerp(-1.35, -1.9, k); m.armL.rotation.z = lerp(-0.35, -0.45, k);
+      m.yamSteam.forEach((sp, i) => { const t = (time * 0.8 + i / 2) % 1; sp.position.set(0.2 + Math.sin(t * 6 + i) * 0.05, 0.15 + t * 0.5, 0); sp.material.opacity = (1 - t) * 0.45 * (1 - k); sp.scale.setScalar(0.15 + t * 0.25); });
     }
   }
   // 티타임: 컵 입구를 입술에 대고, 바닥 쪽을 들어 올려 홀짝인다 (2.2초 주기)
@@ -2374,7 +2416,7 @@ function render(dt) {
   updateBuildings(dt);
   const blink = p.inv > 0 && p.dashT <= 0 && Math.floor(p.inv * 14) % 2;
   elf.group.visible = !p.dead && !blink;
-  const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0);
+  const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0);
   animElf(elf, p.x, p.y, p.z, p.face, Math.hypot(p.vx, p.vz) > 0.5 && p.onGround, flags, p.walk, dt, p.squash);
   elf.held.visible = elf.held.visible && p.ammo > 0;
   shieldMesh.visible = p.shield > 0 && !p.dead; if (shieldMesh.visible) { shieldMesh.position.set(p.x, p.y + 1.3, p.z); shieldMesh.material.opacity = 0.18 + 0.08 * Math.sin(time * 6); }
@@ -2453,6 +2495,8 @@ function render(dt) {
   document.body.classList.toggle('nearfire', !!(me && !me.dead && state === 'play' && (me.sit || nsp)));
   document.body.classList.toggle('onice', !!(me && !me.dead && state === 'play' && onIce(me.x, me.z)));
   $('teaBtn').classList.toggle('on', me.tea > 0);
+  document.body.classList.toggle('fireseat', !!(me && !me.dead && state === 'play' && me.sit && me.sit.fire));
+  { const yb = $('yamBtn'), yh = me.yam > 0 ? '🍠 그만 먹기 <small>(Y)</small>' : '🍠 군고구마 <small>(Y)</small>'; yb.classList.toggle('on', me.yam > 0); if (yb._h !== yh) { yb._h = yh; yb.innerHTML = yh; } }
   { const fb = $('fishBtn'), fh = me.fish ? '🎣 그만하기 <small>(G)</small>' : '🎣 얼음낚시 <small>(G)</small>'; fb.classList.toggle('on', !!me.fish); if (fb._h !== fh) { fb._h = fh; fb.innerHTML = fh; } }
   { const sb = $('sitBtn'), on = !!me.sit, html = on ? '🙋 일어나기 <small>(F)</small>' : nsp && nsp.kind === 'lie' ? '🛏️ 눕기 <small>(F)</small>' : '🪑 앉기 <small>(F)</small>'; sb.classList.toggle('on', on); if (sb._h !== html) { sb._h = html; sb.innerHTML = html; } }
   if (friendly) { friendly.bd.scale.y = 1 + Math.sin(time * 2) * 0.02; friendly.armL.rotation.x = Math.sin(time * 4) * 0.6 - 0.4; }
@@ -2587,6 +2631,7 @@ window.__game = {
   chat(s) { send({ t: 'chat', s }); },
   giftRow(x, z) { const ks = [...W.GIFT_KINDS, 'HEAL']; ks.forEach((k, i) => { const m = k === 'HEAL' ? makeHealPack() : makeGift(GIFT_INFO[k].color); const px = x + (i - ks.length / 2) * 2.2; m.group.position.set(px, heightAt(px, z) + 1, z); scene.add(m.group); }); return ks; },
   get songs() { return PLAYLIST.map(x => ({ name: x.name, beat: x.beat, notes: x.notes })); },
+  yaw(a) { camYaw = camYawT = a; },
   buff(k, n = 1) { for (let i = 0; i < n; i++) giveBuff(k); }, avatars(x, z, looks) { looks.forEach((l, i) => { const m = makeAvatar(l); const px = x - (looks.length - 1) * 0.9 + i * 1.8; m.group.position.set(px, heightAt(px, z), z); scene.add(m.group); }); },
   get voice() { return { on: voice.on, hear: voice.hearOn, peers: [...voice.peers.values()].map(p => ({ id: p.id, st: p.pc.connectionState, sig: p.pc.signalingState })), remotes: [...remotes.values()].map(r => ({ id: r.id, vl: r.vl, vt: r.vt, link: needLink(r) })), myId }; },
 };
