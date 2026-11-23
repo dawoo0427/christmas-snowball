@@ -439,9 +439,9 @@ function aiEnemy(e, dt, tg) {
   for (const t of tg) { const dd = Math.hypot(t.x - e.x, t.z - e.z); if (dd < d) { d = dd; tgt = t; } }
   let nearest = 1e9; for (const p of players.values()) nearest = Math.min(nearest, Math.hypot(p.x - e.x, p.z - e.z));
   e.far = nearest > 95;
-  const aggroR = T.boss ? 32 : e.type === 'badsanta' ? 28 : 25;
+  const aggroR = T.boss ? 20 : e.type === 'badsanta' ? 17 : 14;      // 플레이어를 알아차리는 거리
   if (tgt && d < aggroR) e.aggro = true;
-  if (!tgt || d > aggroR + 18) e.aggro = false;
+  if (!tgt || d > aggroR + 12) e.aggro = false;                       // 이만큼 멀어지면 포기
   if (Math.hypot(e.x - e.home.x, e.z - e.home.z) > (T.boss ? 75 : 40)) e.aggro = false;
   let mx = 0, mz = 0, spd = T.speed;
   if (e.aggro && tgt && T.melee) {
@@ -533,7 +533,7 @@ function applyHit(e, b, goOn) {
   const p = players.get(b.owner);
   e.hp -= b.dmg; e.flash = 0.15; e.aggro = true;
   e.kx = b.dx * 10 / e.T.scale; e.kz = b.dz * 10 / e.T.scale;
-  for (const o of enemies.values()) if (o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 16) o.aggro = true;   // 근처 동료도 화가 난다
+  for (const o of enemies.values()) if (o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 10) o.aggro = true;   // 근처 동료도 화가 난다
   let pts = 0;
   if (p) {
     p.combo++; p.best = Math.max(p.best, p.combo);
