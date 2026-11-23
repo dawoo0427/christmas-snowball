@@ -78,43 +78,53 @@
     }
     return -1;
   }
-  // ---- 이글루: 둥근 벽, 문(rot 방향)으로만 드나들 수 있음 ----
-  const IGLOO = { r: 3.4, wall: 0.35, door: 0.42, score: 5000 };
-  const iglooDoor = (ig, x, z) => Math.abs(angDiff(Math.atan2(x - ig.x, z - ig.z), ig.rot)) < IGLOO.door;
+  // ---- 이글루 / 얼음성: 둥근 벽, 문(rot 방향)으로만 드나들 수 있음. 레벨이 오를수록 커진다 ----
+  const IGLOO = {
+    r: 3.4, wall: 0.35, door: 0.42, score: 5000,
+    LV: [
+      { name: '이글루', r: 3.4, cost: 5000 },
+      { name: '얼음성 Lv1', r: 4.6, cost: 10000 },
+      { name: '얼음성 Lv2', r: 5.6, cost: 20000 },
+      { name: '얼음성 Lv3', r: 6.8, cost: 50000 },
+    ],
+  };
+  // 레벨에 맞는 반지름과 문 폭(문 너비는 2.7로 같고, 각도로 바꿔 둔다)
+  function igDims(ig) { const r = IGLOO.LV[ig.lv | 0].r; ig.r = r; ig.d = Math.asin(1.35 / r); return ig; }
+  const iglooDoor = (ig, x, z) => Math.abs(angDiff(Math.atan2(x - ig.x, z - ig.z), ig.rot)) < ig.d;
   // 플레이어: 벽에 막히고, 문으로는 통과
   function iglooPush(o, r, igs) {
     for (const ig of igs) {
       const dx = o.x - ig.x, dz = o.z - ig.z, d = Math.hypot(dx, dz);
-      if (d < 1e-4 || Math.abs(d - IGLOO.r) > r + IGLOO.wall || iglooDoor(ig, o.x, o.z)) continue;
-      const to = d < IGLOO.r ? IGLOO.r - r - IGLOO.wall : IGLOO.r + r + IGLOO.wall;
+      if (d < 1e-4 || Math.abs(d - ig.r) > r + IGLOO.wall || iglooDoor(ig, o.x, o.z)) continue;
+      const to = d < ig.r ? ig.r - r - IGLOO.wall : ig.r + r + IGLOO.wall;
       o.x = ig.x + dx / d * to; o.z = ig.z + dz / d * to;
     }
   }
   // 몬스터: 이글루 안으로 못 들어옴
   function iglooPushFull(o, r, igs) {
     for (const ig of igs) {
-      const dx = o.x - ig.x, dz = o.z - ig.z, d = Math.hypot(dx, dz), m = IGLOO.r + IGLOO.wall + r;
+      const dx = o.x - ig.x, dz = o.z - ig.z, d = Math.hypot(dx, dz), m = ig.r + IGLOO.wall + r;
       if (d < m) { const k = d > 1e-4 ? m / d : 0; o.x = ig.x + (k ? dx * k : m); o.z = ig.z + (k ? dz * k : 0); }
     }
   }
   // 눈덩이: 벽을 뚫고 지나가면 막힘 (문 쪽은 통과)
   function iglooBlocks(igs, x0, z0, x1, z1) {
     for (const ig of igs) {
-      const d0 = Math.hypot(x0 - ig.x, z0 - ig.z) - IGLOO.r, d1 = Math.hypot(x1 - ig.x, z1 - ig.z) - IGLOO.r;
+      const d0 = Math.hypot(x0 - ig.x, z0 - ig.z) - ig.r, d1 = Math.hypot(x1 - ig.x, z1 - ig.z) - ig.r;
       if ((d0 > 0) !== (d1 > 0) && !iglooDoor(ig, x1, z1)) return true;
     }
     return false;
   }
-  const iglooAt = (igs, x, z) => igs.find(ig => Math.hypot(x - ig.x, z - ig.z) < IGLOO.r) || null;
+  const iglooAt = (igs, x, z) => igs.find(ig => Math.hypot(x - ig.x, z - ig.z) < ig.r) || null;
   // 이글루를 지을 수 있는 자리인지 (이유 문자열 또는 '')
-  function iglooSpot(x, z, igs, ignoreId) {
-    if (Math.hypot(x, z) < VILLAGE_SAFE + IGLOO.r + 2) return '마을 안에는 지을 수 없어요';
+  function iglooSpot(x, z, igs, ignoreId, R = IGLOO.r) {
+    if (Math.hypot(x, z) < VILLAGE_SAFE + R + 2) return '마을 안에는 지을 수 없어요';
     if (Math.abs(x) > LIMIT - 6 || Math.abs(z) > LIMIT - 6) return '맵 끝에는 지을 수 없어요';
-    if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + IGLOO.r) return '얼음 호수 위에는 지을 수 없어요';
-    for (const ig of igs) if (ig.id !== ignoreId && Math.hypot(x - ig.x, z - ig.z) < IGLOO.r * 2 + 3) return '다른 이글루와 너무 가까워요';
+    if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + R) return '얼음 호수 위에는 지을 수 없어요';
+    for (const ig of igs) if (ig.id !== ignoreId && Math.hypot(x - ig.x, z - ig.z) < ig.r + R + 3) return '다른 이글루와 너무 가까워요';
     const y = heightAt(x, z) + 1;
     if (hitsCollider(x, y, z, 0.5)) return '나무나 바위가 있는 자리예요';
-    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; if (hitsCollider(x + Math.sin(a) * IGLOO.r, heightAt(x + Math.sin(a) * IGLOO.r, z + Math.cos(a) * IGLOO.r) + 1, z + Math.cos(a) * IGLOO.r, 0.6)) return '나무나 바위가 너무 가까워요'; }
+    for (const rr of [R * 0.5, R]) for (let i = 0; i < 16; i++) { const a = i / 16 * TAU, px = x + Math.sin(a) * rr, pz = z + Math.cos(a) * rr; if (hitsCollider(px, heightAt(px, pz) + 1, pz, 0.6)) return '나무나 바위가 너무 가까워요'; }
     return '';
   }
 
@@ -228,7 +238,7 @@
 
   const World = {
     TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ROAD_ENDS, LAKE, FLATS, PATHS,
-    HOUSE, houseAt, IGLOO, iglooDoor, iglooPush, iglooPushFull, iglooBlocks, iglooAt, iglooSpot, MAX_ALLIES: 10,
+    HOUSE, houseAt, IGLOO, igDims, iglooDoor, iglooPush, iglooPushFull, iglooBlocks, iglooAt, iglooSpot, MAX_ALLIES: 10,
     heightAt, pathDist, onIce, inVillage, pushOut, hitsCollider, colliders, layout,
     BALL_H: 1.35, PLAYER_RANGE: 34, MAX_HP: 100, HEAL_AMOUNT: 35, RELOAD_TIME: 2.0,
     TYPES: {
@@ -279,6 +289,16 @@
         pierce: s.pierce, boom: s.boom ? 2.5 + s.boom : 0, ice: s.ice ? 1.5 + s.ice : 0,
       };
     },
+    // 얼음낚시: 5초마다 한 마리 (확률 %, 점수)
+    FISH_EVERY: 5,
+    FISH: [
+      { k: 'smelt', name: '빙어', emoji: '🐟', p: 40, pts: 20 },
+      { k: 'trout', name: '송어', emoji: '🐠', p: 27, pts: 50 },
+      { k: 'salmon', name: '연어', emoji: '🐟', p: 15, pts: 100 },
+      { k: 'puffer', name: '복어', emoji: '🐡', p: 8, pts: 150 },
+      { k: 'boot', name: '낡은 장화', emoji: '👢', p: 7, pts: 5 },
+      { k: 'gold', name: '황금 물고기', emoji: '✨', p: 3, pts: 500 },
+    ],
     pvpDmg(dmg) { return Math.min(40, Math.round(dmg * World.PVP_DMG)); },
     BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, VILLAGE_TREES, BENCHES, SEATS, BENCH_TOP, FIRE_HEAL: 12, TEA_TIME: 4.5, SIT_RANGE: 11,
   };

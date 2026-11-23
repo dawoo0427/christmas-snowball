@@ -158,7 +158,7 @@ const heals = W.layout.heals.map(h => ({ x: h.x, z: h.z, on: true, respawn: 0 })
 const HEAL_RESPAWN = W.HEAL_RESPAWN;
 const igloos = new Map();        // 주인 id -> { id, x, z, rot, n }
 const igList = () => [...igloos.values()];
-const igRow = ig => [ig.id, r1(ig.x), r1(ig.z), r2(ig.rot), ig.n];
+const igRow = ig => [ig.id, r1(ig.x), r1(ig.z), r2(ig.rot), ig.n, ig.lv];
 
 function broadcast(obj, except) { const s = JSON.stringify(obj), buf = Buffer.from(s); for (const p of players.values()) if (p !== except && p.ready) p.conn.frame(1, buf); }
 function addEnemy(type, x, z, spawn) {
@@ -308,17 +308,36 @@ function handle(p, m) {
       q.allies.delete(p.id); sendAllies(p); sendAllies(q); q.conn.send({ t: 'allyOff', id: p.id });
       break;
     }
-    case 'igloo': {              // 이글루 짓기 (5000점 이상, 한 사람에 하나 — 다시 지으면 옮겨짐)
-      const x = num(m.x), z = num(m.z), rot = num(m.rot);
+    case 'igloo': {              // 이글루 짓기 (5000점 차감). 이미 있으면 같은 레벨 그대로 옮기기(무료)
+      const x = num(m.x), z = num(m.z), rot = num(m.rot), old = igloos.get(p.id), lv = old ? old.lv : 0;
+      const cost = old ? 0 : W.IGLOO.LV[0].cost;
       let why = '';
       if (p.dead) why = '쓰러진 상태에서는 지을 수 없어요';
-      else if (p.score < W.IGLOO.score) why = `${W.IGLOO.score}점부터 지을 수 있어요`;
-      else if (Math.hypot(x - p.x, z - p.z) > 10) why = '너무 멀어요';
-      else why = W.iglooSpot(x, z, igList(), p.id);
+      else if (p.score < cost) why = `이글루는 ${cost.toLocaleString()}점이 필요해요`;
+      else if (Math.hypot(x - p.x, z - p.z) > 16) why = '너무 멀어요';
+      else why = W.iglooSpot(x, z, igList(), p.id, W.IGLOO.LV[lv].r);
       if (why) { p.conn.send({ t: 'igfail', why }); break; }
-      const ig = { id: p.id, x, z, rot, n: p.n };
+      p.score -= cost;
+      const ig = W.igDims({ id: p.id, x, z, rot, n: p.n, lv });
       igloos.set(p.id, ig);
-      broadcast({ t: 'ig', i: igRow(ig) });
+      broadcast({ t: 'ig', i: igRow(ig), cost, mv: old ? 1 : 0 });
+      break;
+    }
+    case 'igup': {               // 얼음성으로 업그레이드 (점수 차감)
+      const ig = igloos.get(p.id);
+      if (!ig) { p.conn.send({ t: 'igfail', why: '먼저 이글루를 지어 주세요' }); break; }
+      if (ig.lv >= W.IGLOO.LV.length - 1) { p.conn.send({ t: 'igfail', why: '이미 최종 얼음성이에요' }); break; }
+      const next = W.IGLOO.LV[ig.lv + 1];
+      let why = p.score < next.cost ? `${next.name}은 ${next.cost.toLocaleString()}점이 필요해요` : W.iglooSpot(ig.x, ig.z, igList(), p.id, next.r);
+      if (why && why.includes('가까워요')) why = '주변이 좁아서 넓힐 수 없어요 (나무·바위·다른 이글루). 넓은 곳으로 옮긴 뒤 다시 해 보세요';
+      if (why) { p.conn.send({ t: 'igfail', why }); break; }
+      p.score -= next.cost; ig.lv++; W.igDims(ig);
+      broadcast({ t: 'ig', i: igRow(ig), cost: next.cost, up: 1 });
+      break;
+    }
+    case 'fish': {               // 얼음낚시 시작/그만
+      if (m.on && !p.dead && W.onIce(p.x, p.z)) p.fishing = { x: p.x, z: p.z, t: W.FISH_EVERY };
+      else p.fishing = null;
       break;
     }
     case 'look': {               // 꾸미기 변경
@@ -516,6 +535,18 @@ function step(dt) {
         }
       }
     }
+  }
+  // 얼음낚시: 가만히 앉아 있으면 5초마다 랜덤 물고기
+  for (const p of players.values()) {
+    const f = p.fishing; if (!f) continue;
+    if (p.dead || !W.onIce(p.x, p.z) || Math.hypot(p.x - f.x, p.z - f.z) > 1.2) { p.fishing = null; p.conn.send({ t: 'fishx' }); continue; }
+    f.t -= dt; if (f.t > 0) continue;
+    f.t = W.FISH_EVERY;
+    let roll = Math.random() * 100, fish = W.FISH[0];
+    for (const c of W.FISH) { if (roll < c.p) { fish = c; break; } roll -= c.p; }
+    p.score += fish.pts;
+    p.conn.send({ t: 'catch', k: fish.k, pts: fish.pts });
+    if (fish.k === 'gold') broadcast({ t: 'goldfish', id: p.id }, p);
   }
   // 드랍 아이템 수명, 오래된 눈덩이 기록 정리
   for (const d of [...drops.values()]) { d.ttl -= dt; if (d.ttl <= 0) { drops.delete(d.id); broadcast({ t: 'dropx', id: d.id }); } }
