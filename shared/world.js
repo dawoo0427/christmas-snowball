@@ -14,9 +14,21 @@
     return f;
   }
 
-  // 맵 크기: 플레이 가능 범위 ±224 (예전의 2배). 가장자리 바깥은 산으로 막힌다.
-  const LIMIT = 224, EDGE = 216, HALF = 290;
-  const VILLAGE_SAFE = 28;            // 마을 안전지대 반지름. 이 밖에서는 플레이어끼리 PvP 가능
+  // 맵 크기: 플레이 가능 범위 ±448 (예전의 2배). 가장자리 바깥은 산으로 막힌다.
+  const LIMIT = 448, EDGE = 432, HALF = 580;
+  const VILLAGE_SAFE = 56;            // 마을 안전지대 반지름 (예전의 2배). 이 밖에서는 플레이어끼리 PvP 가능
+  const ZONES = [220, 340];           // 마을에서 이 거리 밖부터 나쁜 루돌프, 나쁜 산타가 나온다
+  // 안전지대의 초대형 크리스마스트리: 플레이어가 오너먼트로 꾸민다 (하나에 1,000점)
+  // (카메라 높이가 약 24라서, 카메라를 뚫지 않도록 높이 18.5로)
+  const GIANT_TREE = { x: 0, z: 30, r: 7.2, h: 18.5, trunk: 2.4,
+    tiers: [0, 1, 2, 3, 4, 5].map(i => ({ b: 2.4 + i * 2.3, r: 7.6 * (1 - i / 6.3), h: 4.6 })), ornCost: 1000, maxOrn: 400, near: 24 };
+  // 트리 표면 반지름 (높이 y 에서 가장 바깥쪽 가지)
+  GIANT_TREE.surfR = y => { let r = 0; for (const t of GIANT_TREE.tiers) if (y >= t.b && y <= t.b + t.h) r = Math.max(r, t.r * (1 - (y - t.b) / t.h)); return r; };
+  const ORNAMENTS = [
+    { k: 'red', name: '빨간 공', emoji: '🔴' }, { k: 'gold', name: '금빛 공', emoji: '🟡' }, { k: 'blue', name: '파란 공', emoji: '🔵' },
+    { k: 'star', name: '별', emoji: '⭐' }, { k: 'cane', name: '지팡이 사탕', emoji: '🍭' }, { k: 'bell', name: '종', emoji: '🔔' },
+    { k: 'bow', name: '리본', emoji: '🎀' }, { k: 'light', name: '반짝 전구', emoji: '💡' }, { k: 'snow', name: '눈꽃', emoji: '❄️' }, { k: 'gift', name: '작은 선물', emoji: '🎁' },
+  ];
   const BONFIRE = { x: 0, z: 0, r: 3.2, healR: 11 };      // 마을 중앙의 대형 모닥불
   const VILLAGE_TREES = [{ x: -12.5, z: 7.2, s: 0.45 }, { x: 12.5, z: -7.2, s: 0.45 }];   // 모닥불 양옆의 작은 크리스마스트리
   // 모닥불을 둘러싼 통나무 의자 6개, 의자마다 2자리. 앉으면 모닥불을 바라본다
@@ -28,15 +40,15 @@
   });
   const SEATS = BENCHES.flatMap(b => b.seats);
   // 마을에서 뻗어 나가는 길 5개의 끝 지점 (캠프는 없어졌고 길과 가로등은 이정표로 남김)
-  const ROAD_ENDS = [{ x: 110, z: -80 }, { x: -124, z: -84 }, { x: -132, z: 104 }, { x: 124, z: 116 }, { x: 0, z: -184 }];
-  const LAKE = { x: -48, z: 150, r: 22 };
+  const ROAD_ENDS = [{ x: 220, z: -160 }, { x: -248, z: -168 }, { x: -264, z: 208 }, { x: 248, z: 232 }, { x: 0, z: -368 }];
+  const LAKE = { x: -96, z: 300, r: 32 };
 
   function baseH(x, z) {
     return 2.2 * Math.sin(x * 0.045) * Math.cos(z * 0.04) + 0.9 * Math.sin(x * 0.12 + z * 0.08)
          + 1.1 * Math.cos(z * 0.1 - x * 0.035) + 0.45 * Math.sin(x * 0.3) * Math.sin(z * 0.27);
   }
   const FLATS = [
-    { x: 0, z: 0, inner: 32, outer: 44 },
+    { x: 0, z: 0, inner: 62, outer: 78 },
     { x: LAKE.x, z: LAKE.z, inner: LAKE.r + 1, outer: LAKE.r + 10, lower: -1.4 },
   ];
   FLATS.forEach(f => { f.h = baseH(f.x, f.z) + (f.lower || 0); });
@@ -178,9 +190,11 @@
     for (const t of VILLAGE_TREES) addCollider({ t: 'c', x: t.x, z: t.z, r: 4.8 * t.s + 0.3, h: 16 * t.s });
     const wallCols = [0x9b5a3c, 0x6d7fa6, 0x7c9a6a, 0xb07a4a, 0x8d5b8f];
     const pathAngles = PATHS.map(([, , bx, bz]) => Math.atan2(bz, bx));
-    for (let i = 0; i < 10; i++) {
-      const a = i / 10 * TAU + 0.2, Rr = 24;
-      if (pathAngles.some(pa => Math.abs(angDiff(pa, a)) < 0.3)) continue;
+    addCollider({ t: 'c', x: GIANT_TREE.x, z: GIANT_TREE.z, r: GIANT_TREE.r, h: GIANT_TREE.h + 2 });
+    const treeAng = Math.atan2(GIANT_TREE.z, GIANT_TREE.x);
+    for (let i = 0; i < 16; i++) {
+      const a = i / 16 * TAU + 0.2, Rr = 44;
+      if (pathAngles.some(pa => Math.abs(angDiff(pa, a)) < 0.22) || Math.abs(angDiff(treeAng, a)) < 0.4) continue;
       const x = Math.cos(a) * Rr, z = Math.sin(a) * Rr, rot = Math.atan2(-x, -z);
       data.houses.push({ x, z, rot, col: wallCols[i % wallCols.length] });
       // 벽 4면 (앞쪽 가운데에 문). 로컬 좌표 → 월드 좌표: 메쉬 rotation.y = rot 과 같은 규칙
@@ -198,12 +212,12 @@
       for (const s of spots) if (Math.abs(s.x - x) < minD && Math.abs(s.z - z) < minD && Math.hypot(s.x - x, s.z - z) < minD) return false;
       return true;
     };
-    for (let i = 0; i < 9000 && spots.length < 1500; i++) {
+    for (let i = 0; i < 40000 && spots.length < 4800; i++) {
       const x = R.range(-HALF + 10, HALF - 10), z = R.range(-HALF + 10, HALF - 10);
       if (ok(x, z, 3.6)) spots.push({ x, z, s: R.range(0.75, 1.55), r: R.range(0, TAU), heavy: R() < 0.3 });
     }
     for (const s of spots) { addCollider({ t: 'c', x: s.x, z: s.z, r: 0.55 * s.s + 0.3, h: 5.2 * s.s }); data.trees.push(s); }
-    for (let i = 0; i < 1500 && data.rocks.length < 220; i++) {
+    for (let i = 0; i < 6000 && data.rocks.length < 700; i++) {
       const x = R.range(-LIMIT, LIMIT), z = R.range(-LIMIT, LIMIT);
       if (ok(x, z, 5)) { const r = { x, z, s: R.range(0.6, 1.6) }; data.rocks.push(r); addCollider({ t: 'c', x, z, r: r.s * 1.05, h: r.s * 1.3 }); }
     }
@@ -214,21 +228,21 @@
       const Lp = Math.hypot(bx, bz), nx = bx / Lp, nz = bz / Lp;
       data.heals.push(freeSpot(nx * Lp * 0.55 + nz * 2.5, nz * Lp * 0.55 - nx * 2.5));
     }
-    for (let i = 0; i < 2000 && data.heals.length < 32; i++) {
-      const x = R.range(-200, 200), z = R.range(-200, 200);
-      if (Math.hypot(x, z) < 40 || data.heals.some(h => Math.hypot(h.x - x, h.z - z) < 30)) continue;
+    for (let i = 0; i < 8000 && data.heals.length < 80; i++) {
+      const x = R.range(-LIMIT + 24, LIMIT - 24), z = R.range(-LIMIT + 24, LIMIT - 24);
+      if (Math.hypot(x, z) < VILLAGE_SAFE + 14 || data.heals.some(h => Math.hypot(h.x - x, h.z - z) < 30)) continue;
       const o = freeSpot(x, z); if (Math.hypot(o.x - x, o.z - z) < 0.01) data.heals.push(o);
     }
     // 필드 몬스터 스폰 지점: 마을에서 멀수록 강한 몬스터. 죽으면 같은 자리에서 다시 생긴다
     const pick = (d) => {
       const t = R();
-      if (d < 110) return t < 0.6 ? 'snowman' : 'penguin';
-      if (d < 170) return t < 0.35 ? 'snowman' : t < 0.6 ? 'penguin' : 'rudolph';
+      if (d < ZONES[0]) return t < 0.6 ? 'snowman' : 'penguin';
+      if (d < ZONES[1]) return t < 0.35 ? 'snowman' : t < 0.6 ? 'penguin' : 'rudolph';
       return t < 0.2 ? 'snowman' : t < 0.35 ? 'penguin' : t < 0.68 ? 'rudolph' : 'badsanta';
     };
-    for (let i = 0; i < 6000 && data.spawns.length < 75; i++) {
+    for (let i = 0; i < 30000 && data.spawns.length < 225; i++) {      // 필드 몬스터 225마리 (예전의 3배)
       const x = R.range(-LIMIT + 12, LIMIT - 12), z = R.range(-LIMIT + 12, LIMIT - 12), d = Math.hypot(x, z);
-      if (d < 48 || onIce(x, z) || data.spawns.some(sp => Math.hypot(sp.x - x, sp.z - z) < 17)) continue;
+      if (d < VILLAGE_SAFE + 20 || onIce(x, z) || data.spawns.some(sp => Math.hypot(sp.x - x, sp.z - z) < 17)) continue;
       const o = freeSpot(x, z); if (Math.hypot(o.x - x, o.z - z) > 0.01) continue;
       data.spawns.push({ id: data.spawns.length, x, z, type: pick(d) });
     }
@@ -237,7 +251,7 @@
   const layout = build();
 
   const World = {
-    TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ROAD_ENDS, LAKE, FLATS, PATHS,
+    TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ZONES, GIANT_TREE, ORNAMENTS, ROAD_ENDS, LAKE, FLATS, PATHS,
     HOUSE, houseAt, IGLOO, igDims, iglooDoor, iglooPush, iglooPushFull, iglooBlocks, iglooAt, iglooSpot, MAX_ALLIES: 10,
     heightAt, pathDist, onIce, inVillage, pushOut, hitsCollider, colliders, layout,
     BALL_H: 1.35, PLAYER_RANGE: 34, MAX_HP: 100, HEAL_AMOUNT: 35, RELOAD_TIME: 2.0,
@@ -247,7 +261,7 @@
       // 나쁜 루돌프: 빠르게 달려들어 빨간 눈덩이를 빠르게 던진다
       rudolph:  { id: 2, hp: 4, r: 0.95, h: 2.4, speed: 9.5, cool: [1.0, 1.7], wind: 0.4, range: 11, maxRange: 20, spd: 24, err: 0.08, pts: 220, scale: 1, dmg: 14, ball: 2, drop: 0.15 },
       // 나쁜 산타: 덩치 큰 정예. 석탄 눈덩이를 3발씩 부채꼴로 던진다
-      badsanta: { id: 3, hp: 10, r: 1.1, h: 3.6, speed: 3.6, cool: [1.7, 2.5], wind: 0.8, range: 14, maxRange: 26, spd: 18, err: 0.05, pts: 450, scale: 1.25, dmg: 18, ball: 1, spread: 3, drops: 2 },
+      badsanta: { id: 3, hp: 10, r: 1.1, h: 3.6, speed: 3.6, cool: [1.7, 2.5], wind: 0.8, range: 14, maxRange: 26, spd: 18, err: 0.05, pts: 1000, scale: 1.25, dmg: 18, ball: 1, spread: 3, drops: 2 },
       // 거대 하프물범 (보스): 맵 랜덤한 곳에 한 마리. 다가와서 배치기로 주변을 내려친다. 처치 시 10,000점 + 선물 4개
       seal: { id: 4, hp: 300, r: 1.8, h: 2.6, speed: 7.2, cool: [1.2, 1.9], wind: 0.75, range: 2.4, maxRange: 4.4, spd: 0, err: 0, pts: 10000, scale: 1.6, dmg: 30,
         melee: true, reach: 4.4, boss: true, drops: 4, name: '거대 하프물범' },

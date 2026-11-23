@@ -39,6 +39,8 @@
   #upBtn { background:#7e57c2e6 !important; box-shadow:0 3px 0 #4527a0 !important; }
   #fishBtn { background:#00838fe6 !important; box-shadow:0 3px 0 #005662 !important; }
   #fishBtn.on { background:#ff7043e6 !important; }
+  #treeBtn { background:#2e7d32e6 !important; box-shadow:0 3px 0 #1b4d1f !important; }
+  body.playing.neartree #treeBtn { display:block; }
   #sledBtn { background:#c62828e6 !important; box-shadow:0 3px 0 #7f0000 !important; }
   #sledBtn.on { background:#ffb300e6 !important; box-shadow:0 3px 0 #a86b00 !important; }
   body.playing.cansled #sledBtn { display:block; }
@@ -52,6 +54,15 @@
   #allyAsk button[data-ok="0"] { background:#6d6d7a; }
   #plistSet button.ally { border-color:#7dffb0; }
   #plistSet button.ally.on { background:#2e7d32; border-color:#7dffb0; }
+  #treeBoard { position:absolute; transform:translate(-50%,-100%); z-index:2; display:none; text-align:center; pointer-events:none; white-space:nowrap;
+    background:#0b1430ee; border:3px solid #ffd34d; border-radius:14px; padding:7px 16px 6px; box-shadow:0 0 14px #ffd34d88, inset 0 0 10px #ffd34d33; }
+  #treeBoard::before, #treeBoard::after { content:''; position:absolute; left:10px; right:10px; height:4px; background:repeating-linear-gradient(90deg,#ff4d4d 0 6px,transparent 6px 12px,#ffd34d 12px 18px,transparent 18px 24px,#4dc3ff 24px 30px,transparent 30px 36px); animation:led 1.2s steps(3) infinite; }
+  #treeBoard::before { top:3px; } #treeBoard::after { bottom:3px; }
+  @keyframes led { to { background-position:36px 0; } }
+  #treeBoard small { display:block; font-family:var(--display); color:#ffd34d; font-size:13px; letter-spacing:1px; }
+  #treeBoard b { display:block; font-family:var(--display); font-weight:400; font-size:19px; color:#fff; }
+  #treeBoard i { position:absolute; left:50%; bottom:-11px; transform:translateX(-50%); color:#ffd34d; font-style:normal; font-size:12px; }
+  body.touch #treeBoard b { font-size:15px; } body.touch #treeBoard { padding:5px 12px 4px; }
   .tag.igtag { font-size:12px; color:#cfe8ff; background:#0b143099; }
   #sitBtn.on { background:#ffb74de6 !important; box-shadow:0 3px 0 #a86b12 !important; }
   body.playing.safe #teaBtn, body.playing.nearfire #sitBtn { display:block; }
@@ -156,7 +167,8 @@
   .custom .chips { display:flex; flex-wrap:wrap; gap:6px; }
   #overlay .custom .chips button { font-family:var(--body); font-size:13px; padding:6px 11px; border-radius:14px; background:#ffffff14; box-shadow:none; border:1.5px solid #ffffff30; }
   #overlay .custom .chips button.sel { background:#2f6fd6; border-color:#9cc3ff; }
-  @media (max-width:560px) { .custom { grid-template-columns:1fr; } .custom canvas { width:180px; height:200px; margin:0 auto; display:block; } }
+  .custom.treeedit { grid-template-columns:300px 1fr; }
+  @media (max-width:560px) { .custom, .custom.treeedit { grid-template-columns:1fr; } #treeCv { margin:0 auto; display:block; max-width:100%; height:auto !important; } .custom canvas { width:180px; height:200px; margin:0 auto; display:block; } }
   .swatch { display:inline-flex; gap:6px; }
   .swatch label { width:30px; height:30px; border-radius:50%; cursor:pointer; border:3px solid transparent; }
   .swatch input { position:absolute; opacity:0; width:1px; height:1px; }
@@ -226,7 +238,7 @@
 </div>
 <button id="gear" aria-label="설정 열기" title="설정">⚙️</button>
 <div id="allyAsk" role="alertdialog" aria-live="assertive"><span id="allyAskText"></span><button data-ok="1">🤝 수락</button><button data-ok="0">거절</button></div>
-<div id="actBtns"><button id="igBtn" class="act" aria-label="이글루 짓기">🧊 이글루 짓기 <small>(B)</small></button><button id="sledBtn" class="act" aria-label="눈썰매"></button><button id="fishBtn" class="act" aria-label="얼음낚시">🎣 얼음낚시 <small>(G)</small></button><button id="upBtn" class="act" aria-label="얼음성 업그레이드"></button><button id="yamBtn" class="act" aria-label="군고구마 먹기">🍠 군고구마 <small>(Y)</small></button><button id="sitBtn" class="act" aria-label="앉기 또는 눕기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button></div>
+<div id="actBtns"><button id="igBtn" class="act" aria-label="이글루 짓기">🧊 이글루 짓기 <small>(B)</small></button><button id="treeBtn" class="act" aria-label="트리 꾸미기">🎄 트리 꾸미기 <small>(H)</small></button><button id="sledBtn" class="act" aria-label="눈썰매"></button><button id="fishBtn" class="act" aria-label="얼음낚시">🎣 얼음낚시 <small>(G)</small></button><button id="upBtn" class="act" aria-label="얼음성 업그레이드"></button><button id="yamBtn" class="act" aria-label="군고구마 먹기">🍠 군고구마 <small>(Y)</small></button><button id="sitBtn" class="act" aria-label="앉기 또는 눕기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button></div>
 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <h3 id="setTitle">설정</h3>
   <label class="opt" for="optHear"><span>다른 사람 목소리 듣기<small>마이크 없이도 근처 플레이어 목소리가 들려요</small></span><input type="checkbox" id="optHear" checked></label>
@@ -356,7 +368,7 @@ function glow(color, size, x, y, z, parent, twinkle = 0) {
 //  월드 그리기 (배치는 world.js 가 서버와 똑같이 계산)
 // ============================================================
 function buildTerrain() {
-  const seg = isTouch ? 150 : 220;
+  const seg = isTouch ? 260 : 400;         // 맵이 2배라 칸 수도 늘림
   const geo = new THREE.PlaneGeometry(W.HALF * 2, W.HALF * 2, seg, seg); geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, n = pos.count;
   for (let i = 0; i < n; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
@@ -609,6 +621,101 @@ function buildLamp({ x, z, light }) {
   glow(0xffc060, 3.5, x, y + 4.6, z, null, 0.6);
   if (light) { const Lt = new THREE.PointLight(0xffb860, 1.1, 22, 1.6); Lt.position.set(x, y + 4.4, z); scene.add(Lt); }
 }
+// ---------- 초대형 트리 (꾸미기 + 1위 전광판) ----------
+const GT = W.GIANT_TREE;
+const giant = { g: null, deco: null, orns: new Map(), board: null, boardTxt: '', hit: null };
+function buildGiantTree() {
+  const g = new THREE.Group(); g.position.set(GT.x, heightAt(GT.x, GT.z) - 0.2, GT.z); scene.add(g); giant.g = g;
+  // 트리가 카메라와 내 캐릭터 사이를 가리면 반투명해지도록 재질을 따로 둔다
+  const own = c => { const m = mat(c).clone(); m.transparent = true; return m; };
+  const trunkM = own(0x5a3a22); mk(Cyl(1.3, 1.7, GT.trunk + 0.6, 10), trunkM, 0, (GT.trunk + 0.6) / 2, 0, g);
+  const greens = [0x1d6b3a, 0x237a42, 0x1d6b3a, 0x2a8a4a, 0x1f7040, 0x2a8a4a].map(own);
+  GT.tiers.forEach((t, i) => mk(Cone(t.r, t.h, 16), greens[i], 0, t.b + t.h / 2, 0, g));
+  giant.mats = [trunkM, ...new Set(greens)]; giant.fade = 1;
+  const deco = new THREE.Group(); g.add(deco); giant.deco = deco;      // 전구·별·오너먼트·전광판 (트리가 화면을 가릴 땐 숨김)
+  // 눈 쌓인 가지 끝 + 기본 전구 줄
+  const cols = [0xff4d4d, 0xffd34d, 0x4dc3ff, 0xff7dd8, 0x7dffb0];
+  for (let i = 0; i < 130; i++) {
+    const y = GT.trunk + 0.5 + (i / 130) * (GT.h - GT.trunk - 1.5), a = i * 0.9, r = GT.surfR(y) + 0.1, c = cols[i % 5];
+    const bulb = mk(Sph(0.18, 6, 4), mat(c, { basic: true }).clone(), Math.sin(a) * r, y, Math.cos(a) * r, deco, false);
+    twinkleBulbs.push({ m: bulb, c: new THREE.Color(c), ph: i * 0.37 });
+  }
+  const sh = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.9 : 2.1; i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+  const sg = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false }); sg.translate(0, 0, -0.25);
+  const star = mk(sg, mat(0xffd34d, { em: 0xffc020, emI: 1.6, metal: 0.4 }), 0, GT.h + 1.2, 0, deco, false); stars.push(star);
+  glow(0xffd860, 11, 0, GT.h + 1.3, 0, deco, 1.2);
+  const lt = new THREE.PointLight(0xffd59a, 1.2, 40, 1.6); lt.position.set(0, GT.h * 0.5, 0); g.add(lt);
+  // 1위 전광판: 트리 꼭대기를 따라다니는 화면 표시 (탑뷰 카메라에서는 꼭대기가 화면 밖일 때가 많아 위쪽 가장자리에 붙는다)
+  const bd = document.createElement('div'); bd.id = 'treeBoard'; bd.innerHTML = '<small>👑 현재 랭킹 1위</small><b></b><i>▼</i>'; $('labels').appendChild(bd);
+  giant.board = bd;
+  // 클릭 판정용 투명 원기둥
+  giant.hit = new THREE.Mesh(new THREE.CylinderGeometry(GT.r, GT.r, GT.h + 3, 12), new THREE.MeshBasicMaterial({ visible: false }));
+  giant.hit.position.set(0, (GT.h + 3) / 2, 0); g.add(giant.hit);
+  drawBoard('', '점수를 모아 1위에 올라 보세요!', 0);
+}
+function drawBoard(title, name, score) {
+  giant.board.querySelector('b').textContent = score ? `${name} · ${score.toLocaleString()}점` : name;
+}
+// 전광판 위치: 트리 꼭대기의 화면 좌표, 화면 밖이면 가장자리에 붙임
+function placeBoard() {
+  const bd = giant.board; if (!bd) return;
+  const show = state === 'play' && me && Math.hypot(me.x - GT.x, me.z - GT.z) < 90;
+  if (!show) { bd.style.display = 'none'; return; }
+  tmpV.set(GT.x, heightAt(GT.x, GT.z) + GT.h + 2.5, GT.z).project(camera);
+  if (tmpV.z > 1) { bd.style.display = 'none'; return; }
+  const sx = (tmpV.x * 0.5 + 0.5) * innerWidth, sy = (-tmpV.y * 0.5 + 0.5) * innerHeight;
+  if (sx < -150 || sx > innerWidth + 150) { bd.style.display = 'none'; return; }
+  bd.style.display = 'block'; bd.style.left = clamp(sx, 110, innerWidth - 110) + 'px'; bd.style.top = clamp(sy, isTouch ? 96 : 118, innerHeight - 160) + 'px';
+}
+// 오너먼트 모델 (트리 바깥쪽을 향하도록)
+function makeOrnament(k) {
+  const g = new THREE.Group(); g.scale.setScalar(0.85);
+  const shiny = (c, em) => mat(c, { metal: 0.6, rough: 0.25, em: em || 0x000000, emI: 0.6 });
+  if (k === 'red' || k === 'gold' || k === 'blue') {
+    mk(Sph(0.55, 14, 10), shiny({ red: 0xe53935, gold: 0xffc107, blue: 0x1e88e5 }[k], { red: 0x330000, gold: 0x332200, blue: 0x001133 }[k]), 0, 0, 0.3, g);
+    mk(Cyl(0.14, 0.14, 0.2, 8), shiny(0xd4af37), 0, 0.58, 0.3, g);
+  } else if (k === 'star') { const st = mk(getStarGeo(), mat(0xffd34d, { em: 0xffc020, emI: 1.2 }), 0, 0, 0.35, g, false); st.scale.setScalar(4.2); glow(0xffe082, 1.8, 0, 0, 0.5, g, 2); }
+  else if (k === 'cane') {
+    const st = mk(Cyl(0.1, 0.1, 1.1, 8), toon(0xffffff), 0, -0.2, 0.3, g); for (const y of [-0.55, -0.25, 0.05]) mk(Cyl(0.11, 0.11, 0.1, 8), toon(0xe53935), 0, y, 0.3, g, false);
+    mk(new THREE.TorusGeometry(0.22, 0.1, 6, 12, Math.PI), toon(0xe53935), 0.22, 0.35, 0.3, g);
+  } else if (k === 'bell') { mk(Cone(0.5, 0.75, 14), shiny(0xffc107, 0x332200), 0, 0, 0.3, g); mk(Sph(0.13, 8, 6), shiny(0xb8860b), 0, -0.4, 0.3, g, false); mk(new THREE.TorusGeometry(0.4, 0.08, 6, 14), toon(0xd32f2f), 0, 0.3, 0.3, g).rotation.x = Math.PI / 2; }
+  else if (k === 'bow') { for (const sd of [-1, 1]) { const w = mk(Sph(0.32, 10, 8), toon(0xd81b60), sd * 0.32, 0.05, 0.3, g); w.scale.set(1, 0.65, 0.4); const t = mk(Box(0.14, 0.5, 0.06), toon(0xd81b60), sd * 0.15, -0.35, 0.3, g); t.rotation.z = sd * 0.3; } mk(Sph(0.14, 8, 6), toon(0xad1457), 0, 0.05, 0.35, g); }
+  else if (k === 'light') { const b = mk(Sph(0.32, 10, 8), mat(0xfff59d, { basic: true }).clone(), 0, 0, 0.3, g, false); glow(0xfff59d, 2.6, 0, 0, 0.45, g, 2); twinkleBulbs.push({ m: b, c: new THREE.Color(0xfff59d), ph: Math.random() * TAU }); }
+  else if (k === 'snow') { for (let i = 0; i < 3; i++) { const bx = mk(Box(1.1, 0.12, 0.08), mat(0xe3f2fd, { em: 0x88bbff, emI: 0.5 }), 0, 0, 0.32, g, false); bx.rotation.z = i * Math.PI / 3; } }
+  else { mk(Box(0.75, 0.65, 0.75), toon(0x43a047), 0, 0, 0.35, g); mk(Box(0.78, 0.68, 0.18), toon(0xffd34d), 0, 0, 0.35, g, false); mk(Box(0.18, 0.68, 0.78), toon(0xffd34d), 0, 0, 0.35, g, false); }
+  return g;
+}
+function addOrnament([id, k, a, y, n]) {
+  if (giant.orns.has(id) || !giant.g) return;
+  const m = makeOrnament(k), r = GT.surfR(y);
+  m.position.set(Math.sin(a) * r, y, Math.cos(a) * r); m.rotation.y = a; giant.deco.add(m);
+  giant.orns.set(id, { id, k, a, y, n, m });
+}
+function clearOrnaments() { for (const o of giant.orns.values()) giant.deco.remove(o.m); giant.orns.clear(); }
+// 1위 전광판 갱신 (나와 다른 플레이어 점수 중 가장 높은 사람)
+// 카메라→캐릭터 선분이 트리 줄기 가까이를 지나가면 트리를 반투명하게
+function updateGiantFade(dt) {
+  if (!giant.mats || !me) return;
+  const ax = camera.position.x, az = camera.position.z, bx = me.x, bz = me.z, dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
+  const t = clamp(((GT.x - ax) * dx + (GT.z - az) * dz) / L2, 0, 1), d = Math.hypot(ax + dx * t - GT.x, az + dz * t - GT.z);
+  const target = state === 'play' && d < GT.r + 1.5 && t > 0.02 && t < 0.995 ? 0.22 : 1;
+  if (Math.abs(giant.fade - target) > 0.004) { giant.fade += (target - giant.fade) * Math.min(1, dt * 6); setFade(giant.mats, giant.fade > 0.98 ? 1 : giant.fade); }
+  giant.deco.visible = giant.fade > 0.6;
+}
+function updateBoard() {
+  if (!giant.board || state !== 'play') return;
+  let top = { n: nick, s: myScore }; for (const r of remotes.values()) if (r.score > top.s) top = { n: r.n, s: r.score };
+  const txt = top.s > 0 ? `${top.n}|${top.s}` : '-';
+  if (txt === giant.boardTxt) return; giant.boardTxt = txt;
+  if (top.s > 0) drawBoard('', top.n, top.s); else drawBoard('', '점수를 모아 1위에 올라 보세요!', 0);
+}
+const nearGiant = () => me && Math.hypot(me.x - GT.x, me.z - GT.z) < GT.near;
+function openTree() {
+  if (state !== 'play' || !me || me.dead) return;
+  if (!nearGiant()) { toast('🎄 초대형 트리 가까이 가야 꾸밀 수 있어요', '마을 안 큰 트리', 1.8); return; }
+  overlay('tree');
+}
 function buildBigTree(x = 0, z = 0, sc = 1) {
   const g = new THREE.Group(); g.position.set(x, heightAt(x, z), z); g.scale.setScalar(sc); scene.add(g);
   mk(Cyl(0.7, 0.9, 2.5, 8), mat(0x5a3a22), 0, 1.25, 0, g);
@@ -637,6 +744,7 @@ let friendly = null;
 function buildVillage() {
   for (const t of W.VILLAGE_TREES) buildBigTree(t.x, t.z, t.s);
   L.houses.forEach((h, i) => buildHouse(h, i));
+  buildGiantTree();
   L.lamps.forEach(buildLamp);
   friendly = makeSnowman('friend'); friendly.group.position.set(L.friendly.x, heightAt(L.friendly.x, L.friendly.z), L.friendly.z); friendly.group.rotation.y = 0.8; scene.add(friendly.group);
 }
@@ -1265,6 +1373,7 @@ function onMsg(m) {
       if (m.g) applyGifts(m.g);
       if (m.h) m.h.forEach((on, i) => setHeal(i, !!on));
       for (const row of (m.ig || [])) addIgloo(row);
+      clearOrnaments(); for (const row of (m.orn || [])) addOrnament(row); giant.boardTxt = '';
       camYaw = camYawT = 0;
       sendVoiceFlags();
       for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = '';
@@ -1316,6 +1425,15 @@ function onMsg(m) {
       break;
     }
     case 'igx': removeIgloo(m.id); break;
+    case 'orn': {                // 누군가 초대형 트리를 꾸밈
+      addOrnament(m.o);
+      const o = W.ORNAMENTS.find(q => q.k === m.o[1]);
+      if (m.by === myId) { sfx.pop(); toast(`${o ? o.emoji : '🎄'} 장식을 달았어요!`, `-${GT.ornCost.toLocaleString()}점`, 1.4); }
+      else if (Math.hypot(GT.x - me.x, GT.z - me.z) < 60) feed(`<span class="sys">🎄 ${esc(m.o[4])} 님이 트리에 ${o ? o.emoji + ' ' + o.name : '장식'}을 달았어요</span>`);
+      if (treeView) { setTimeout(() => { if (treeView) { treeView.info(); treeView.draw(); } }, 50); }
+      break;
+    }
+    case 'ornfail': toast('🎄 장식을 달 수 없어요', esc(m.why || ''), 1.8); break;
     case 'bought': if (m.item === 'sled') { const fresh = !ownSled; ownSled = true; if (fresh) { sfx.win(); toast('🛷 눈썰매 구매 완료!', `${m.cost ? `-${(+m.cost).toLocaleString()}점 · ` : ''}N 키 또는 🛷 버튼으로 타기`, 3); } } break;
     case 'buyfail': toast('🛷 구매할 수 없어요', esc(m.why || ''), 2); break;
     case 'slam': {               // 하프물범 배치기
@@ -1692,6 +1810,8 @@ $('fishBtn').addEventListener('click', e => { e.stopPropagation(); audio(); star
 $('yamBtn').addEventListener('click', e => { e.stopPropagation(); audio(); startYam(); });
 $('sledBtn').addEventListener('click', e => { e.stopPropagation(); audio(); if (ownSled) toggleRide(); else buySled(); });
 $('sledBtn').addEventListener('pointerdown', e => e.stopPropagation());
+$('treeBtn').addEventListener('click', e => { e.stopPropagation(); audio(); openTree(); });
+$('treeBtn').addEventListener('pointerdown', e => e.stopPropagation());
 $('yamBtn').addEventListener('pointerdown', e => e.stopPropagation());
 for (const id of ['upBtn', 'fishBtn']) $(id).addEventListener('pointerdown', e => e.stopPropagation());
 function toggleSettings(open) {
@@ -1740,6 +1860,7 @@ addEventListener('keydown', e => {
     if (k === 'v') toggleMic();
     if (k === 't') startTea();
     if (k === 'y') startYam();
+    if (k === 'h') openTree();
     if (k === 'n') { if (ownSled) toggleRide(); else buySled(); }
     if (k === 'f') toggleSit();
     if (k === 'b') buildIgloo();
@@ -1757,8 +1878,15 @@ const touch = { moveId: null, mo: null, move: { x: 0, z: 0 }, aimId: null, ao: n
 function showJoy(id, x, y, dx = 0, dy = 0) { const j = $(id); j.style.display = 'block'; j.style.left = x + 'px'; j.style.top = y + 'px'; j.firstElementChild.style.transform = `translate(${dx}px,${dy}px)`; }
 function hideJoy(id) { $(id).style.display = 'none'; }
 const canThrow = () => state === 'play' && me && !me.dead && !me.riding && me.ammo > 0 && me.reloadT <= 0;
+function clickedGiant(e) {
+  if (!giant.hit || !nearGiant()) return false;
+  const v = new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(v, camera);
+  return raycaster.intersectObject(giant.hit).length > 0;
+}
 canvas.addEventListener('pointerdown', e => {
   audio(); if (typing()) closeChat();
+  if (state === 'play' && me && !me.dead && (e.pointerType !== 'touch' || e.clientX >= innerWidth * 0.45) && clickedGiant(e)) { openTree(); return; }
   if (me && me.tea > 0 && e.pointerType !== 'touch') me.tea = 0;
   try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
   if (e.pointerType === 'touch') {
@@ -2053,7 +2181,7 @@ function updateHUD() {
     voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, p.tea > 0 && '<span style="color:#ffcc80">☕ 티타임 중… 따뜻해요</span>', p.rest && !p.dead && `<span style="color:#ffb74d">${p.sit && p.sit.kind === 'lie' ? '🛏️ 침대에서' : p.sit && !p.sit.fire ? '🪑 앉아서' : `🔥 모닥불${p.sit ? ' 앞에 앉아' : '에서'}`} 쉬는 중${p.hp < p.maxHp ? ' · 체력 회복' : ''}</span>`,
     !p.dead && (p.inVillage ? `<span style="color:#3ddc84">🏠 안전지대${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>` : '<span style="color:#ff8a8a">⚔️ PvP 구역 · 다른 플레이어도 공격할 수 있어요</span>')].filter(Boolean).join('');
   let nearN = 0, danger = ''; for (const e of enemies.values()) { const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < 40) { nearN++; if (e.T.boss) danger = ` · 🦭 ${e.T.name} 근처!`; else if (e.type === 'badsanta' && !danger.includes('🦭')) danger = ' · 🎅 나쁜 산타 주의!'; } }
-  const zone = Math.hypot(p.x, p.z), area = zone < W.VILLAGE_SAFE ? '마을' : zone < 110 ? '눈밭 (눈사람·펭귄)' : zone < 170 ? '숲 (나쁜 루돌프 출몰)' : '먼 설원 (나쁜 산타 출몰)';
+  const zone = Math.hypot(p.x, p.z), area = zone < W.VILLAGE_SAFE ? '마을' : zone < W.ZONES[0] ? '눈밭 (눈사람·펭귄)' : zone < W.ZONES[1] ? '숲 (나쁜 루돌프 출몰)' : '먼 설원 (나쁜 산타 출몰)';
   const obj = `⚔️ 처치 <b>${myKills}</b>` + `<small>${area} · 근처 몬스터 ${nearN}${danger}</small>`;
   const sc = `${myScore.toLocaleString()}점`, cb = myCombo >= 3 ? `${myCombo} 콤보 x${Math.min(4, 1 + Math.floor(myCombo / 3) * 0.5).toFixed(1)}` : '';
   const all = [{ id: myId, n: nick, score: myScore, c: colorIdx }, ...[...remotes.values()].map(r => ({ id: r.id, n: r.n, score: r.score, c: r.c }))].sort((a, b) => b.score - a.score);
@@ -2061,7 +2189,7 @@ function updateHUD() {
   const key = h + ammo + buffs + obj + sc + cb + board;
   if (key !== hudCache) { hudCache = key; const bar = $('hpbar').firstElementChild, ratio = clamp(p.hp / p.maxHp, 0, 1); bar.style.width = (ratio * 100) + '%'; bar.className = ratio > 0.6 ? 'high' : ratio > 0.3 ? 'mid' : ''; $('hpbar').lastElementChild.textContent = h; $('ammo').innerHTML = ammo; $('buffs').innerHTML = buffs; $('objective').innerHTML = obj; $('score').textContent = sc; $('combo').textContent = cb; $('board').innerHTML = board; }
 }
-const mini = $('mini'), mctx = mini.getContext('2d'), MS = 180, WR = 240;
+const mini = $('mini'), mctx = mini.getContext('2d'), MS = 180, WR = W.LIMIT + 16;
 const mbg = document.createElement('canvas'); mbg.width = mbg.height = MS;
 const toMini = (x, z) => [(x / WR * 0.5 + 0.5) * MS, (z / WR * 0.5 + 0.5) * MS];
 function buildMinimapBg() {
@@ -2114,7 +2242,9 @@ function keysHtml() {
     <b>빨간 줄</b><span>적이 그 방향으로 던질 예정!</span><b>🟢 안전지대</b><span>마을의 초록 원 안 · 체력 회복, 공격받지 않음</span><b>🔥 모닥불 · F · T</b><span>모닥불 옆에서 쉬면 빠르게 회복 · F로 의자에 앉기 · T로 티타임</span><b>⚔️ 원 밖</b><span>다른 플레이어와도 눈싸움(PvP)</span></div>`;
 }
 let overlayKind = null, healthTimer = null;
+let treeView = null;
 function overlay(kind, err = '') {
+  if (kind !== 'tree') treeView = null;
   if (kind) resetTouch();
   if (overlayKind === 'custom' && kind !== 'custom') previewStop();
   overlayKind = kind;
@@ -2142,6 +2272,51 @@ function overlay(kind, err = '') {
       const s = $('srv'); if (s) s.innerHTML = `<i class="on"></i> ${esc(h.server)} · ${h.players}명 접속 중`;
     }).catch(() => { const s = $('srv'); if (s) s.innerHTML = '<i></i> 서버에 연결할 수 없어요'; });
     check(); healthTimer = setInterval(check, 5000);
+  }
+  if (kind === 'tree') {
+    let pick = W.ORNAMENTS[0].k;
+    el.innerHTML = `<div><h1>🎄 초대형 트리 꾸미기</h1>
+      <h2 id="treeInfo"></h2>
+      <div class="custom treeedit">
+        <canvas id="treeCv" width="300" height="380" style="width:300px;height:380px;border-radius:16px;background:radial-gradient(circle at 50% 35%, #2a3a6e, #0b1430);touch-action:none;cursor:crosshair" aria-label="트리를 눌러 장식 달기"></canvas>
+        <div><div class="slot"><b>오너먼트 고르기</b><div class="chips">${W.ORNAMENTS.map(o => `<button data-o="${o.k}" class="${o.k === pick ? 'sel' : ''}">${o.emoji} ${o.name}</button>`).join('')}</div></div>
+        <p class="note" style="text-align:left">트리를 누른 곳에 오너먼트가 달려요.<br>하나에 <b>${GT.ornCost.toLocaleString()}점</b>이 차감되고, 모두에게 보여요.</p></div>
+      </div>
+      <div class="btns"><button id="done">다 꾸몄어요</button></div></div>`;
+    const cv = $('treeCv'), cx = cv.getContext('2d'), S = 330 / (GT.h + 2.5), ox = 150, oy = 365;
+    const view = Math.atan2(me.x - GT.x, me.z - GT.z);
+    const info = () => { $('treeInfo').textContent = `장식 ${giant.orns.size}개 · 내 점수 ${myScore.toLocaleString()}점 · 하나에 ${GT.ornCost.toLocaleString()}점`; };
+    const emojiOf = k => (W.ORNAMENTS.find(o => o.k === k) || {}).emoji || '•';
+    let ghost = null;
+    const draw = () => {
+      cx.clearRect(0, 0, 300, 380);
+      cx.fillStyle = '#5a3a22'; cx.fillRect(ox - 1.5 * S, oy - GT.trunk * S, 3 * S, GT.trunk * S);
+      GT.tiers.forEach((t, i) => { cx.fillStyle = ['#1d6b3a', '#237a42', '#1d6b3a', '#2a8a4a', '#1f7040', '#2a8a4a'][i]; cx.beginPath(); cx.moveTo(ox - t.r * S, oy - t.b * S); cx.lineTo(ox + t.r * S, oy - t.b * S); cx.lineTo(ox, oy - (t.b + t.h) * S); cx.closePath(); cx.fill(); });
+      cx.font = '26px sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('⭐', ox, oy - (GT.h + 1.2) * S);
+      const list = [...giant.orns.values()].map(o => ({ o, th: angDiff(view, o.a) })).filter(q => Math.abs(q.th) < Math.PI / 2).sort((p, q) => Math.abs(q.th) - Math.abs(p.th));
+      for (const { o, th } of list) { cx.globalAlpha = 0.5 + 0.5 * Math.cos(th); cx.font = `${Math.round(12 + 8 * Math.cos(th))}px sans-serif`; cx.fillText(emojiOf(o.k), ox + Math.sin(th) * GT.surfR(o.y) * S, oy - o.y * S); }
+      cx.globalAlpha = 1;
+      if (ghost) { cx.globalAlpha = ghost.ok ? 0.85 : 0.35; cx.font = '24px sans-serif'; cx.fillText(emojiOf(pick), ghost.x, ghost.y); cx.globalAlpha = 1; }
+    };
+    // 캔버스 좌표 → 트리 위 (각도, 높이)
+    const spot = e => {
+      const b = cv.getBoundingClientRect(), px = (e.clientX - b.left) * 300 / b.width, py = (e.clientY - b.top) * 380 / b.height;
+      const y = (oy - py) / S, X = (px - ox) / S, R = GT.surfR(y);
+      const ok = y >= GT.trunk + 0.3 && y <= GT.h - 0.5 && R > 0.3 && Math.abs(X) <= R;
+      return { x: px, y: py, ok, a: view + Math.asin(clamp(X / Math.max(R, 0.01), -1, 1)), h: y };
+    };
+    cv.onpointermove = e => { ghost = spot(e); draw(); };
+    cv.onpointerleave = () => { ghost = null; draw(); };
+    cv.onpointerdown = e => {
+      e.preventDefault(); const sp = spot(e); ghost = sp;
+      if (!sp.ok) { toast('🎄 트리 위를 눌러 주세요', '', 1.2); return; }
+      if (myScore < GT.ornCost) { toast(`🎄 오너먼트 하나에 ${GT.ornCost.toLocaleString()}점이 필요해요`, `지금 ${myScore.toLocaleString()}점`, 1.8); return; }
+      send({ t: 'orn', k: pick, a: r2(sp.a), y: r2(sp.h) });
+    };
+    el.querySelectorAll('.chips button').forEach(b => b.onclick = () => { pick = b.dataset.o; el.querySelectorAll('.chips button').forEach(x => x.classList.toggle('sel', x === b)); draw(); });
+    $('done').onclick = () => overlay(null);
+    treeView = { draw, info }; info(); draw();
+    return;
   }
   if (kind === 'custom') {
     const slots = [['a', '캐릭터'], ['h', '머리'], ['e', '눈'], ['n', '코'], ['m', '입'], ['r', '귀'], ['k', '목'], ['b', '등']];
@@ -2596,6 +2771,8 @@ function render(dt) {
     } else if (e.bar) e.bar.style.display = 'none';
   }
   animFire(dt);
+  updateBoard(); updateGiantFade(dt); placeBoard();
+  if (treeView && Math.random() < 0.1) treeView.info();
   const mineIg = igloos.get(myId), nextLv = mineIg ? W.IGLOO.LV[mineIg.lv + 1] : null;
   { const lbl = mineIg ? `${mineIg.lv ? '🏰 얼음성' : '🧊 이글루'} 옮기기 <small>(B)</small>` : `🧊 이글루 짓기 <small>${W.IGLOO.LV[0].cost.toLocaleString()}점 (B)</small>`; if ($('igBtn')._l !== lbl) { $('igBtn')._l = lbl; $('igBtn').innerHTML = lbl; } }
   { const lbl = nextLv ? `🏰 ${nextLv.name} <small>${nextLv.cost.toLocaleString()}점 (U)</small>` : ''; if ($('upBtn')._l !== lbl) { $('upBtn')._l = lbl; $('upBtn').innerHTML = lbl; } }
@@ -2608,6 +2785,7 @@ function render(dt) {
   document.body.classList.toggle('nearfire', !!(me && !me.dead && state === 'play' && (me.sit || nsp)));
   document.body.classList.toggle('onice', !!(me && !me.dead && state === 'play' && onIce(me.x, me.z)));
   $('teaBtn').classList.toggle('on', me.tea > 0);
+  document.body.classList.toggle('neartree', !!(me && !me.dead && state === 'play' && nearGiant()));
   document.body.classList.toggle('cansled', !!(me && !me.dead && state === 'play' && (ownSled || myScore >= W.SLED.cost)));
   { const sb = $('sledBtn'), sh = !ownSled ? `🛷 눈썰매 구매 <small>${W.SLED.cost.toLocaleString()}점 (N)</small>` : me.riding ? '🛷 내리기 <small>(N)</small>' : '🛷 썰매 타기 <small>(N)</small>'; sb.classList.toggle('on', !!me.riding); if (sb._h !== sh) { sb._h = sh; sb.innerHTML = sh; } }
   if (me && state === 'play' && !ownSled && myScore >= W.SLED.cost && !me.sledHint) { me.sledHint = true; toast('🛷 눈썰매를 살 수 있어요!', `${W.SLED.cost.toLocaleString()}점 · 이동 속도 3배`, 3); }

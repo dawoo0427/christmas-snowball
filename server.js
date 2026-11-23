@@ -156,6 +156,9 @@ const HIT_SLACK = 4;             // 명중 신고 허용 오차 (통신 지연�
 const drops = new Map(); let nextDrop = 1;
 const heals = W.layout.heals.map(h => ({ x: h.x, z: h.z, on: true, respawn: 0 }));
 const HEAL_RESPAWN = W.HEAL_RESPAWN;
+const ornaments = [];            // 초대형 트리 장식 [{ id, k, a, y, n }] (서버가 켜져 있는 동안 유지)
+let nextOrn = 1;
+const ornRow = o => [o.id, o.k, r2(o.a), r2(o.y), o.n];
 const igloos = new Map();        // 주인 id -> { id, x, z, rot, n }
 const igList = () => [...igloos.values()];
 const igRow = ig => [ig.id, r1(ig.x), r1(ig.z), r2(ig.rot), ig.n, ig.lv];
@@ -170,8 +173,8 @@ function addEnemy(type, x, z, spawn) {
 }
 function openSpot(minFromPlayers = 0) {
   for (let k = 0; k < 200; k++) {
-    const x = rand(-200, 200), z = rand(-200, 200);
-    if (Math.hypot(x, z) < 16) continue;
+    const x = rand(-W.LIMIT + 24, W.LIMIT - 24), z = rand(-W.LIMIT + 24, W.LIMIT - 24);
+    if (Math.hypot(x, z) < 16 || Math.hypot(x - W.GIANT_TREE.x, z - W.GIANT_TREE.z) < W.GIANT_TREE.r + 3) continue;
     let near = false; for (const p of players.values()) if (Math.hypot(x - p.x, z - p.z) < minFromPlayers) near = true;
     if (near) continue;
     const o = { x, z }; pushOut(o, 1.5); if (Math.hypot(o.x - x, o.z - z) > 0.01) continue;
@@ -182,7 +185,8 @@ function openSpot(minFromPlayers = 0) {
 const randGift = () => Math.floor(Math.random() * W.GIFT_KINDS.length);
 function placeGift(i) { const s = openSpot(25); gifts[i] = { x: s.x, z: s.z, on: true, ti: randGift(), respawn: 0 }; }
 for (const sp of spawns) addEnemy(sp.type, sp.x, sp.z, sp);
-for (let i = 0; i < 36; i++) placeGift(i);
+const GIFT_COUNT = 90;                 // 맵이 4배 넓어져서 선물도 늘림
+for (let i = 0; i < GIFT_COUNT; i++) placeGift(i);
 
 // ============================================================
 //  접속 처리
@@ -204,7 +208,7 @@ function onConnect(conn) {
       p.y = heightAt(p.x, p.z);
       players.set(id, p);
       conn.send({ t: 'welcome', id, server: SERVER_NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c, q.look]), drops: [...drops.values()].map(d => [d.id, r1(d.x), r1(d.z), d.k]),
-        g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)), ig: igList().map(igRow) });
+        g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)), ig: igList().map(igRow), orn: ornaments.map(ornRow) });
       broadcast({ t: 'pj', id, n: p.n, c: p.c, look: p.look }, p);
       log(`입장 ${p.n}#${id} (현재 ${players.size}명)`);
       return;
@@ -341,6 +345,21 @@ function handle(p, m) {
       if (p.score < W.SLED.cost) { p.conn.send({ t: 'buyfail', why: `${W.SLED.cost.toLocaleString()}점이 필요해요` }); break; }
       p.score -= W.SLED.cost; p.sled = true;
       p.conn.send({ t: 'bought', item: 'sled', cost: W.SLED.cost });
+      break;
+    }
+    case 'orn': {                // 초대형 트리에 오너먼트 달기 (1,000점 차감)
+      const T = W.GIANT_TREE, k = String(m.k), y = num(m.y), a = num(m.a);
+      let why = '';
+      if (!W.ORNAMENTS.some(o => o.k === k)) why = '알 수 없는 장식이에요';
+      else if (Math.hypot(p.x - T.x, p.z - T.z) > T.near + 6) why = '트리 가까이에서 꾸밀 수 있어요';
+      else if (p.score < T.ornCost) why = `오너먼트 하나에 ${T.ornCost.toLocaleString()}점이 필요해요`;
+      else if (ornaments.length >= T.maxOrn) why = '트리가 장식으로 가득 찼어요!';
+      else if (!(y >= T.trunk + 0.3 && y <= T.h - 0.5)) why = '트리 위에 달아 주세요';
+      if (why) { p.conn.send({ t: 'ornfail', why }); break; }
+      p.score -= T.ornCost;
+      const o = { id: nextOrn++, k, a, y, n: p.n };
+      ornaments.push(o);
+      broadcast({ t: 'orn', o: ornRow(o), by: p.id });
       break;
     }
     case 'fish': {               // 얼음낚시 시작/그만
@@ -539,7 +558,7 @@ function applyHit(e, b, goOn) {
 let bossTimer = W.BOSS_FIRST;
 function spawnBoss() {
   let s = null;
-  for (let k = 0; k < 50 && !s; k++) { const c = openSpot(40); if (Math.hypot(c.x, c.z) > 70 && !W.onIce(c.x, c.z)) s = c; }
+  for (let k = 0; k < 50 && !s; k++) { const c = openSpot(40); if (Math.hypot(c.x, c.z) > W.VILLAGE_SAFE * 2.5 && !W.onIce(c.x, c.z)) s = c; }
   if (!s) { bossTimer = 10; return; }
   const e = addEnemy('seal', s.x, s.z, null); e.boss = true;
   broadcast({ t: 'boss', on: 1, x: r1(s.x), z: r1(s.z), type: 'seal' });
