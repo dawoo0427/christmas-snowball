@@ -2147,6 +2147,7 @@ window.__game = {
   teleport(x, z) { me.x = x; me.z = z; }, showcase(x, z) { [makeSnowman('normal'), makePenguin(), makeRudolph(), makeSanta()].forEach((m, i) => { const px = x - 4.5 + i * 3; m.group.position.set(px, heightAt(px, z), z); if (i === 3) m.group.scale.setScalar(1.25); scene.add(m.group); }); }, cam(d) { camDist = d; }, face(a) { me.face = a; },
   throwAt(x, z) { mouse.has = false; aimTarget = null; aim.set(x, heightAt(x, z), z); me.charging = true; me.charge = 0; me.cd = 0; throwPlayer(); },
   chat(s) { send({ t: 'chat', s }); },
+  giftRow(x, z) { const ks = [...W.GIFT_KINDS, 'HEAL']; ks.forEach((k, i) => { const m = k === 'HEAL' ? makeHealPack() : makeGift(GIFT_INFO[k].color); const px = x + (i - ks.length / 2) * 2.2; m.group.position.set(px, heightAt(px, z) + 1, z); scene.add(m.group); }); return ks; },
   buff(k, n = 1) { for (let i = 0; i < n; i++) giveBuff(k); }, avatars(x, z, looks) { looks.forEach((l, i) => { const m = makeAvatar(l); const px = x - (looks.length - 1) * 0.9 + i * 1.8; m.group.position.set(px, heightAt(px, z), z); scene.add(m.group); }); },
   get voice() { return { on: voice.on, hear: voice.hearOn, peers: [...voice.peers.values()].map(p => ({ id: p.id, st: p.pc.connectionState, sig: p.pc.signalingState })), remotes: [...remotes.values()].map(r => ({ id: r.id, vl: r.vl, vt: r.vt, link: needLink(r) })), myId }; },
 };

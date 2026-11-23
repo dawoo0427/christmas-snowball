@@ -119,12 +119,7 @@
       data.houses.push({ x, z, rot, col: wallCols[i % wallCols.length] });
       addCollider({ t: 'b', x, z, hw: 3.6, hd: 3.2, rot, h: 8 });
     }
-    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; data.lamps.push({ x: Math.cos(a) * 12, z: Math.sin(a) * 12, light: i % 2 === 0 }); }
-    for (const [, , bx, bz] of PATHS) {
-      const L = Math.hypot(bx, bz), nx = bx / L, nz = bz / L;
-      for (let d = 34; d < L - 16; d += 24) data.lamps.push({ x: nx * d - nz * 3.4, z: nz * d + nx * 3.4, light: false });
-    }
-    for (const l of data.lamps) addCollider({ t: 'c', x: l.x, z: l.z, r: 0.3, h: 5 });
+    // 가로등은 위에서 보면 빛나는 하얀 상자처럼 보여 아이템과 헷갈려서 없앰 (data.lamps 는 빈 목록)
     addCollider({ t: 'c', x: 8, z: 9, r: 1, h: 3 });
     addCollider({ t: 'c', x: BONFIRE.x, z: BONFIRE.z, r: BONFIRE.r, h: 1.6 });
     // 숲과 바위
