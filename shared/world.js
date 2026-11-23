@@ -17,6 +17,7 @@
   // 맵 크기: 플레이 가능 범위 ±224 (예전의 2배). 가장자리 바깥은 산으로 막힌다.
   const LIMIT = 224, EDGE = 216, HALF = 290;
   const VILLAGE_SAFE = 28;            // 마을 안전지대 반지름. 이 밖에서는 플레이어끼리 PvP 가능
+  const BONFIRE = { x: -12, z: -12, r: 1.9, healR: 7.5 };   // 안전지대 안의 대형 모닥불
   const CAMPS = [
     // 바깥 고리: 마을에서 길이 이어진 큰 캠프
     { x: 110,  z: -80,  name: '얼음 언덕 캠프',    snow: 2, peng: 1 },
@@ -128,6 +129,7 @@
     }
     for (const l of data.lamps) addCollider({ t: 'c', x: l.x, z: l.z, r: 0.3, h: 5 });
     addCollider({ t: 'c', x: 8, z: 9, r: 1, h: 3 });
+    addCollider({ t: 'c', x: BONFIRE.x, z: BONFIRE.z, r: BONFIRE.r, h: 1.6 });
     // 캠프
     CAMPS.forEach((def, idx) => {
       const Rc = def.boss ? 15 : 10, n = def.boss ? 9 : 6, len = def.boss ? 6.5 : 5;
@@ -199,7 +201,7 @@
     TYPE_BY_ID: ['snowman', 'penguin', 'boss'],
     // 선물 버프: 체력, 트리플, 왕눈덩이, 스피드, 공격력 2배, 연사 2배, 보호막, 무한 눈덩이
     GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite'],
-    BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF,
+    BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, FIRE_HEAL: 12, TEA_TIME: 4.5,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = World;
   else root.World = World;
