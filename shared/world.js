@@ -17,7 +17,8 @@
   // 맵 크기: 플레이 가능 범위 ±224 (예전의 2배). 가장자리 바깥은 산으로 막힌다.
   const LIMIT = 224, EDGE = 216, HALF = 290;
   const VILLAGE_SAFE = 28;            // 마을 안전지대 반지름. 이 밖에서는 플레이어끼리 PvP 가능
-  const BONFIRE = { x: -12, z: -12, r: 1.9, healR: 7.5 };   // 안전지대 안의 대형 모닥불
+  const BONFIRE = { x: 0, z: 0, r: 3.2, healR: 11 };      // 마을 중앙의 대형 모닥불
+  const VILLAGE_TREES = [{ x: -12.5, z: 7.2, s: 0.45 }, { x: 12.5, z: -7.2, s: 0.45 }];   // 모닥불 양옆의 작은 크리스마스트리
   const CAMPS = [
     // 바깥 고리: 마을에서 길이 이어진 큰 캠프
     { x: 110,  z: -80,  name: '얼음 언덕 캠프',    snow: 2, peng: 1 },
@@ -112,7 +113,7 @@
     const R = rng(20261225);
     const data = { trees: [], rocks: [], houses: [], lamps: [], camps: [], friendly: { x: 8, z: 9 } };
     // 마을
-    addCollider({ t: 'c', x: 0, z: 0, r: 4.8, h: 16 });
+    for (const t of VILLAGE_TREES) addCollider({ t: 'c', x: t.x, z: t.z, r: 4.8 * t.s + 0.3, h: 16 * t.s });
     const wallCols = [0x9b5a3c, 0x6d7fa6, 0x7c9a6a, 0xb07a4a, 0x8d5b8f];
     const pathAngles = PATHS.map(([, , bx, bz]) => Math.atan2(bz, bx));
     for (let i = 0; i < 10; i++) {
@@ -201,7 +202,7 @@
     TYPE_BY_ID: ['snowman', 'penguin', 'boss'],
     // 선물 버프: 체력, 트리플, 왕눈덩이, 스피드, 공격력 2배, 연사 2배, 보호막, 무한 눈덩이
     GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite'],
-    BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, FIRE_HEAL: 12, TEA_TIME: 4.5,
+    BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, VILLAGE_TREES, FIRE_HEAL: 12, TEA_TIME: 4.5,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = World;
   else root.World = World;
