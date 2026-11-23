@@ -61,6 +61,62 @@
   }
   const onIce = (x, z) => Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r;
   const inVillage = (x, z) => Math.hypot(x, z) < VILLAGE_SAFE;
+  // 집: 가로 7, 세로 6. 문은 앞쪽(+z) 가운데 폭 2.2
+  const HOUSE = { hw: 3.5, hd: 3.0, door: 1.1, wall: 0.18 };
+  const HOUSE_WALLS = [
+    [0, -HOUSE.hd, HOUSE.hw, HOUSE.wall],                                        // 뒤
+    [-HOUSE.hw, 0, HOUSE.wall, HOUSE.hd], [HOUSE.hw, 0, HOUSE.wall, HOUSE.hd],   // 옆
+    [-(HOUSE.hw + HOUSE.door) / 2, HOUSE.hd, (HOUSE.hw - HOUSE.door) / 2, HOUSE.wall],  // 앞 왼쪽
+    [(HOUSE.hw + HOUSE.door) / 2, HOUSE.hd, (HOUSE.hw - HOUSE.door) / 2, HOUSE.wall],   // 앞 오른쪽
+  ];
+  // 집 안에 있는지 (몇 번째 집인지, 없으면 -1)
+  function houseAt(x, z) {
+    const hs = World.layout.houses;
+    for (let i = 0; i < hs.length; i++) {
+      const h = hs[i], cs = Math.cos(h.rot), sn = Math.sin(h.rot), dx = x - h.x, dz = z - h.z;
+      if (Math.abs(cs * dx - sn * dz) < HOUSE.hw - 0.1 && Math.abs(sn * dx + cs * dz) < HOUSE.hd - 0.1) return i;
+    }
+    return -1;
+  }
+  // ---- 이글루: 둥근 벽, 문(rot 방향)으로만 드나들 수 있음 ----
+  const IGLOO = { r: 3.4, wall: 0.35, door: 0.42, score: 5000 };
+  const iglooDoor = (ig, x, z) => Math.abs(angDiff(Math.atan2(x - ig.x, z - ig.z), ig.rot)) < IGLOO.door;
+  // 플레이어: 벽에 막히고, 문으로는 통과
+  function iglooPush(o, r, igs) {
+    for (const ig of igs) {
+      const dx = o.x - ig.x, dz = o.z - ig.z, d = Math.hypot(dx, dz);
+      if (d < 1e-4 || Math.abs(d - IGLOO.r) > r + IGLOO.wall || iglooDoor(ig, o.x, o.z)) continue;
+      const to = d < IGLOO.r ? IGLOO.r - r - IGLOO.wall : IGLOO.r + r + IGLOO.wall;
+      o.x = ig.x + dx / d * to; o.z = ig.z + dz / d * to;
+    }
+  }
+  // 몬스터: 이글루 안으로 못 들어옴
+  function iglooPushFull(o, r, igs) {
+    for (const ig of igs) {
+      const dx = o.x - ig.x, dz = o.z - ig.z, d = Math.hypot(dx, dz), m = IGLOO.r + IGLOO.wall + r;
+      if (d < m) { const k = d > 1e-4 ? m / d : 0; o.x = ig.x + (k ? dx * k : m); o.z = ig.z + (k ? dz * k : 0); }
+    }
+  }
+  // 눈덩이: 벽을 뚫고 지나가면 막힘 (문 쪽은 통과)
+  function iglooBlocks(igs, x0, z0, x1, z1) {
+    for (const ig of igs) {
+      const d0 = Math.hypot(x0 - ig.x, z0 - ig.z) - IGLOO.r, d1 = Math.hypot(x1 - ig.x, z1 - ig.z) - IGLOO.r;
+      if ((d0 > 0) !== (d1 > 0) && !iglooDoor(ig, x1, z1)) return true;
+    }
+    return false;
+  }
+  const iglooAt = (igs, x, z) => igs.find(ig => Math.hypot(x - ig.x, z - ig.z) < IGLOO.r) || null;
+  // 이글루를 지을 수 있는 자리인지 (이유 문자열 또는 '')
+  function iglooSpot(x, z, igs, ignoreId) {
+    if (Math.hypot(x, z) < VILLAGE_SAFE + IGLOO.r + 2) return '마을 안에는 지을 수 없어요';
+    if (Math.abs(x) > LIMIT - 6 || Math.abs(z) > LIMIT - 6) return '맵 끝에는 지을 수 없어요';
+    if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + IGLOO.r) return '얼음 호수 위에는 지을 수 없어요';
+    for (const ig of igs) if (ig.id !== ignoreId && Math.hypot(x - ig.x, z - ig.z) < IGLOO.r * 2 + 3) return '다른 이글루와 너무 가까워요';
+    const y = heightAt(x, z) + 1;
+    if (hitsCollider(x, y, z, 0.5)) return '나무나 바위가 있는 자리예요';
+    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; if (hitsCollider(x + Math.sin(a) * IGLOO.r, heightAt(x + Math.sin(a) * IGLOO.r, z + Math.cos(a) * IGLOO.r) + 1, z + Math.cos(a) * IGLOO.r, 0.6)) return '나무나 바위가 너무 가까워요'; }
+    return '';
+  }
 
   // ---- 충돌체 (공간 격자). 박스 rot = 메쉬 rotation.y ----
   const CELL = 10, grid = new Map(), colliders = [];
@@ -117,7 +173,9 @@
       if (pathAngles.some(pa => Math.abs(angDiff(pa, a)) < 0.3)) continue;
       const x = Math.cos(a) * Rr, z = Math.sin(a) * Rr, rot = Math.atan2(-x, -z);
       data.houses.push({ x, z, rot, col: wallCols[i % wallCols.length] });
-      addCollider({ t: 'b', x, z, hw: 3.6, hd: 3.2, rot, h: 8 });
+      // 벽 4면 (앞쪽 가운데에 문). 로컬 좌표 → 월드 좌표: 메쉬 rotation.y = rot 과 같은 규칙
+      const cs = Math.cos(rot), sn = Math.sin(rot);
+      for (const [lx, lz, hw, hd] of HOUSE_WALLS) addCollider({ t: 'b', x: x + cs * lx + sn * lz, z: z - sn * lx + cs * lz, hw, hd, rot, h: 8 });
     }
     // 가로등은 위에서 보면 빛나는 하얀 상자처럼 보여 아이템과 헷갈려서 없앰 (data.lamps 는 빈 목록)
     addCollider({ t: 'c', x: 8, z: 9, r: 1, h: 3 });
@@ -170,6 +228,7 @@
 
   const World = {
     TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ROAD_ENDS, LAKE, FLATS, PATHS,
+    HOUSE, houseAt, IGLOO, iglooDoor, iglooPush, iglooPushFull, iglooBlocks, iglooAt, iglooSpot, MAX_ALLIES: 10,
     heightAt, pathDist, onIce, inVillage, pushOut, hitsCollider, colliders, layout,
     BALL_H: 1.35, PLAYER_RANGE: 34, MAX_HP: 100, HEAL_AMOUNT: 35, RELOAD_TIME: 2.0,
     TYPES: {

@@ -156,6 +156,9 @@ const HIT_SLACK = 4;             // 명중 신고 허용 오차 (통신 지연�
 const drops = new Map(); let nextDrop = 1;
 const heals = W.layout.heals.map(h => ({ x: h.x, z: h.z, on: true, respawn: 0 }));
 const HEAL_RESPAWN = W.HEAL_RESPAWN;
+const igloos = new Map();        // 주인 id -> { id, x, z, rot, n }
+const igList = () => [...igloos.values()];
+const igRow = ig => [ig.id, r1(ig.x), r1(ig.z), r2(ig.rot), ig.n];
 
 function broadcast(obj, except) { const s = JSON.stringify(obj), buf = Buffer.from(s); for (const p of players.values()) if (p !== except && p.ready) p.conn.frame(1, buf); }
 function addEnemy(type, x, z, spawn) {
@@ -197,11 +200,11 @@ function onConnect(conn) {
       const id = nextId++;
       const look = W.cleanLook(m.look || { c: m.c });
       p = { id, conn, look, n: cleanName(m.n) || '꼬마요정' + id, c: look.c, x: rand(-3, 3), z: 12 + rand(-2, 2), y: 0, face: Math.PI, vx: 0, vz: 0,
-        flags: 0, hp: W.MAX_HP, dead: false, score: 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, vl: false, vt: false, lastHitBy: 0, lastHitAt: 0, joined: Date.now() };
+        flags: 0, hp: W.MAX_HP, dead: false, score: +process.env.START_SCORE || 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, vl: false, vt: false, lastHitBy: 0, lastHitAt: 0, joined: Date.now(), allies: new Set(), reqTo: new Set() };
       p.y = heightAt(p.x, p.z);
       players.set(id, p);
       conn.send({ t: 'welcome', id, server: SERVER_NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c, q.look]), drops: [...drops.values()].map(d => [d.id, r1(d.x), r1(d.z), d.k]),
-        g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)) });
+        g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)), ig: igList().map(igRow) });
       broadcast({ t: 'pj', id, n: p.n, c: p.c, look: p.look }, p);
       log(`입장 ${p.n}#${id} (현재 ${players.size}명)`);
       return;
@@ -211,10 +214,19 @@ function onConnect(conn) {
   conn.onclose = () => {
     if (!p) return;
     players.delete(p.id);
+    for (const q of players.values()) { q.reqTo.delete(p.id); if (q.allies.delete(p.id)) sendAllies(q); }
+    if (igloos.delete(p.id)) broadcast({ t: 'igx', id: p.id });
     broadcast({ t: 'pl', id: p.id });
     log(`퇴장 ${p.n}#${p.id} (현재 ${players.size}명)`);
     p = null;
   };
+}
+function sendAllies(p) { p.conn.send({ t: 'allies', ids: [...p.allies] }); }
+function makeAllies(a, b) {
+  a.reqTo.delete(b.id); b.reqTo.delete(a.id);
+  if (a.allies.size >= W.MAX_ALLIES || b.allies.size >= W.MAX_ALLIES) { a.conn.send({ t: 'allyNo', id: b.id, why: 'full' }); b.conn.send({ t: 'allyNo', id: a.id, why: 'full' }); return; }
+  a.allies.add(b.id); b.allies.add(a.id); sendAllies(a); sendAllies(b);
+  a.conn.send({ t: 'allyOk', id: b.id }); b.conn.send({ t: 'allyOk', id: a.id });
 }
 const num = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : d);
 function handle(p, m) {
@@ -261,7 +273,7 @@ function handle(p, m) {
         hitEnemy(b, e);
       } else if (m.v) {
         const v = players.get(m.v | 0);
-        if (!v || v === p || v.dead || !b.pv || inVillage(v.x, v.z) || Math.hypot(b.x - v.x, b.z - v.z) > 0.6 + b.r + HIT_SLACK) break;
+        if (!v || v === p || v.dead || !b.pv || p.allies.has(v.id) || inVillage(v.x, v.z) || Math.hypot(b.x - v.x, b.z - v.z) > 0.6 + b.r + HIT_SLACK) break;
         b.hit = true; balls.delete(id); recentBalls.delete(id);
         broadcast({ t: 'be', id, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z) });
         v.lastHitBy = p.id; v.lastHitAt = Date.now(); p.score += 5;
@@ -276,6 +288,39 @@ function handle(p, m) {
       broadcast({ t: 'dropx', id: d.id, by: p.id, k: d.k });
       break;
     }
+    case 'ally': {               // 동맹 신청 (상대도 나에게 신청해 둔 상태면 바로 동맹)
+      const q = players.get(m.id | 0);
+      if (!q || q === p || p.allies.has(q.id)) break;
+      if (q.reqTo.has(p.id)) { makeAllies(p, q); break; }
+      if (p.reqTo.has(q.id)) break;
+      p.reqTo.add(q.id); q.conn.send({ t: 'allyReq', from: p.id });
+      break;
+    }
+    case 'allyAns': {            // 신청에 대한 대답
+      const q = players.get(m.id | 0);
+      if (!q || !q.reqTo.has(p.id)) break;
+      if (m.ok) makeAllies(p, q); else { q.reqTo.delete(p.id); q.conn.send({ t: 'allyNo', id: p.id }); }
+      break;
+    }
+    case 'unally': {             // 동맹 해제
+      const q = players.get(m.id | 0);
+      if (!q || !p.allies.delete(q.id)) break;
+      q.allies.delete(p.id); sendAllies(p); sendAllies(q); q.conn.send({ t: 'allyOff', id: p.id });
+      break;
+    }
+    case 'igloo': {              // 이글루 짓기 (5000점 이상, 한 사람에 하나 — 다시 지으면 옮겨짐)
+      const x = num(m.x), z = num(m.z), rot = num(m.rot);
+      let why = '';
+      if (p.dead) why = '쓰러진 상태에서는 지을 수 없어요';
+      else if (p.score < W.IGLOO.score) why = `${W.IGLOO.score}점부터 지을 수 있어요`;
+      else if (Math.hypot(x - p.x, z - p.z) > 10) why = '너무 멀어요';
+      else why = W.iglooSpot(x, z, igList(), p.id);
+      if (why) { p.conn.send({ t: 'igfail', why }); break; }
+      const ig = { id: p.id, x, z, rot, n: p.n };
+      igloos.set(p.id, ig);
+      broadcast({ t: 'ig', i: igRow(ig) });
+      break;
+    }
     case 'look': {               // 꾸미기 변경
       p.look = W.cleanLook(m.look); p.c = p.look.c;
       broadcast({ t: 'lk', id: p.id, look: p.look });
@@ -285,7 +330,7 @@ function handle(p, m) {
       const b = balls.get(String(m.id));
       if (!b) break;
       if (b.owner === 'e') { endBall(b, true); p.combo = 0; }
-      else if (b.pv && b.owner !== p.id && !inVillage(p.x, p.z)) {     // PvP: 다른 플레이어의 눈덩이에 맞음
+      else if (b.pv && b.owner !== p.id && !p.allies.has(b.owner) && !inVillage(p.x, p.z)) {     // PvP: 다른 플레이어의 눈덩이에 맞음
         b.hit = true; balls.delete(b.id);
         broadcast({ t: 'be', id: b.id, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z) });
         p.lastHitBy = b.owner; p.lastHitAt = Date.now();
@@ -374,6 +419,7 @@ function aiEnemy(e, dt, tg) {
   if (vd < wall) { e.x = e.x / vd * wall; e.z = e.z / vd * wall; }
   e.x = clamp(e.x, -W.LIMIT, W.LIMIT); e.z = clamp(e.z, -W.LIMIT, W.LIMIT);
   pushOut(e, T.r);
+  if (igloos.size) W.iglooPushFull(e, T.r, igList());
   if (e.faceT !== undefined) e.face = angLerp(e.face, e.faceT, Math.min(1, dt * 6));
 }
 function enemyThrow(e, target) {
@@ -455,8 +501,9 @@ function step(dt) {
   }
   // 눈덩이
   for (const b of [...balls.values()]) {
-    const st = b.spd * dt;
+    const st = b.spd * dt, x0 = b.x, z0 = b.z;
     b.x += b.dx * st; b.z += b.dz * st; b.dist += st;
+    if (igloos.size && W.iglooBlocks(igList(), x0, z0, b.x, b.z)) { endBall(b, b.owner !== 'e'); continue; }
     if (b.dist > b.max) { b.fall += 22 * dt; b.h -= b.fall * dt; }
     else if (b.h < 2) b.h += (W.BALL_H - b.h) * Math.min(1, dt * 3);
     const y = heightAt(b.x, b.z) + b.h;

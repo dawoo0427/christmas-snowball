@@ -34,6 +34,16 @@
   #actBtns .act:active { transform:translateY(2px); box-shadow:0 1px 0 #3e2723; }
   #actBtns .act.on { background:#3ddc84e6; box-shadow:0 3px 0 #1b7a45; }
   #sitBtn { background:#8d6e63e6 !important; }
+  #igBtn { background:#4f86c6e6 !important; box-shadow:0 3px 0 #1f4e85 !important; }
+  body.playing.canigloo #igBtn { display:block; }
+  #allyAsk { position:fixed; left:50%; top:calc(64px + env(safe-area-inset-top,0px)); transform:translateX(-50%); z-index:6; display:none; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center;
+    background:#0b1430f0; border:2px solid #7dffb0; border-radius:16px; padding:10px 14px; font-family:var(--display); font-size:16px; max-width:calc(100vw - 32px); box-shadow:0 6px 20px #0008; }
+  #allyAsk.open { display:flex; }
+  #allyAsk button { font-family:var(--display); font-size:15px; padding:6px 14px; border-radius:12px; border:none; color:#fff; cursor:pointer; background:#2e7d32; }
+  #allyAsk button[data-ok="0"] { background:#6d6d7a; }
+  #plistSet button.ally { border-color:#7dffb0; }
+  #plistSet button.ally.on { background:#2e7d32; border-color:#7dffb0; }
+  .tag.igtag { font-size:12px; color:#cfe8ff; background:#0b143099; }
   #sitBtn.on { background:#ffb74de6 !important; box-shadow:0 3px 0 #a86b12 !important; }
   body.playing.safe #teaBtn, body.playing.nearfire #sitBtn { display:block; }
   body.touch #actBtns { bottom:calc(88px + env(safe-area-inset-bottom,0px)); flex-direction:column-reverse; gap:6px; }
@@ -206,7 +216,8 @@
   R 재장전 · Q/E 또는 우클릭 드래그 카메라 회전 · 휠 줌 · Enter 채팅 · V 마이크 · F 앉기 · T 티타임 · Esc 설정
 </div>
 <button id="gear" aria-label="설정 열기" title="설정">⚙️</button>
-<div id="actBtns"><button id="sitBtn" class="act" aria-label="모닥불 앞에 앉기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button></div>
+<div id="allyAsk" role="alertdialog" aria-live="assertive"><span id="allyAskText"></span><button data-ok="1">🤝 수락</button><button data-ok="0">거절</button></div>
+<div id="actBtns"><button id="igBtn" class="act" aria-label="이글루 짓기">🧊 이글루 짓기 <small>(B)</small></button><button id="sitBtn" class="act" aria-label="모닥불 앞에 앉기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button></div>
 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <h3 id="setTitle">설정</h3>
   <label class="opt" for="optHear"><span>다른 사람 목소리 듣기<small>마이크 없이도 근처 플레이어 목소리가 들려요</small></span><input type="checkbox" id="optHear" checked></label>
@@ -399,24 +410,81 @@ function buildForest() {
 }
 const twinkleBulbs = [];
 const stars = [];
-function buildHouse({ x, z, rot, col }) {
+// 집: 벽 4면 + 열리는 문 + 실내 가구. 안에 들어가면 벽·지붕이 반투명해진다
+const houseObjs = [];
+function buildHouse({ x, z, rot, col }, idx) {
   const g = new THREE.Group(); g.position.set(x, heightAt(x, z) - 0.3, z); g.rotation.y = rot; scene.add(g);
-  mk(Box(7, 4.3, 6), mat(col), 0, 2.15, 0, g);
-  const roof = mk(Cyl(4.3, 4.3, 8, 3), mat(0xf2f6ff), 0, 5.6, 0, g); roof.rotation.z = Math.PI / 2; roof.scale.set(0.62, 1, 1);
-  const eave = mk(Cyl(4.05, 4.05, 7.8, 3), mat(0x7a2e22), 0, 5.4, 0, g); eave.rotation.z = Math.PI / 2; eave.scale.set(0.62, 1, 1);
-  mk(Box(1.5, 2.5, 0.2), mat(0x4a2a16), 0, 1.25, 3.02, g);
-  mk(Box(0.16, 0.16, 0.1), mat(0xffd34d, { metal: 0.6 }), 0.5, 1.3, 3.15, g);
-  const winMat = mat(0xffc766, { em: 0xffb347, emI: 1.4 });
-  for (const sx of [-2.2, 2.2]) { mk(Box(1.3, 1.1, 0.12), winMat, sx, 2.6, 3.02, g, false); glow(0xffb347, 2.2, sx, 2.6, 3.3, g); }
-  for (const sx of [-3.52, 3.52]) mk(Box(0.12, 1.1, 1.3), winMat, sx, 2.6, 0, g, false);
-  mk(Box(0.9, 2.4, 0.9), mat(0x8a3b2e), 2, 7.2, -1.2, g);
-  mk(new THREE.TorusGeometry(0.38, 0.12, 6, 12), mat(0x1f6b3a), 0, 3.05, 3.12, g);
-  mk(Box(0.22, 0.18, 0.1), mat(0xd32f2f), 0, 2.72, 3.2, g);
+  const shell = [];
+  const own = (color, o) => { const m = mat(color, o).clone(); m.transparent = true; m.userData.fade = true; return m; };
+  const S = (geo, m, px, py, pz, sh = true) => { const mesh = mk(geo, m, px, py, pz, g, sh); shell.push(mesh); return mesh; };
+  const wallM = own(col), H = W.HOUSE;
+  S(Box(7, 4.3, 0.3), wallM, 0, 2.15, -2.85);
+  for (const sd of [-1, 1]) { S(Box(0.3, 4.3, 6), wallM, sd * 3.35, 2.15, 0); S(Box(3.5 - H.door, 4.3, 0.3), wallM, sd * (3.5 + H.door) / 2, 2.15, 2.85); }
+  S(Box(H.door * 2, 1.3, 0.3), wallM, 0, 3.65, 2.85);
+  const roof = S(Cyl(4.3, 4.3, 8, 3), own(0xf2f6ff), 0, 5.6, 0); roof.rotation.z = Math.PI / 2; roof.scale.set(0.62, 1, 1);
+  const eave = S(Cyl(4.05, 4.05, 7.8, 3), own(0x7a2e22), 0, 5.4, 0); eave.rotation.z = Math.PI / 2; eave.scale.set(0.62, 1, 1);
+  S(Box(0.9, 2.4, 0.9), own(0x8a3b2e), 2, 7.2, -1.2);
+  const winMat = own(0xffc766, { em: 0xffb347, emI: 1.4 });
+  for (const sx of [-2.3, 2.3]) { S(Box(1.2, 1.1, 0.34), winMat, sx, 2.6, 2.85, false); glow(0xffb347, 2.2, sx, 2.6, 3.3, g); }
+  for (const sx of [-3.35, 3.35]) S(Box(0.34, 1.1, 1.3), winMat, sx, 2.6, 0, false);
+  S(new THREE.TorusGeometry(0.38, 0.12, 6, 12), own(0x1f6b3a), 0, 3.65, 3.05);
+  S(Box(0.22, 0.18, 0.1), own(0xd32f2f), 0, 3.32, 3.1);
+  // 문 (왼쪽 경첩, 안쪽으로 열림)
+  const door = new THREE.Group(); door.position.set(-H.door, 0, 2.85); g.add(door);
+  const doorM = own(0x4a2a16);
+  shell.push(mk(Box(H.door * 2, 2.7, 0.14), doorM, H.door, 1.65, 0, door));
+  shell.push(mk(Box(0.16, 0.16, 0.1), own(0xffd34d, { metal: 0.6 }), H.door * 2 - 0.35, 1.7, 0.12, door));
+  // 바닥과 실내
+  mk(Box(6.5, 0.1, 5.5), mat(0xa47148), 0, 0.27, 0, g, false);
+  mk(Cyl(1.6, 1.6, 0.04, 24), toon(0xb71c1c), 0, 0.34, 0.4, g, false);
+  mk(Box(1.9, 1.7, 0.7), mat(0x9e9e9e), 0, 1.15, -2.3, g);                         // 벽난로
+  mk(Box(1.0, 0.8, 0.1), mat(0x1a1010), 0, 0.75, -1.94, g, false);
+  for (const fx of [-0.2, 0.2]) mk(Cone(0.18, 0.5, 6), new THREE.MeshBasicMaterial({ color: 0xff8a30 }), fx, 0.6, -2.0, g, false);
+  glow(0xff8a30, 2.6, 0, 0.8, -1.8, g, 1.5);
+  mk(Box(0.9, 0.55, 2.4), toon(0x5c6bc0), -2.55, 0.6, 0.4, g);                      // 소파
+  mk(Box(0.3, 1.0, 2.4), toon(0x3f51b5), -3.0, 1.0, 0.4, g);
+  mk(Cyl(0.6, 0.6, 0.08, 16), mat(0x6d4c41), 0, 0.95, 0.4, g); mk(Cyl(0.08, 0.1, 0.6, 8), mat(0x5d4037), 0, 0.62, 0.4, g);   // 탁자
+  mk(Cyl(0.1, 0.09, 0.2, 10), toon(0xfafafa), 0.2, 1.09, 0.3, g, false);           // 머그컵
+  mk(Cone(0.6, 1.5, 8), toon(0x2e7d32), 2.5, 1.15, -2.0, g); mk(Sph(0.12, 8, 6), mat(0xffd34d, { basic: true }), 2.5, 1.95, -2.0, g, false);   // 작은 트리
+  mk(Box(1.2, 0.5, 2.0), toon(0xffccbc), 2.6, 0.55, 1.2, g);                        // 침대
+  mk(Box(1.0, 0.2, 0.5), toon(0xffffff), 2.6, 0.88, 0.4, g, false);
   const cols = [0xff4d4d, 0xffd34d, 0x4dff88, 0x4dc3ff];
   for (let i = 0; i < 9; i++) {
-    const b = mk(Sph(0.11, 6, 4), mat(cols[i % 4], { basic: true }).clone(), -3.6 + i * 0.9, 3.95, 3.45, g, false);
+    const b = mk(Sph(0.11, 6, 4), mat(cols[i % 4], { basic: true }).clone(), -3.6 + i * 0.9, 3.95, 3.15, g, false);
+    b.material.transparent = true; b.material.userData.fade = true; shell.push(b);
     twinkleBulbs.push({ m: b, c: new THREE.Color(cols[i % 4]), ph: i * 0.7 });
   }
+  const mats = [...new Set(shell.map(m => m.material))];
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  houseObjs[idx] = { g, door, mats, shell, fade: 1, open: 0, dx: x + sn * 3.2, dz: z + cs * 3.2 };
+}
+// 이글루: 문이 뚫린 눈 돔 + 입구 터널 + 안쪽 러그와 등불
+function makeIgloo(ig) {
+  const R = W.IGLOO.r, D = W.IGLOO.door;
+  const g = new THREE.Group(); g.position.set(ig.x, heightAt(ig.x, ig.z) - 0.15, ig.z); g.rotation.y = ig.rot; scene.add(g);
+  const snow = new THREE.MeshToonMaterial({ color: 0xf4f9ff, gradientMap: toonGrad, side: THREE.DoubleSide, transparent: true });
+  const seam = new THREE.MeshToonMaterial({ color: 0xbcd3ee, gradientMap: toonGrad, transparent: true });
+  const shell = [];
+  shell.push(mk(new THREE.SphereGeometry(R, 32, 14, Math.PI / 2 + D, TAU - 2 * D, 0, Math.PI / 2), snow, 0, 0, 0, g));
+  for (const h of [0.55, 1.25, 1.95, 2.6]) {        // 얼음 블록 줄무늬
+    const wrap = new THREE.Group(); wrap.rotation.y = -(Math.PI / 2 + D); wrap.position.y = h; g.add(wrap);
+    const ring = mk(new THREE.TorusGeometry(Math.sqrt(R * R - h * h) + 0.01, 0.035, 4, 40, TAU - 2 * D), seam, 0, 0, 0, wrap, false); ring.rotation.x = Math.PI / 2; shell.push(ring);
+  }
+  const tun = mk(new THREE.CylinderGeometry(1.25, 1.25, 2.2, 16, 1, true, Math.PI / 2, Math.PI), snow, 0, 0, R + 0.25, g); tun.rotation.x = Math.PI / 2; shell.push(tun);
+  shell.push(mk(new THREE.TorusGeometry(1.25, 0.13, 6, 16, Math.PI), seam, 0, 0, R + 1.35, g, false));
+  const nm = names.get(ig.id), fc = ELF_COLORS[(nm ? nm.c : 0) % 6];
+  shell.push(mk(Cyl(0.04, 0.04, 1.2, 6), mat(0x6d4c41), 0, R + 0.5, 0, g));
+  const flag = mk(Box(0.6, 0.38, 0.03), new THREE.MeshToonMaterial({ color: fc, gradientMap: toonGrad, transparent: true }), 0.32, R + 0.9, 0, g, false); shell.push(flag);
+  mk(Cyl(1.6, 1.6, 0.05, 24), toon(0xd7ccc8), 0, 0.18, -0.3, g, false);           // 털 러그
+  mk(Box(0.3, 0.4, 0.3), mat(0xffe0a0, { em: 0xffb347, emI: 1.6 }), 1.6, 0.4, -1.4, g, false);   // 등불
+  glow(0xffb347, 2.4, 1.6, 0.6, -1.4, g, 1.2);
+  mk(Box(1.4, 0.3, 0.7), toon(0x90caf9), -1.4, 0.32, -1.3, g);                     // 얼음 침대
+  const tag = document.createElement('div'); tag.className = 'tag igtag'; tag.textContent = `🧊 ${nm ? nm.n : ''}의 이글루`; $('labels').appendChild(tag);
+  return { g, shell, mats: [...new Set(shell.map(m => m.material))], tag, fade: 1 };
+}
+// 투명도 바꾸기: 반투명일 때는 깊이를 쓰지 않아 안쪽이 비친다
+function setFade(mats, f) {
+  for (const m of mats) { m.opacity = f; m.depthWrite = f > 0.98; }
 }
 function buildLamp({ x, z, light }) {
   const y = heightAt(x, z);
@@ -453,7 +521,7 @@ function buildBigTree(x = 0, z = 0, sc = 1) {
 let friendly = null;
 function buildVillage() {
   for (const t of W.VILLAGE_TREES) buildBigTree(t.x, t.z, t.s);
-  L.houses.forEach(buildHouse);
+  L.houses.forEach((h, i) => buildHouse(h, i));
   L.lamps.forEach(buildLamp);
   friendly = makeSnowman('friend'); friendly.group.position.set(L.friendly.x, heightAt(L.friendly.x, L.friendly.z), L.friendly.z); friendly.group.rotation.y = 0.8; scene.add(friendly.group);
 }
@@ -870,9 +938,24 @@ const NOTE = { C: 523.25, D: 587.33, E: 659.25, F: 698.46, G: 783.99 };
 const SONG = 'E1E1E2E1E1E2E1G1C1.5D.5E4F1F1F1.5F.5F1E1E1E.5E.5E1D1D1E1D2G2E1E1E2E1E1E2E1G1C1.5D.5E4F1F1F1.5F.5F1E1E1E.5E.5G1G1F1D1C4R4'
   .match(/[A-GR][\d.]+/g).map(s => [s[0], parseFloat(s.slice(1))]);
 let songIdx = 0, songT = 0;
+const NF = { C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392, A4: 440, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46 };
+const CALM = ('G4 1.5 A4 .5 G4 1 E4 3 G4 1.5 A4 .5 G4 1 E4 3 D5 2 D5 1 B4 3 C5 2 C5 1 G4 3 A4 2 A4 1 C5 1.5 B4 .5 A4 1 G4 1.5 A4 .5 G4 1 E4 3 ' +
+  'A4 2 A4 1 C5 1.5 B4 .5 A4 1 G4 1.5 A4 .5 G4 1 E4 3 D5 2 D5 1 F5 1.5 D5 .5 B4 1 C5 3 E5 3 C5 1.5 G4 .5 E4 1 G4 1.5 F4 .5 D4 1 C4 6 R 3')
+  .split(' ').reduce((a, v, i, arr) => (i % 2 ? a : a.concat([[v, parseFloat(arr[i + 1])]])), []);
+let calmIdx = 0, wasIndoor = false;
 setInterval(() => {
   if (!ac || !musicOn || state !== 'play' || document.hidden) return;
+  const indoor = !!(me && me.indoor);
+  if (indoor !== wasIndoor) { wasIndoor = indoor; songT = ac.currentTime + 0.3; if (indoor) calmIdx = 0; }   // 실내·실외 음악 전환
   if (songT < ac.currentTime) songT = ac.currentTime + 0.05;
+  if (indoor) {
+    while (songT < ac.currentTime + 0.5) {
+      const [n, d] = CALM[calmIdx];
+      if (n !== 'R') { tone(NF[n], d * 0.42, 'sine', 0.028, 0, songT, true); tone(NF[n] / 2, d * 0.42, 'triangle', 0.012, 0, songT, true); }
+      songT += d * 0.42; calmIdx = (calmIdx + 1) % CALM.length;
+    }
+    return;
+  }
   while (songT < ac.currentTime + 0.4) {
     const [n, d] = SONG[songIdx];
     if (n !== 'R') { tone(NOTE[n], 0.5, 'sine', 0.032, 0, songT, true); tone(NOTE[n] * 2, 0.25, 'sine', 0.011, 0, songT, true); }
@@ -895,6 +978,19 @@ const remotes = new Map();             // id -> 원격 플레이어
 const enemies = new Map();             // id -> 적 (서버 상태를 화면에 표시)
 const balls = new Map();               // id -> 눈덩이
 let gifts = [], popups = [], cid = 1;
+const igloos = new Map();              // 주인 id -> { id, x, z, rot, n, model }
+let igArr = [];                        // 충돌 계산용 배열
+const myAllies = new Set(), allySent = new Set(), allyInbox = [];
+function addIgloo([id, x, z, rot, n]) {
+  removeIgloo(id);
+  const ig = { id, x, z, rot, n };
+  ig.model = makeIgloo(ig); igloos.set(id, ig); igArr = [...igloos.values()];
+  burst(x, heightAt(x, z) + 1.5, z, 30, 0xffffff, 7);
+}
+function removeIgloo(id) {
+  const ig = igloos.get(id); if (!ig) return;
+  scene.remove(ig.model.g); ig.model.tag.remove(); igloos.delete(id); igArr = [...igloos.values()];
+}
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
     reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, slowT: 0, tea: 0, rest: 0, restT: 0, sit: -1, dashT: 0, dashCD: 0, dx: 0, dz: 0,
@@ -950,6 +1046,8 @@ function resetWorld() {
   for (const b of balls.values()) scene.remove(b.mesh); balls.clear();
   for (const r of remotes.values()) removeRemote(r); remotes.clear();
   names.clear();
+  for (const id of [...igloos.keys()]) removeIgloo(id);
+  myAllies.clear(); allySent.clear(); allyInbox.length = 0; showAllyAsk();
 }
 function onMsg(m) {
   switch (m.t) {
@@ -961,6 +1059,7 @@ function onMsg(m) {
       me = newPlayer(m.x, m.z); myScore = 0; myCombo = 0; myKills = 0; playTime = 0;
       if (m.g) applyGifts(m.g);
       if (m.h) m.h.forEach((on, i) => setHeal(i, !!on));
+      for (const row of (m.ig || [])) addIgloo(row);
       camYaw = camYawT = 0;
       sendVoiceFlags();
       for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = '';
@@ -972,7 +1071,7 @@ function onMsg(m) {
     }
     case 'full': state = 'title'; overlay('title', `서버가 가득 찼어요 (최대 ${m.max | 0}명). 잠시 후 다시 시도해 주세요.`); break;
     case 'pj': names.set(m.id, { n: m.n, c: m.c, look: m.look || { c: m.c } }); feed(`<span class="sys">${esc(m.n)} 님이 들어왔어요</span>`); break;
-    case 'pl': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">${esc(nm.n)} 님이 나갔어요</span>`); names.delete(m.id); const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } closePeer(m.id); break; }
+    case 'pl': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">${esc(nm.n)} 님이 나갔어요</span>`); names.delete(m.id); allySent.delete(m.id); { const k = allyInbox.indexOf(m.id); if (k >= 0) { allyInbox.splice(k, 1); showAllyAsk(); } } const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } closePeer(m.id); break; }
     case 's': applySnapshot(m); break;
     case 'b': if (m.o !== 'e') { if (!balls.has(m.id + '.0')) spawnVolley({ id: m.id, owner: 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, ch: m.ch, st: m.st, pv: m.pv }); break; }
       if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || (m.o === 'e' ? 15 : 1), pv: !!m.pv, kind: m.k | 0 }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
@@ -1000,9 +1099,31 @@ function onMsg(m) {
       if (m.by === myId) giveBuff(m.k, g);
       break;
     }
+    case 'ig': {                 // 이글루가 지어짐 (같은 사람이 다시 지으면 옮겨짐)
+      addIgloo(m.i);
+      const nm = names.get(m.i[0]);
+      if (m.i[0] === myId) { sfx.gift(); toast('🧊 이글루 완성!', '몬스터는 못 들어와요. 안에서 쉬면 체력이 차요', 2.6); }
+      else if (nm && Math.hypot(m.i[1] - me.x, m.i[2] - me.z) < 60) feed(`<span class="sys">🧊 ${esc(nm.n)} 님이 이글루를 지었어요</span>`);
+      break;
+    }
+    case 'igx': removeIgloo(m.id); break;
+    case 'igfail': toast('🧊 여기에는 지을 수 없어요', esc(m.why || ''), 2); break;
+    case 'allies': {
+      myAllies.clear(); for (const id of m.ids || []) { myAllies.add(id); allySent.delete(id); }
+      plistKey = ''; if ($('settings').classList.contains('open')) renderPlayerList();
+      break;
+    }
+    case 'allyReq': {            // 누가 나에게 동맹 신청
+      if (voice.blocked.has(m.from) || allyInbox.includes(m.from)) break;
+      allyInbox.push(m.from); showAllyAsk(); sfx.chat();
+      break;
+    }
+    case 'allyOk': { const nm = names.get(m.id); toast('🤝 동맹 결성!', `${esc(nm ? nm.n : '')} 님과는 서로 공격해도 피해가 없어요`, 2.6); sfx.pop(); feed(`<span class="sys">🤝 ${esc(nm ? nm.n : '')} 님과 동맹을 맺었어요</span>`); break; }
+    case 'allyNo': { allySent.delete(m.id); const nm = names.get(m.id); toast(m.why === 'full' ? '동맹은 최대 10명까지예요' : `${esc(nm ? nm.n : '')} 님이 동맹을 거절했어요`, '', 2); plistKey = ''; break; }
+    case 'allyOff': { const nm = names.get(m.id); feed(`<span class="sys">${esc(nm ? nm.n : '')} 님이 동맹을 해제했어요</span>`); break; }
     case 'lk': { const nm = names.get(m.id); if (nm) { nm.look = m.look; nm.c = m.look.c; } break; }
     case 'dmg': {                // 다른 플레이어가 맞힌 걸 서버가 확인해 준 피해
-      if (appliedHits.has(m.id)) break;
+      if (appliedHits.has(m.id) || myAllies.has(m.by)) break;
       appliedHits.add(m.id); if (appliedHits.size > 400) appliedHits.clear();
       const b = balls.get(m.id); if (b) killBall(b);
       if (!me.dead && me.inv <= 0 && !me.inVillage) { hurtMe(m.a | 0, m.by); if (m.ic) me.slowT = Math.max(me.slowT, +m.ic); }
@@ -1259,20 +1380,44 @@ function syncSettings() {
   renderPlayerList();
 }
 let plistKey = '';
+function showAllyAsk() {
+  const box = $('allyAsk');
+  while (allyInbox.length && !names.has(allyInbox[0])) allyInbox.shift();
+  if (!allyInbox.length) { box.classList.remove('open'); return; }
+  const nm = names.get(allyInbox[0]);
+  $('allyAskText').textContent = `🤝 ${nm.n} 님이 동맹을 신청했어요`;
+  box.classList.add('open');
+}
+$('allyAsk').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !allyInbox.length) return;
+  const id = allyInbox.shift(); send({ t: 'allyAns', id, ok: b.dataset.ok === '1' ? 1 : 0 }); showAllyAsk(); plistKey = '';
+});
+$('allyAsk').addEventListener('pointerdown', e => e.stopPropagation());
 function renderPlayerList() {
   const list = [...remotes.values()].sort((a, b) => a.n.localeCompare(b.n));
-  const key = list.map(r => `${r.id}:${r.n}:${r.voice ? 1 : 0}:${voice.muted.has(r.id) ? 1 : 0}:${voice.blocked.has(r.id) ? 1 : 0}`).join('|');
+  const key = list.map(r => `${r.id}:${r.n}:${r.voice ? 1 : 0}:${voice.muted.has(r.id) ? 1 : 0}:${voice.blocked.has(r.id) ? 1 : 0}:${myAllies.has(r.id) ? 1 : allySent.has(r.id) ? 2 : allyInbox.includes(r.id) ? 3 : 0}`).join('|');
   if (key === plistKey) return; plistKey = key;
   $('plistSet').innerHTML = list.length ? list.map(r => {
     const muted = voice.muted.has(r.id), blocked = voice.blocked.has(r.id);
     const d = Math.round(Math.hypot(r.x - me.x, r.z - me.z));
     return `<div class="prow"><b style="color:${ELF_CSS[r.c % 6]}">${esc(r.n)}</b><small>${r.voice ? '🎙️ ' : ''}${d}m</small>
+      <button data-act="ally" data-id="${r.id}" class="ally ${myAllies.has(r.id) ? 'on' : ''}" aria-pressed="${myAllies.has(r.id)}">${myAllies.has(r.id) ? '🤝 동맹 해제' : allyInbox.includes(r.id) ? '🤝 수락' : allySent.has(r.id) ? '신청함…' : '🤝 동맹'}</button>
       <button data-act="mute" data-id="${r.id}" class="${muted ? 'on' : ''}" aria-pressed="${muted}">${muted ? '🔇 음소거됨' : '음소거'}</button>
       <button data-act="block" data-id="${r.id}" class="${blocked ? 'on' : ''}" aria-pressed="${blocked}">${blocked ? '🚫 차단됨' : '차단'}</button></div>`;
   }).join('') : '<p class="empty">지금은 나 혼자 있어요.</p>';
 }
 $('plistSet').addEventListener('click', e => {
   const b = e.target.closest('button[data-act]'); if (!b) return;
+  if (b.dataset.act === 'ally') {
+    const id = +b.dataset.id, r = remotes.get(id), name = r ? r.n : '플레이어';
+    if (myAllies.has(id)) { send({ t: 'unally', id }); toast(`${esc(name)} 님과 동맹 해제`, '', 1.5); }
+    else if (allyInbox.includes(id)) { allyInbox.splice(allyInbox.indexOf(id), 1); send({ t: 'allyAns', id, ok: 1 }); showAllyAsk(); }
+    else if (!allySent.has(id)) {
+      if (myAllies.size >= W.MAX_ALLIES) { toast('동맹은 최대 10명까지예요', '', 1.5); return; }
+      allySent.add(id); send({ t: 'ally', id }); toast(`🤝 ${esc(name)} 님에게 동맹 신청`, '상대가 수락하면 서로 피해를 입지 않아요', 2);
+    }
+    plistKey = ''; renderPlayerList(); return;
+  }
   const id = +b.dataset.id, r = remotes.get(id), set = b.dataset.act === 'mute' ? voice.muted : voice.blocked;
   if (set.has(id)) set.delete(id); else set.add(id);
   if (b.dataset.act === 'block' && voice.blocked.has(id)) closePeer(id);
@@ -1281,6 +1426,16 @@ $('plistSet').addEventListener('click', e => {
   else toast(voice.blocked.has(id) ? `🚫 ${esc(name)} 차단` : `${esc(name)} 차단 해제`, voice.blocked.has(id) ? '목소리와 채팅이 보이지 않아요' : '', 2);
   plistKey = ''; renderPlayerList();
 });
+function buildIgloo() {
+  if (state !== 'play' || !me || me.dead) return;
+  if (myScore < W.IGLOO.score) { toast(`🧊 이글루는 ${W.IGLOO.score.toLocaleString()}점부터 지을 수 있어요`, `지금 ${myScore.toLocaleString()}점`, 2); return; }
+  const d = W.IGLOO.r + 2.4, x = me.x + Math.sin(me.face) * d, z = me.z + Math.cos(me.face) * d, rot = Math.atan2(me.x - x, me.z - z);
+  const why = W.iglooSpot(x, z, igArr, myId);
+  if (why) { toast('🧊 여기에는 지을 수 없어요', why, 2); return; }
+  send({ t: 'igloo', x: r2(x), z: r2(z), rot: r2(rot) });
+}
+$('igBtn').addEventListener('click', e => { e.stopPropagation(); audio(); buildIgloo(); });
+$('igBtn').addEventListener('pointerdown', e => e.stopPropagation());
 function toggleSettings(open) {
   const el = $('settings'), want = open === undefined ? !el.classList.contains('open') : open;
   if (want && state !== 'play') return;
@@ -1327,6 +1482,7 @@ addEventListener('keydown', e => {
     if (k === 'v') toggleMic();
     if (k === 't') startTea();
     if (k === 'f') toggleSit();
+    if (k === 'b') buildIgloo();
     if (k === 'escape') toggleSettings();
   }
   if (k === 'm') { musicOn = !musicOn; store.set('snowball-music', musicOn ? '1' : '0'); toast(musicOn ? '♪ 음악 켜짐' : '음악 꺼짐', '', 1); syncSettings(); }
@@ -1615,7 +1771,8 @@ function drawMinimap() {
   mctx.fillStyle = '#5dff9a'; for (const h of heals) if (h.on) { const [x, z] = toMini(h.x, h.z); mctx.fillRect(x - 2.5, z - 0.8, 5, 1.6); mctx.fillRect(x - 0.8, z - 2.5, 1.6, 5); }
   mctx.fillStyle = '#ff5252';
   for (const e of enemies.values()) { if (Math.hypot(e.x - me.x, e.z - me.z) > 45) continue; const [x, z] = toMini(e.x, e.z); mctx.fillRect(x - 1.5, z - 1.5, 3, 3); }
-  for (const r of remotes.values()) { const [x, z] = toMini(r.x, r.z); mctx.fillStyle = ELF_CSS[r.c % 6]; mctx.beginPath(); mctx.arc(x, z, 3.5, 0, TAU); mctx.fill(); }
+  for (const ig of igloos.values()) { const [x, z] = toMini(ig.x, ig.z); mctx.fillStyle = '#e3f2ff'; mctx.beginPath(); mctx.arc(x, z, 3.4, Math.PI, 0); mctx.fill(); mctx.fillRect(x - 3.4, z, 6.8, 1.4); }
+  for (const r of remotes.values()) { const [x, z] = toMini(r.x, r.z); mctx.fillStyle = ELF_CSS[r.c % 6]; mctx.beginPath(); mctx.arc(x, z, 3.5, 0, TAU); mctx.fill(); if (myAllies.has(r.id)) { mctx.strokeStyle = '#7dffb0'; mctx.lineWidth = 1.6; mctx.stroke(); } }
   const [px, pz] = toMini(me.x, me.z);
   mctx.save(); mctx.translate(px, pz);
   mctx.fillStyle = '#ffffff30'; mctx.beginPath(); mctx.moveTo(0, 0); mctx.arc(0, 0, 22, -Math.PI / 2 - camYaw - 0.5, -Math.PI / 2 - camYaw + 0.5); mctx.fill();
@@ -1744,6 +1901,7 @@ function updateMe(dt) {
   if (p.dashT > 0) { p.dashT -= dt; p.vx = p.dx * 28; p.vz = p.dz * 28; if (Math.random() < 0.6) burst(p.x, p.y + 0.2, p.z, 1, 0xffffff, 2, 1); }
   p.x = clamp(p.x + p.vx * dt, -LIMIT, LIMIT); p.z = clamp(p.z + p.vz * dt, -LIMIT, LIMIT);
   pushOut(p, 0.6);
+  if (igArr.length) W.iglooPush(p, 0.6, igArr);
   if (keys[' ']) jump();
   const gh = heightAt(p.x, p.z);
   if (!p.onGround) { p.vy -= 26 * dt; p.y += p.vy * dt; if (p.y <= gh) { p.y = gh; p.vy = 0; p.onGround = true; p.squash = 0.3; burst(p.x, gh + 0.1, p.z, 6, 0xffffff, 3, 1); } }
@@ -1770,7 +1928,9 @@ function updateMe(dt) {
     p.fireAcc = (p.fireAcc || 0) + W.FIRE_HEAL * dt;
     if (p.fireAcc >= W.FIRE_HEAL) { p.fireAcc -= W.FIRE_HEAL; p.hp = Math.min(p.maxHp, p.hp + W.FIRE_HEAL); popup(p.x, p.y + 3, p.z, `🔥+${W.FIRE_HEAL}`, '#ffb74d'); }
   } else p.fireAcc = 0;
-  if (p.inVillage) {
+  p.house = W.houseAt(p.x, p.z); p.igloo = igArr.length ? W.iglooAt(igArr, p.x, p.z) : null;
+  p.indoor = p.house >= 0 || !!p.igloo;
+  if (p.inVillage || p.igloo) {
     p.regenT += dt;
     if (p.regenT > 1.5 && p.hp < p.maxHp) { p.regenT = 0; p.hp = Math.min(p.maxHp, p.hp + 10); popup(p.x, p.y + 3, p.z, '+10', '#7dffb0'); }
   } else p.regenT = 0;
@@ -1800,8 +1960,9 @@ function hurtMe(dmg, by) {
 }
 function updateBalls(dt) {
   for (const b of [...balls.values()]) {
-    const st = b.spd * dt;
+    const st = b.spd * dt, x0 = b.x, z0 = b.z;
     b.x += b.dx * st; b.z += b.dz * st; b.dist += st;
+    if (igArr.length && W.iglooBlocks(igArr, x0, z0, b.x, b.z)) { killBall(b); burst(b.x, heightAt(b.x, b.z) + b.h, b.z, 8, 0xeef4ff, 4, 2); continue; }
     if (b.dist > b.max) { b.fall += 22 * dt; b.h -= b.fall * dt; }
     else if (b.h < 2) b.h = lerp(b.h, BALL_H, Math.min(1, dt * 3));
     const y = heightAt(b.x, b.z) + b.h;
@@ -1813,7 +1974,7 @@ function updateBalls(dt) {
     }
     if (b.owner !== 'enemy') {
       // PvP: 안전지대 밖에서 던진 남의 눈덩이가 안전지대 밖의 나를 맞힘 (맞은 사람이 판정)
-      if (b.owner === 'remote' && b.pv && !b.ghost && !me.dead && !me.inVillage && Math.hypot(b.x - me.x, b.z - me.z) < 0.6 + b.r && y > me.y - 0.1 && y < me.y + 2.4) {
+      if (b.owner === 'remote' && b.pv && !b.ghost && !me.dead && !me.inVillage && !myAllies.has(b.from) && Math.hypot(b.x - me.x, b.z - me.z) < 0.6 + b.r && y > me.y - 0.1 && y < me.y + 2.4) {
         killBall(b); burst(b.x, y, b.z, 18, 0xffffff, 7);
         send({ t: 'hurt', id: b.id });
         if (!appliedHits.has(b.id)) { appliedHits.add(b.id); if (me.inv <= 0) { hurtMe(W.pvpDmg(b.dmg || 1), b.from); if (b.ice) me.slowT = Math.max(me.slowT, b.ice); } }
@@ -1828,7 +1989,7 @@ function updateBalls(dt) {
         }
       }
       if (!b.ghost && b.pv) for (const r of remotes.values()) {
-        if (r.dead || r.id === b.from || inVillage(r.x, r.z)) continue;
+        if (r.dead || r.id === b.from || inVillage(r.x, r.z) || (b.owner === 'me' && myAllies.has(r.id)) || (b.owner === 'remote' && r.id === myId)) continue;
         if (Math.hypot(b.x - r.x, b.z - r.z) < 0.6 + b.r && y > r.y - 0.1 && y < r.y + 2.4) { b.mesh.visible = false; b.ghost = true; r.hpShowT = 6; if (b.owner === 'me') { send({ t: 'hc', id: b.id, v: r.id }); sfx.hit(); popup(r.x, r.y + 3, r.z, '명중!', '#ff8a8a'); } break; }
       }
       if (b.ghost) { b.ghostT = (b.ghostT || 0) + dt; if (b.ghostT > 0.6) killBall(b); }
@@ -1942,8 +2103,28 @@ function setTag(el, name, color, bubble) {
   if (el._html !== html) { el._html = html; el.innerHTML = html; }
   el.style.color = color;
 }
+// 집·이글루: 안에 들어가면 반투명, 누가 다가오면 문이 열림
+function updateBuildings(dt) {
+  const k = Math.min(1, dt * 6), who = [me, ...remotes.values()].filter(q => q && !q.dead);
+  houseObjs.forEach((h, i) => {
+    const target = me && me.house === i && state === 'play' ? 0.2 : 1;
+    if (Math.abs(h.fade - target) > 0.004) { h.fade += (target - h.fade) * k; setFade(h.mats, h.fade > 0.98 ? 1 : h.fade); }
+    const near = who.some(q => Math.hypot(q.x - h.dx, q.z - h.dz) < 2.6);
+    h.open += ((near ? 1 : 0) - h.open) * Math.min(1, dt * 5);
+    h.door.rotation.y = h.open * 1.7;
+  });
+  for (const ig of igloos.values()) {
+    const m = ig.model, target = me && me.igloo === ig && state === 'play' ? 0.25 : 1;
+    if (Math.abs(m.fade - target) > 0.004) { m.fade += (target - m.fade) * k; setFade(m.mats, m.fade > 0.98 ? 1 : m.fade); }
+    const far = !me || Math.hypot(ig.x - me.x, ig.z - me.z) > 45;
+    if (far || state !== 'play') { m.tag.style.display = 'none'; continue; }
+    const sp = toScreen(new THREE.Vector3(ig.x, heightAt(ig.x, ig.z) + W.IGLOO.r + 1.8, ig.z));
+    m.tag.style.display = sp.ok ? '' : 'none'; m.tag.style.left = sp.x + 'px'; m.tag.style.top = sp.y + 'px';
+  }
+}
 function render(dt) {
   const p = me;
+  updateBuildings(dt);
   const blink = p.inv > 0 && p.dashT <= 0 && Math.floor(p.inv * 14) % 2;
   elf.group.visible = !p.dead && !blink;
   const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit >= 0 ? 64 : 0);
@@ -1967,7 +2148,7 @@ function render(dt) {
         r.bar.firstChild.style.width = (ratio * 100) + '%'; r.bar.className = 'hp ph' + (ratio <= 0.3 ? ' low' : ratio <= 0.6 ? ' mid' : '');
       } else r.bar.style.display = 'none';
     }
-    setTag(r.tag, (voice.blocked.has(r.id) ? '🚫 ' : voice.muted.has(r.id) && r.voice ? '🔇 ' : r.flags & 16 ? '🔊 ' : r.voice ? '🎙️ ' : '') + (r.dead ? `${r.n} 💤` : r.n), ELF_CSS[r.c % 6], r.bubbleT > 0 ? r.bubble : '');
+    setTag(r.tag, (myAllies.has(r.id) ? '🤝 ' : '') + (voice.blocked.has(r.id) ? '🚫 ' : voice.muted.has(r.id) && r.voice ? '🔇 ' : r.flags & 16 ? '🔊 ' : r.voice ? '🎙️ ' : '') + (r.dead ? `${r.n} 💤` : r.n), myAllies.has(r.id) ? '#7dffb0' : ELF_CSS[r.c % 6], r.bubbleT > 0 ? r.bubble : '');
   }
   if (!myTag) { myTag = document.createElement('div'); myTag.className = 'tag'; $('labels').appendChild(myTag); }
   if (myBubbleT > 0 && state === 'play') {
@@ -2013,6 +2194,9 @@ function render(dt) {
     } else if (e.bar) e.bar.style.display = 'none';
   }
   animFire(dt);
+  { const lbl = igloos.has(myId) ? '🧊 이글루 옮기기 <small>(B)</small>' : '🧊 이글루 짓기 <small>(B)</small>'; if ($('igBtn')._l !== lbl) { $('igBtn')._l = lbl; $('igBtn').innerHTML = lbl; } }
+  document.body.classList.toggle('canigloo', !!(me && !me.dead && state === 'play' && myScore >= W.IGLOO.score && !me.inVillage));
+  if (me && state === 'play' && myScore >= W.IGLOO.score && !me.igHint) { me.igHint = true; toast('🧊 이글루를 지을 수 있어요!', '마을 밖에서 B 키 또는 🧊 버튼', 3); }
   document.body.classList.toggle('safe', !!(me && me.inVillage && !me.dead && state === 'play'));
   document.body.classList.toggle('nearfire', !!(me && !me.dead && state === 'play' && (me.sit >= 0 || Math.hypot(me.x - W.BONFIRE.x, me.z - W.BONFIRE.z) < W.SIT_RANGE)));
   $('teaBtn').classList.toggle('on', me.tea > 0);
