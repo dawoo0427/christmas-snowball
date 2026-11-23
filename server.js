@@ -151,6 +151,9 @@ let nextId = 1, nextEnemy = 1, nextEBall = 1;
 // 필드 몬스터 스폰 지점: 몬스터가 죽으면 MOB_RESPAWN초 뒤 같은 자리에서 다시 나타난다
 const spawns = W.layout.spawns.map(sp => ({ ...sp, eid: 0, timer: 0 }));
 const gifts = [];
+const recentBalls = new Map();   // 방금 사라진 플레이어 눈덩이 (늦게 도착한 명중 신고를 받아주기 위해 잠깐 보관)
+const HIT_SLACK = 4;             // 명중 신고 허용 오차 (통신 지연과 화면 보간 차이)
+const drops = new Map(); let nextDrop = 1;
 const heals = W.layout.heals.map(h => ({ x: h.x, z: h.z, on: true, respawn: 0 }));
 const HEAL_RESPAWN = 25;
 
@@ -192,13 +195,14 @@ function onConnect(conn) {
       if (m.t !== 'hello') return;
       if (players.size >= MAX_PLAYERS) { conn.send({ t: 'full', max: MAX_PLAYERS }); return conn.close(); }
       const id = nextId++;
-      p = { id, conn, n: cleanName(m.n) || '꼬마요정' + id, c: clamp(m.c | 0, 0, 5), x: rand(-3, 3), z: 12 + rand(-2, 2), y: 0, face: Math.PI, vx: 0, vz: 0,
+      const look = W.cleanLook(m.look || { c: m.c });
+      p = { id, conn, look, n: cleanName(m.n) || '꼬마요정' + id, c: look.c, x: rand(-3, 3), z: 12 + rand(-2, 2), y: 0, face: Math.PI, vx: 0, vz: 0,
         flags: 0, hp: W.MAX_HP, dead: false, score: 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, vl: false, vt: false, lastHitBy: 0, lastHitAt: 0, joined: Date.now() };
       p.y = heightAt(p.x, p.z);
       players.set(id, p);
-      conn.send({ t: 'welcome', id, server: SERVER_NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c]),
+      conn.send({ t: 'welcome', id, server: SERVER_NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c, q.look]), drops: [...drops.values()].map(d => [d.id, r1(d.x), r1(d.z), d.k]),
         g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)) });
-      broadcast({ t: 'pj', id, n: p.n, c: p.c }, p);
+      broadcast({ t: 'pj', id, n: p.n, c: p.c, look: p.look }, p);
       log(`입장 ${p.n}#${id} (현재 ${players.size}명)`);
       return;
     }
@@ -234,7 +238,7 @@ function handle(p, m) {
       if (p.dead || p.tokens < 1) return;
       p.tokens -= 1;
       const x = num(m.x, p.x), z = num(m.z, p.z);
-      if (Math.hypot(x - p.x, z - p.z) > 4) return;
+      if (Math.hypot(x - p.x, z - p.z) > 8) return;
       let dx = num(m.dx), dz = num(m.dz); const dl = Math.hypot(dx, dz); if (dl < 0.5) return; dx /= dl; dz /= dl;
       const ch = !!m.ch, gi = !!m.gi, big = (ch ? 1 : 0) + (gi ? 1 : 0), pw = m.pw ? 2 : 1;
       const pv = !inVillage(p.x, p.z);          // 안전지대 밖에서 던진 눈덩이만 플레이어를 맞힐 수 있다
@@ -246,6 +250,35 @@ function handle(p, m) {
         balls.set(b.id, b);
         broadcast({ t: 'b', id: b.id, o: p.id, x: r1(x), z: r1(z), h: r1(h), dx: r2(bx), dz: r2(bz), s: b.spd, r: r2(b.r), dm: b.dmg, pv: pv ? 1 : 0 }, p);
       });
+      break;
+    }
+    case 'hc': {                 // 내 화면에서 맞은 걸 신고 → 서버가 거리만 확인하고 바로 적용 (공격 씹힘 방지)
+      const id = String(m.id), b = balls.get(id) || recentBalls.get(id);
+      if (!b || b.owner !== p.id || b.hit) break;
+      if (m.e) {
+        const e = enemies.get(m.e | 0);
+        if (!e || Math.hypot(b.x - e.x, b.z - e.z) > e.T.r + b.r + HIT_SLACK) break;
+        b.hit = true; balls.delete(id); recentBalls.delete(id); applyHit(e, b);
+      } else if (m.v) {
+        const v = players.get(m.v | 0);
+        if (!v || v === p || v.dead || !b.pv || inVillage(v.x, v.z) || Math.hypot(b.x - v.x, b.z - v.z) > 0.6 + b.r + HIT_SLACK) break;
+        b.hit = true; balls.delete(id); recentBalls.delete(id);
+        broadcast({ t: 'be', id, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z) });
+        v.lastHitBy = p.id; v.lastHitAt = Date.now(); p.score += 5;
+        v.conn.send({ t: 'dmg', id, a: b.dmg * W.PVP_DMG, by: p.id });
+      }
+      break;
+    }
+    case 'pick': {               // 나쁜 산타가 떨어뜨린 선물 줍기
+      const d = drops.get(m.id | 0);
+      if (!d || p.dead || Math.hypot(d.x - p.x, d.z - p.z) > 3.5) break;
+      drops.delete(d.id); p.score += 80;
+      broadcast({ t: 'dropx', id: d.id, by: p.id, k: d.k });
+      break;
+    }
+    case 'look': {               // 꾸미기 변경
+      p.look = W.cleanLook(m.look); p.c = p.look.c;
+      broadcast({ t: 'lk', id: p.id, look: p.look });
       break;
     }
     case 'hurt': {               // 적 눈덩이에 맞음 (맞은 사람이 직접 알림)
@@ -360,6 +393,7 @@ function enemyThrow(e, target) {
 }
 function endBall(b, silent) {
   balls.delete(b.id);
+  if (b.owner !== 'e' && !b.hit) { b.endedAt = Date.now(); recentBalls.set(b.id, b); }
   if (!b.hit && b.owner !== 'e') { const p = players.get(b.owner); if (p) p.combo = 0; }
   if (!silent || b.owner === 'e') broadcast({ t: 'be', id: b.id, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z) });
 }
@@ -379,6 +413,11 @@ function applyHit(e, b) {
   if (e.hp <= 0) {
     enemies.delete(e.id);
     if (e.spawn) { e.spawn.eid = 0; e.spawn.timer = W.MOB_RESPAWN; }
+    if (e.type === 'badsanta') for (let i = 0; i < W.SANTA_DROPS; i++) {   // 나쁜 산타는 선물을 떨어뜨린다
+      const a = rand(0, TAU), o = { x: e.x + Math.cos(a) * 1.6, z: e.z + Math.sin(a) * 1.6 }; pushOut(o, 0.8);
+      const d = { id: nextDrop++, x: o.x, z: o.z, k: W.GIFT_KINDS[Math.floor(Math.random() * W.GIFT_KINDS.length)], ttl: W.DROP_TTL };
+      drops.set(d.id, d); broadcast({ t: 'drop', id: d.id, x: r1(d.x), z: r1(d.z), k: d.k, by: p ? p.id : 0 });
+    }
   }
 }
 function step(dt) {
@@ -409,6 +448,9 @@ function step(dt) {
       }
     }
   }
+  // 드랍 아이템 수명, 오래된 눈덩이 기록 정리
+  for (const d of [...drops.values()]) { d.ttl -= dt; if (d.ttl <= 0) { drops.delete(d.id); broadcast({ t: 'dropx', id: d.id }); } }
+  { const now = Date.now(); for (const [id, b] of recentBalls) if (now - b.endedAt > 700) recentBalls.delete(id); }
   // 선물·힐팩·필드 몬스터 리젠
   gifts.forEach((g, i) => { if (!g.on) { g.respawn -= dt; if (g.respawn <= 0) placeGift(i); } });
   heals.forEach((h, i) => { if (!h.on) { h.respawn -= dt; if (h.respawn <= 0) { h.on = true; broadcast({ t: 'hon', i }); } } });

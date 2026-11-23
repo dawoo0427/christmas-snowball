@@ -187,6 +187,14 @@
     },
     TYPE_BY_ID: ['snowman', 'penguin', 'rudolph', 'badsanta'],
     MOB_RESPAWN: 20, GIFT_RESPAWN: 20,
+    DROP_TTL: 30, SANTA_DROPS: 2,
+    // 캐릭터 꾸미기 선택지 개수 (화면 쪽 이름 목록과 순서를 맞춘다)
+    LOOK_SLOTS: { a: 6, h: 9, f: 5, k: 4, b: 4, c: 6 },
+    cleanLook(o) {
+      const L = World.LOOK_SLOTS, out = {};
+      for (const key in L) { const v = o && typeof o === 'object' ? o[key] | 0 : 0; out[key] = v >= 0 && v < L[key] ? v : 0; }
+      return out;
+    },
     // 선물 버프: 체력, 트리플, 왕눈덩이, 스피드, 공격력 2배, 연사 2배, 보호막, 무한 눈덩이
     GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite'],
     BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, VILLAGE_TREES, BENCHES, SEATS, BENCH_TOP, FIRE_HEAL: 12, TEA_TIME: 4.5, SIT_RANGE: 11,
