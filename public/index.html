@@ -16,7 +16,9 @@
     --body: "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     color-scheme: dark;
   }
-  * { box-sizing:border-box; }
+  * { box-sizing:border-box; touch-action:none; }
+  #overlay, #overlay *, #settings, #settings * { touch-action:pan-y; }
+  input, textarea { touch-action:manipulation; }
   html, body { margin:0; height:100%; overflow:hidden; background:var(--night); color:var(--ink); font-family:var(--body);
     touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; overscroll-behavior:none; }
   canvas#game { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
@@ -1283,7 +1285,7 @@ function toggleSettings(open) {
   const el = $('settings'), want = open === undefined ? !el.classList.contains('open') : open;
   if (want && state !== 'play') return;
   el.classList.toggle('open', want);
-  if (want) { syncSettings(); if (me) me.charging = false; $('setClose').focus(); }
+  if (want) { syncSettings(); resetTouch(); $('setClose').focus(); }
 }
 $('gear').addEventListener('click', () => { audio(); toggleSettings(true); });
 $('teaBtn').addEventListener('click', e => { e.stopPropagation(); audio(); startTea(); });
@@ -1309,7 +1311,7 @@ const keys = {};
 const mouse = { nx: 0, ny: 0, has: false };
 let camYaw = 0, camYawT = 0, camDist = isTouch ? 28 : 30, rDrag = null;
 const typing = () => document.activeElement && document.activeElement.tagName === 'INPUT';
-function openChat() { if (state !== 'play') return; $('chatbox').classList.add('open'); for (const k in keys) keys[k] = false; $('chatIn').focus(); }
+function openChat() { if (state !== 'play') return; $('chatbox').classList.add('open'); for (const k in keys) keys[k] = false; resetTouch(); $('chatIn').focus(); }
 function closeChat() { $('chatbox').classList.remove('open'); $('chatIn').blur(); }
 $('chatbox').addEventListener('submit', e => { e.preventDefault(); const s = $('chatIn').value.trim(); if (s) send({ t: 'chat', s }); $('chatIn').value = ''; closeChat(); });
 $('chatIn').addEventListener('keydown', e => { if (e.key === 'Escape') { closeChat(); } e.stopPropagation(); });
@@ -1330,7 +1332,7 @@ addEventListener('keydown', e => {
   if (k === 'm') { musicOn = !musicOn; store.set('snowball-music', musicOn ? '1' : '0'); toast(musicOn ? '♪ 음악 켜짐' : '음악 꺼짐', '', 1); syncSettings(); }
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (me) me.charging = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (me) me.charging = false; resetTouch(); });
 function setMouse(e) { mouse.nx = e.clientX / innerWidth * 2 - 1; mouse.ny = -(e.clientY / innerHeight) * 2 + 1; mouse.has = true; }
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 const touch = { moveId: null, mo: null, move: { x: 0, z: 0 }, aimId: null, ao: null, aim: null, aimLen: 0 };
@@ -1343,8 +1345,8 @@ canvas.addEventListener('pointerdown', e => {
   try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
   if (e.pointerType === 'touch') {
     if (state !== 'play') return;
-    if (e.clientX < innerWidth * 0.45 && touch.moveId === null) { touch.moveId = e.pointerId; touch.mo = { x: e.clientX, y: e.clientY }; showJoy('joyL', e.clientX, e.clientY); return; }
-    if (touch.aimId === null) {
+    if (e.clientX < innerWidth * 0.45) { touch.moveId = e.pointerId; touch.move = { x: 0, z: 0 }; touch.mo = { x: e.clientX, y: e.clientY }; showJoy('joyL', e.clientX, e.clientY); return; }
+    if (touch.aimId === null || !activeTouches.has(touch.aimId)) {
       touch.aimId = e.pointerId; touch.ao = { x: e.clientX, y: e.clientY }; touch.aim = null; touch.aimLen = 0;
       showJoy('joyR', e.clientX, e.clientY);
       if (canThrow()) { me.charging = true; me.charge = 0; }
@@ -1381,6 +1383,32 @@ function pointerEnd(e) {
   if (me && me.charging) throwPlayer();
 }
 canvas.addEventListener('pointerup', pointerEnd);
+// 모바일 조이스틱 고정 방지: 손가락을 뗀 신호를 어디서 받든 처리하고, 남은 터치가 없으면 전부 풀어준다
+const activeTouches = new Set();
+addEventListener('pointerdown', e => { if (e.pointerType === 'touch') activeTouches.add(e.pointerId); }, true);
+function touchGone(e) {
+  if (e.pointerType !== 'touch') return;
+  activeTouches.delete(e.pointerId);
+  if (e.pointerId === touch.moveId || e.pointerId === touch.aimId) pointerEnd(e);
+}
+addEventListener('pointerup', touchGone, true);
+addEventListener('pointercancel', e => { if (e.pointerId === touch.aimId && me) me.charging = false; touchGone(e); }, true);
+canvas.addEventListener('lostpointercapture', e => { if (e.pointerType === 'touch' && !activeTouches.has(e.pointerId)) touchGone(e); });
+function resetTouch() {
+  activeTouches.clear();
+  touch.moveId = null; touch.move = { x: 0, z: 0 }; hideJoy('joyL');
+  touch.aimId = null; touch.aim = null; hideJoy('joyR');
+  for (const k in held) held[k] = false;
+  if (me) me.charging = false;
+}
+addEventListener('touchend', e => { if (e.touches.length === 0 && (touch.moveId !== null || touch.aimId !== null)) { const aimed = touch.aimId !== null && me && me.charging; resetTouch(); if (aimed && canThrow()) { me.charging = true; autoAim(); throwPlayer(); } } }, true);
+addEventListener('touchcancel', e => { if (e.touches.length === 0) resetTouch(); }, true);
+document.addEventListener('visibilitychange', () => { if (document.hidden) resetTouch(); });
+addEventListener('pagehide', resetTouch);
+// 화면 확대 방지 (아이폰 사파리는 user-scalable=no 를 무시한다)
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', e => { if (e.touches.length > 1 || (e.scale && e.scale !== 1)) e.preventDefault(); }, { passive: false });
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 canvas.addEventListener('pointercancel', e => { rDrag = null; if (e.pointerId === touch.aimId && me) me.charging = false; pointerEnd(e); });
 canvas.addEventListener('wheel', e => { camDist = clamp(camDist + e.deltaY * 0.02, 16, 48); e.preventDefault(); }, { passive: false });
 const held = {};
@@ -1612,6 +1640,7 @@ function keysHtml() {
 }
 let overlayKind = null, healthTimer = null;
 function overlay(kind, err = '') {
+  if (kind) resetTouch();
   if (overlayKind === 'custom' && kind !== 'custom') previewStop();
   overlayKind = kind;
   const el = $('overlay');
