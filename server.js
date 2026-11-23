@@ -87,7 +87,7 @@ function getIceServers() {
 // ============================================================
 class Conn {
   constructor(socket) {
-    this.s = socket; this.buf = Buffer.alloc(0); this.frag = []; this.closed = false; this.lastMsg = Date.now();
+    this.s = socket; this.buf = Buffer.alloc(0); this.frag = []; this.closed = false; this.lastMsg = Date.now(); this.lastApp = Date.now();
     this.onmessage = () => {}; this.onclose = () => {};
     socket.on('data', d => this.data(d));
     socket.on('close', () => this.finish());
@@ -185,6 +185,7 @@ const cleanName = s => String(s || '').replace(/[\u0000-\u001f\u007f-\u009f​-�
 function onConnect(conn) {
   let p = null;
   conn.onmessage = text => {
+    conn.lastApp = Date.now();          // 게임 화면이 보낸 메시지만 '살아 있음'으로 친다 (ping 응답은 제외)
     let m; try { m = JSON.parse(text); } catch (e) { return; }
     if (!m || typeof m !== 'object') return;
     if (!p) {
@@ -284,6 +285,8 @@ function handle(p, m) {
       to.conn.send({ t: 'rtc', from: p.id, d: m.d });
       break;
     }
+    case 'hb': break;                // 1초마다 오는 생존 신호
+    case 'bye': p.conn.close(); break;  // 나가기·탭 닫기: 즉시 제거
     case 'chat': {
       const text = String(m.s || '').replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/g, '').trim().slice(0, 60);
       if (!text || Date.now() - (p.lastChat || 0) < 1200) return;
@@ -437,10 +440,15 @@ setInterval(() => {
   step(dt); tick++;
   if (tick % SNAP_EVERY === 0) snapshot();
 }, 1000 / TICK);
-// 응답 없는 연결 정리
+// 응답 없는 연결 정리: 게임 화면이 8초 동안 아무것도 안 보내면(앱 전환, 화면 꺼짐, 네트워크 끊김) 바로 제거
+const IDLE_KICK = +process.env.IDLE_KICK || 8000;
+let pingT = 0;
 setInterval(() => {
-  const now = Date.now();
-  for (const p of players.values()) { if (now - p.conn.lastMsg > 30000) p.conn.close(); else p.conn.frame(9, Buffer.alloc(0)); }
-}, 10000);
+  const now = Date.now(); pingT++;
+  for (const p of [...players.values()]) {
+    if (now - p.conn.lastApp > IDLE_KICK) { log(`응답 없음으로 제거 ${p.n}#${p.id}`); p.conn.close(); }
+    else if (pingT % 5 === 0) p.conn.frame(9, Buffer.alloc(0));
+  }
+}, 1000);
 
 server.listen(PORT, () => log(`${SERVER_NAME} 시작: http://localhost:${PORT} · 보이스 중계(TURN): ${TURN_KEY_ID && TURN_KEY_API_TOKEN ? '설정됨' : '없음 (직접 연결만)'}`));

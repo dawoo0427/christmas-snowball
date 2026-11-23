@@ -100,6 +100,10 @@
   .hp { position:absolute; width:46px; height:6px; margin-left:-23px; background:#0009; border-radius:3px; overflow:hidden; }
   .hp i { display:block; height:100%; background:linear-gradient(90deg,#ff5252,#ff8a65); }
   .hp.boss { width:110px; margin-left:-55px; height:9px; }
+  .hp.ph { width:44px; margin-left:-22px; height:6px; border:1px solid #ffffffa0; border-radius:4px; transition:opacity .3s; }
+  .hp.ph i { background:linear-gradient(90deg,#2ecc71,#7dffb0); transition:width .2s; }
+  .hp.ph.mid i { background:linear-gradient(90deg,#ffb300,#ffd34d); }
+  .hp.ph.low i { background:linear-gradient(90deg,#ff4d6d,#ff8a65); }
   .pop { position:absolute; transform:translate(-50%,-50%); font-family:var(--display); font-size:21px; text-shadow:0 2px 3px #000a; white-space:nowrap; }
   .tag { position:absolute; transform:translate(-50%,-100%); font-family:var(--display); font-size:14px; padding:1px 8px; border-radius:9px; background:#0008; white-space:nowrap; text-align:center; }
   .tag .bubble { display:block; font-family:var(--body); font-size:13px; color:#1a1420; background:#fff; border-radius:10px; padding:3px 8px; margin-bottom:3px; max-width:220px; white-space:normal; overflow-wrap:anywhere; }
@@ -206,6 +210,7 @@
   <h4>접속 중인 플레이어</h4>
   <div id="plistSet"></div>
   <button class="close" id="setClose">닫기</button>
+  <button class="close" id="leaveBtn" style="background:#ffffff1c;margin-top:8px">🚪 나가기 (처음 화면으로)</button>
 </div>
 <form id="chatbox" autocomplete="off"><input id="chatIn" maxlength="60" placeholder="메시지 입력 후 Enter" aria-label="채팅 메시지"><button type="submit">보내기</button></form>
 <div id="touch">
@@ -749,22 +754,45 @@ function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
 // ============================================================
 //  네트워크
 // ============================================================
-const net = { ws: null, open: false, lastMsg: 0, sendT: 0, retryT: 0, wantPlay: false };
+const net = { ws: null, open: false, lastMsg: 0, sendT: 0, retryT: 0, wantPlay: false, leaving: false };
 const wsUrl = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 function send(obj) { if (net.ws && net.open && net.ws.readyState === 1) net.ws.send(JSON.stringify(obj)); }
 function connect() {
   if (location.protocol === 'file:') { overlay('file'); return; }
   if (net.ws) { try { net.ws.close(); } catch (e) {} }
+  net.leaving = false;
   const ws = new WebSocket(wsUrl()); net.ws = ws; net.open = false;
   ws.onopen = () => { net.open = true; net.lastMsg = performance.now(); send({ t: 'hello', n: nick, c: colorIdx }); };
   ws.onmessage = ev => { net.lastMsg = performance.now(); let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
   ws.onclose = () => {
     if (net.ws !== ws) return;
     net.open = false;
+    if (net.leaving) return;
     if (state === 'play' || state === 'connecting') { state = 'disconnected'; overlay('disconnected'); net.retryT = 3; }
   };
   ws.onerror = () => {};
 }
+// 나가기: 서버에 알리고 바로 연결을 끊는다 (서버에서 캐릭터가 즉시 사라짐)
+function leaveGame() {
+  net.leaving = true;
+  try { send({ t: 'bye' }); } catch (e) {}
+  try { if (net.ws) net.ws.close(1000, 'bye'); } catch (e) {}
+  net.open = false;
+  if (voice.on) setVoice(false);
+  resetPeers();
+  resetWorld();
+  toggleSettings(false);
+  document.body.classList.remove('playing', 'safe', 'nearfire');
+  for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = 'hidden';
+  $('respawn').style.display = 'none';
+  state = 'title'; overlay('title');
+}
+// 탭·브라우저를 닫거나 다른 페이지로 갈 때
+addEventListener('pagehide', () => { if (net.open) { net.leaving = true; try { send({ t: 'bye' }); net.ws.close(1000, 'bye'); } catch (e) {} } });
+// 1초마다 생존 신호 (다른 탭을 보는 중에도 연결 유지)
+setInterval(() => { if (net.open && state === 'play') send({ t: 'hb' }); }, 1000);
+// 휴대폰에서 앱으로 돌아왔을 때 끊겨 있으면 바로 다시 연결
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state === 'disconnected') { state = 'connecting'; connect(); } });
 function resetWorld() {
   for (const e of enemies.values()) removeEnemy(e); enemies.clear();
   for (const b of balls.values()) scene.remove(b.mesh); balls.clear();
@@ -857,6 +885,7 @@ function applySnapshot(m) {
     let r = remotes.get(id);
     const nm = names.get(id) || { n: '?', c: 0 };
     if (!r || r.c !== nm.c) { if (r) removeRemote(r); r = addRemote(id, nm); r.x = x; r.z = z; r.y = y; r.face = face; }
+    if (r.hp !== undefined && hp < r.hp && !dead) r.hpShowT = 6;        // 체력이 줄었으면 머리 위 게이지를 잠깐 보여준다
     Object.assign(r, { tx: x, tz: z, ty: y, tface: face, vx, vz, flags, hp, dead: !!dead, score, n: nm.n, vl: !!(vo & 1), vt: !!(vo & 2), voice: !!(vo & 2) });
   }
   for (const [id, r] of remotes) if (!seen.has(id)) { removeRemote(r); remotes.delete(id); closePeer(id); }
@@ -877,10 +906,11 @@ function applySnapshot(m) {
 function addRemote(id, nm) {
   const model = makeElf(nm.c || 0); scene.add(model.group);
   const tag = document.createElement('div'); tag.className = 'tag'; $('labels').appendChild(tag);
-  const r = { id, model, tag, c: nm.c, n: nm.n, x: 0, z: 0, y: 0, face: 0, vx: 0, vz: 0, flags: 0, hp: 6, dead: false, score: 0, walk: 0, bubble: '', bubbleT: 0, tagHtml: '' };
+  const bar = document.createElement('div'); bar.className = 'hp ph'; bar.innerHTML = '<i></i>'; bar.style.display = 'none'; $('labels').appendChild(bar);
+  const r = { id, model, tag, bar, hpShowT: 0, c: nm.c, n: nm.n, x: 0, z: 0, y: 0, face: 0, vx: 0, vz: 0, flags: 0, hp: undefined, dead: false, score: 0, walk: 0, bubble: '', bubbleT: 0, tagHtml: '' };
   remotes.set(id, r); return r;
 }
-function removeRemote(r) { scene.remove(r.model.group); r.tag.remove(); }
+function removeRemote(r) { scene.remove(r.model.group); r.tag.remove(); r.bar.remove(); }
 function addEnemy(id, type, x, z, face) {
   const T = TYPES[type];
   const model = type === 'penguin' ? makePenguin() : type === 'rudolph' ? makeRudolph() : type === 'badsanta' ? makeSanta() : makeSnowman('normal');
@@ -1084,6 +1114,7 @@ $('teaBtn').addEventListener('pointerdown', e => e.stopPropagation());
 $('sitBtn').addEventListener('click', e => { e.stopPropagation(); audio(); toggleSit(); });
 $('sitBtn').addEventListener('pointerdown', e => e.stopPropagation());
 $('setClose').addEventListener('click', () => toggleSettings(false));
+$('leaveBtn').addEventListener('click', () => leaveGame());
 $('settings').addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); toggleSettings(false); } });
 $('optVoice').addEventListener('change', e => setVoice(e.target.checked));
 $('optMic').addEventListener('change', e => { voice.micOn = e.target.checked; store.set('snowball-mic', voice.micOn ? '1' : '0'); applyMic(); });
@@ -1530,7 +1561,7 @@ function updateBalls(dt) {
       }
       if (!b.ghost && b.pv) for (const r of remotes.values()) {
         if (r.dead || r.id === b.from || inVillage(r.x, r.z)) continue;
-        if (Math.hypot(b.x - r.x, b.z - r.z) < 0.6 + b.r && y > r.y - 0.1 && y < r.y + 2.4) { b.mesh.visible = false; b.ghost = true; if (b.owner === 'me') { sfx.hit(); popup(r.x, r.y + 3, r.z, '명중!', '#ff8a8a'); } break; }
+        if (Math.hypot(b.x - r.x, b.z - r.z) < 0.6 + b.r && y > r.y - 0.1 && y < r.y + 2.4) { b.mesh.visible = false; b.ghost = true; r.hpShowT = 6; if (b.owner === 'me') { sfx.hit(); popup(r.x, r.y + 3, r.z, '명중!', '#ff8a8a'); } break; }
       }
       if (b.ghost) { b.ghostT = (b.ghostT || 0) + dt; if (b.ghostT > 0.6) killBall(b); }
     } else {
@@ -1581,6 +1612,7 @@ function step(dt) {
       r.x = lerp(r.x, r.tx, k); r.z = lerp(r.z, r.tz, k); r.y = lerp(r.y, r.ty, k); r.face = angLerp(r.face, r.tface, k);
       r.walk += Math.hypot(r.x - ox, r.z - oz) * 1.3;
       if (r.bubbleT > 0) r.bubbleT -= dt;
+      if (r.hpShowT > 0) r.hpShowT -= dt;
     }
     if (myBubbleT > 0) myBubbleT -= dt;
     voiceTick(dt);
@@ -1657,6 +1689,16 @@ function render(dt) {
     const s = toScreen(new THREE.Vector3(r.x, r.y + 3.4, r.z));
     r.tag.style.display = s.ok && state === 'play' ? '' : 'none';
     r.tag.style.left = s.x + 'px'; r.tag.style.top = s.y + 'px';
+    {
+      const show = r.hpShowT > 0 && !r.dead && state === 'play' && r.hp !== undefined;
+      if (show) {
+        const sb = toScreen(new THREE.Vector3(r.x, r.y + 3.4, r.z)), ratio = clamp(r.hp / W.MAX_HP, 0, 1);
+        const top = sb.y + 3;                  // 이름표 바로 아래, 머리 위
+        r.bar.style.display = sb.ok ? '' : 'none'; r.bar.style.left = sb.x + 'px'; r.bar.style.top = top + 'px';
+        r.bar.style.opacity = Math.min(1, r.hpShowT);
+        r.bar.firstChild.style.width = (ratio * 100) + '%'; r.bar.className = 'hp ph' + (ratio <= 0.3 ? ' low' : ratio <= 0.6 ? ' mid' : '');
+      } else r.bar.style.display = 'none';
+    }
     setTag(r.tag, (voice.blocked.has(r.id) ? '🚫 ' : voice.muted.has(r.id) && r.voice ? '🔇 ' : r.flags & 16 ? '🔊 ' : r.voice ? '🎙️ ' : '') + (r.dead ? `${r.n} 💤` : r.n), ELF_CSS[r.c % 6], r.bubbleT > 0 ? r.bubble : '');
   }
   if (!myTag) { myTag = document.createElement('div'); myTag.className = 'tag'; $('labels').appendChild(myTag); }
