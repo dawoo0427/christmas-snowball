@@ -183,9 +183,9 @@
 <button id="gear" aria-label="설정 열기" title="설정">⚙️</button>
 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <h3 id="setTitle">설정</h3>
-  <label class="opt" for="optVoice"><span>보이스 채팅<small>근처(약 40m 안) 플레이어와 음성으로 대화해요</small></span><input type="checkbox" id="optVoice"></label>
-  <label class="opt" for="optMic"><span>내 마이크<small>끄면 듣기만 해요 · 단축키 V</small></span><input type="checkbox" id="optMic" checked></label>
-  <label class="opt" for="optHear"><span>다른 사람 목소리 듣기</span><input type="checkbox" id="optHear" checked></label>
+  <label class="opt" for="optHear"><span>다른 사람 목소리 듣기<small>마이크 없이도 근처 플레이어 목소리가 들려요</small></span><input type="checkbox" id="optHear" checked></label>
+  <label class="opt" for="optVoice"><span>마이크로 말하기<small>켜면 마이크 권한을 물어봐요 · 단축키 V</small></span><input type="checkbox" id="optVoice"></label>
+  <label class="opt" for="optMic"><span>마이크 켜짐<small>끄면 잠깐 음소거해요</small></span><input type="checkbox" id="optMic" checked></label>
   <label class="opt" for="optRelay"><span>IP 숨기기<small>항상 중계 서버를 거쳐 연결해요. 내 인터넷 주소가 상대에게 보이지 않아요</small></span><input type="checkbox" id="optRelay" checked></label>
   <label class="opt" for="optMusic"><span>배경음악<small>단축키 M</small></span><input type="checkbox" id="optMusic"></label>
   <label class="opt" for="optSfx"><span>효과음</span><input type="checkbox" id="optSfx" checked></label>
@@ -308,8 +308,8 @@ function glow(color, size, x, y, z, parent, twinkle = 0) {
 //  월드 그리기 (배치는 world.js 가 서버와 똑같이 계산)
 // ============================================================
 function buildTerrain() {
-  const seg = isTouch ? 110 : 150;
-  const geo = new THREE.PlaneGeometry(300, 300, seg, seg); geo.rotateX(-Math.PI / 2);
+  const seg = isTouch ? 150 : 220;
+  const geo = new THREE.PlaneGeometry(W.HALF * 2, W.HALF * 2, seg, seg); geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, n = pos.count;
   for (let i = 0; i < n; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
   geo.computeVertexNormals();
@@ -574,6 +574,8 @@ function makePenguin() {
 const GIFT_INFO = {
   heal: { color: 0xe53935, label: '체력 +40', c: '#ff8fa3' }, triple: { color: 0x1e88e5, label: '트리플 샷!', c: '#7dd3ff' },
   giant: { color: 0x8e24aa, label: '왕눈덩이!', c: '#d0a8ff' }, fast: { color: 0x43a047, label: '스피드 업!', c: '#8dffa8' },
+  power: { color: 0xff6d00, label: '공격력 2배!', c: '#ffab6b' }, rapid: { color: 0xfdd835, label: '연사 속도 2배!', c: '#fff176' },
+  shield: { color: 0x00bcd4, label: '보호막! 피해 절반', c: '#80deea' }, infinite: { color: 0xeceff1, label: '무한 눈덩이!', c: '#ffffff' },
 };
 function makeGift(color) {
   const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
@@ -692,7 +694,7 @@ const balls = new Map();               // id -> 눈덩이
 let gifts = [], popups = [], cid = 1;
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
-    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
+    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
     walk: 0, throwAnim: 0, regenT: 0, inVillage: true, dead: false, respawnT: 0, squash: 0 };
 }
 
@@ -732,7 +734,7 @@ function onMsg(m) {
       if (m.g) applyGifts(m.g);
       if (m.h) m.h.forEach((on, i) => setHeal(i, !!on));
       camYaw = camYawT = 0;
-      if (voice.on) send({ t: 'voice', on: 1 });
+      sendVoiceFlags();
       for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = '';
       document.body.classList.add('playing');
       state = 'play'; overlay(null); audio();
@@ -744,7 +746,7 @@ function onMsg(m) {
     case 'pj': names.set(m.id, { n: m.n, c: m.c }); feed(`<span class="sys">${esc(m.n)} 님이 들어왔어요</span>`); break;
     case 'pl': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">${esc(nm.n)} 님이 나갔어요</span>`); names.delete(m.id); const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } closePeer(m.id); break; }
     case 's': applySnapshot(m); break;
-    case 'b': if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || 15 }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
+    case 'b': if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || (m.o === 'e' ? 15 : 1), pv: !!m.pv }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
     case 'be': { const b = balls.get(m.id); if (b) { killBall(b); burst(m.x, m.y, m.z, b.r > 0.4 ? 16 : 8, 0xeef4ff, 5, 2); } break; }
     case 'hit': {
       const b = balls.get(m.id); if (b) killBall(b);
@@ -785,6 +787,12 @@ function onMsg(m) {
       }
       break;
     }
+    case 'ko': {
+      const a = names.get(m.a), v = names.get(m.v);
+      feed(`<span class="sys">⚔️ <b style="color:${ELF_CSS[(a ? a.c : 0) % 6]}">${esc(a ? a.n : '?')}</b> 님이 <b style="color:${ELF_CSS[(v ? v.c : 0) % 6]}">${esc(v ? v.n : '?')}</b> 님을 쓰러뜨렸어요</span>`);
+      if (m.a === myId) { toast('⚔️ KO!', `+${W.KO_POINTS}점`, 1.5); sfx.pop(); }
+      break;
+    }
     case 'hon': { const h = heals[m.i]; if (h) { h.pending = 0; setHeal(m.i, true); } break; }
     case 'rtc': onRtc(m.from, m.d); break;
     case 'chat': {
@@ -822,7 +830,7 @@ function applySnapshot(m) {
     let r = remotes.get(id);
     const nm = names.get(id) || { n: '?', c: 0 };
     if (!r || r.c !== nm.c) { if (r) removeRemote(r); r = addRemote(id, nm); r.x = x; r.z = z; r.y = y; r.face = face; }
-    Object.assign(r, { tx: x, tz: z, ty: y, tface: face, vx, vz, flags, hp, dead: !!dead, score, n: nm.n, voice: !!vo });
+    Object.assign(r, { tx: x, tz: z, ty: y, tface: face, vx, vz, flags, hp, dead: !!dead, score, n: nm.n, vl: !!(vo & 1), vt: !!(vo & 2), voice: !!(vo & 2) });
   }
   for (const [id, r] of remotes) if (!seen.has(id)) { removeRemote(r); remotes.delete(id); closePeer(id); }
   const ids = new Set();
@@ -880,6 +888,11 @@ const rtcConfig = () => ({ ...RTC_CFG, iceTransportPolicy: turnReady && voice.re
 const voice = { on: false, micOn: store.get('snowball-mic', '1') === '1', hearOn: store.get('snowball-hear', '1') === '1', stream: null,
   peers: new Map(), pendingIce: new Map(), muted: new Set(), blocked: new Set(), relayOnly: store.get('snowball-relay', '1') === '1', analyser: null, buf: null, talking: false, talkT: 0, checkT: 0, connected: 0, busy: false };
 const voiceSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection);
+// voice.on = 마이크로 말하기, voice.hearOn = 다른 사람 목소리 듣기 (마이크 없이도 가능, 기본 켜짐)
+const voiceActive = () => voice.on || voice.hearOn;
+function sendVoiceFlags() { send({ t: 'voice', l: voice.hearOn ? 1 : 0, k: voice.on ? 1 : 0 }); }
+function needLink(r) { return !voice.blocked.has(r.id) && ((voice.on && r.vl) || (r.vt && voice.hearOn)); }
+function resetPeers() { for (const id of [...voice.peers.keys()]) closePeer(id, true); }
 async function setVoice(on) {
   if (on === voice.on || voice.busy) return;
   if (on) {
@@ -896,12 +909,11 @@ async function setVoice(on) {
     audio();
     try { const src = ac.createMediaStreamSource(voice.stream); voice.analyser = ac.createAnalyser(); voice.analyser.fftSize = 512; voice.buf = new Uint8Array(voice.analyser.fftSize); src.connect(voice.analyser); } catch (e) { voice.analyser = null; }
     applyMic();
-    send({ t: 'voice', on: 1 });
+    sendVoiceFlags(); resetPeers();
     toast('🎙️ 보이스 채팅 켜짐', '근처 친구들과 대화해요 · 이어폰 권장 · V로 마이크 끄기', 3);
   } else {
     voice.on = false;
-    send({ t: 'voice', on: 0 });
-    for (const id of [...voice.peers.keys()]) closePeer(id);
+    sendVoiceFlags(); resetPeers();
     if (voice.stream) voice.stream.getTracks().forEach(t => t.stop());
     voice.stream = null; voice.analyser = null; voice.talking = false;
     $('micBtn').hidden = true;
@@ -914,7 +926,7 @@ function applyMic() {
   const b = $('micBtn'); b.hidden = !voice.on; b.textContent = voice.micOn ? '🎙️' : '🔇';
 }
 function toggleMic() {
-  if (!voice.on) { toast('보이스 채팅이 꺼져 있어요', '⚙️ 설정에서 먼저 켜 주세요', 2); return; }
+  if (!voice.on) { setVoice(true); return; }
   voice.micOn = !voice.micOn; store.set('snowball-mic', voice.micOn ? '1' : '0'); applyMic(); syncSettings();
   toast(voice.micOn ? '🎙️ 마이크 켜짐' : '🔇 마이크 꺼짐', '', 1);
 }
@@ -923,7 +935,7 @@ function createPeer(id, initiator) {
   const el = document.createElement('audio'); el.autoplay = true; el.playsInline = true; el.hidden = true; document.body.appendChild(el);
   const peer = { id, pc, el, connected: false, made: time };
   voice.peers.set(id, peer);
-  if (voice.stream) voice.stream.getTracks().forEach(t => pc.addTrack(t, voice.stream));
+  if (initiator) { if (voice.stream) voice.stream.getTracks().forEach(t => pc.addTrack(t, voice.stream)); else pc.addTransceiver('audio', { direction: 'recvonly' }); }
   pc.onicecandidate = e => { if (e.candidate) send({ t: 'rtc', to: id, d: { c: e.candidate.toJSON() } }); };
   pc.ontrack = e => { el.srcObject = e.streams[0] || new MediaStream([e.track]); el.play().catch(() => {}); };
   pc.onconnectionstatechange = () => {
@@ -933,8 +945,9 @@ function createPeer(id, initiator) {
   if (initiator) pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => send({ t: 'rtc', to: id, d: { sdp: pc.localDescription.toJSON() } })).catch(() => closePeer(id));
   return peer;
 }
-function closePeer(id) {
+function closePeer(id, notify) {
   const p = voice.peers.get(id); if (!p) return;
+  if (notify) send({ t: 'rtc', to: id, d: { bye: 1 } });
   voice.peers.delete(id); voice.pendingIce.delete(id);
   try { p.pc.close(); } catch (e) {}
   p.el.srcObject = null; p.el.remove();
@@ -944,13 +957,15 @@ async function flushIce(peer) {
   for (const c of list) { try { await peer.pc.addIceCandidate(c); } catch (e) {} }
 }
 async function onRtc(from, d) {
-  if (!voice.on || !d || voice.blocked.has(from)) return;
+  if (!d || d.bye) { closePeer(from); return; }
+  if (!voiceActive() || voice.blocked.has(from)) return;
   let peer = voice.peers.get(from);
   try {
     if (d.sdp && d.sdp.type === 'offer') {
       if (peer) closePeer(from);
       peer = createPeer(from, false);
       await peer.pc.setRemoteDescription(d.sdp);
+      if (voice.stream) voice.stream.getTracks().forEach(t => peer.pc.addTrack(t, voice.stream));
       const ans = await peer.pc.createAnswer(); await peer.pc.setLocalDescription(ans);
       send({ t: 'rtc', to: from, d: { sdp: peer.pc.localDescription.toJSON() } });
       await flushIce(peer);
@@ -963,14 +978,14 @@ async function onRtc(from, d) {
   } catch (e) { closePeer(from); }
 }
 function voiceTick(dt) {
-  if (!voice.on) { voice.connected = 0; return; }
+  if (!voiceActive()) { voice.connected = 0; voice.talking = false; return; }
   // 말하는 중인지 (내 마이크 소리 크기)
   if (voice.analyser && voice.micOn) {
     voice.analyser.getByteTimeDomainData(voice.buf);
     let sum = 0; for (let i = 0; i < voice.buf.length; i += 4) { const v = (voice.buf[i] - 128) / 128; sum += v * v; }
     if (Math.sqrt(sum / (voice.buf.length / 4)) > 0.035) voice.talkT = 0.4;
   }
-  voice.talkT -= dt; voice.talking = voice.micOn && voice.talkT > 0;
+  voice.talkT -= dt; voice.talking = voice.on && voice.micOn && voice.talkT > 0;
   // 거리에 따른 볼륨
   let n = 0;
   for (const peer of voice.peers.values()) {
@@ -982,13 +997,14 @@ function voiceTick(dt) {
   voice.connected = n;
   // 0.5초마다 연결 대상 정리: 가까운 보이스 사용자와 연결, 멀어지면 끊기
   voice.checkT -= dt; if (voice.checkT > 0) return; voice.checkT = 0.5;
-  const cand = [...remotes.values()].filter(r => r.voice && !voice.blocked.has(r.id)).map(r => ({ r, d: Math.hypot(r.x - me.x, r.z - me.z) })).sort((a, b) => a.d - b.d);
+  const cand = [...remotes.values()].filter(needLink).map(r => ({ r, d: Math.hypot(r.x - me.x, r.z - me.z) })).sort((a, b) => a.d - b.d);
   const want = new Set(cand.filter(c => c.d < VOICE_RANGE).slice(0, VOICE_MAX_PEERS).map(c => c.r.id));
   for (const c of cand) if (want.has(c.r.id) && !voice.peers.has(c.r.id) && myId < c.r.id) createPeer(c.r.id, true);
   for (const [id, peer] of voice.peers) {
     const r = remotes.get(id);
     const d = r ? Math.hypot(r.x - me.x, r.z - me.z) : 999;
-    if (!r || !r.voice || voice.blocked.has(id) || d > VOICE_DROP || (!peer.connected && time - peer.made > 15)) closePeer(id);
+    if (!r || !needLink(r) || d > VOICE_DROP) closePeer(id, true);
+    else if (!peer.connected && time - peer.made > 15) closePeer(id, true);
   }
 }
 
@@ -1003,8 +1019,8 @@ function syncSettings() {
   $('optMusic').checked = musicOn; $('optSfx').checked = sfxOn;
   $('vstat').textContent = !voiceSupported ? '이 브라우저에서는 보이스 채팅을 쓸 수 없어요.'
     : voice.busy ? '마이크 권한을 기다리는 중이에요…'
-    : voice.on ? `지금 근처 ${voice.connected}명과 연결돼 있어요. 멀어질수록 목소리가 작아져요.${turnReady ? (voice.relayOnly ? ' 중계 서버로 연결 중이라 IP가 보이지 않아요.' : ' 연결이 어려우면 중계 서버를 써요.') : ' (중계 서버가 없어 일부 네트워크에선 연결이 안 될 수 있어요)'}`
-    : '보이스 채팅을 켜면 마이크 권한을 물어봐요. 근처 플레이어끼리만 연결돼요.';
+    : voiceActive() ? `지금 근처 ${voice.connected}명과 연결돼 있어요. 멀어질수록 목소리가 작아져요.${turnReady ? (voice.relayOnly ? ' 중계 서버로 연결 중이라 IP가 보이지 않아요.' : ' 연결이 어려우면 중계 서버를 써요.') : ' (중계 서버가 없어 일부 네트워크에선 연결이 안 될 수 있어요)'}`
+    : '듣기와 말하기가 모두 꺼져 있어요. 근처 플레이어끼리만 연결돼요.';
   renderPlayerList();
 }
 let plistKey = '';
@@ -1041,8 +1057,8 @@ $('setClose').addEventListener('click', () => toggleSettings(false));
 $('settings').addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); toggleSettings(false); } });
 $('optVoice').addEventListener('change', e => setVoice(e.target.checked));
 $('optMic').addEventListener('change', e => { voice.micOn = e.target.checked; store.set('snowball-mic', voice.micOn ? '1' : '0'); applyMic(); });
-$('optHear').addEventListener('change', e => { voice.hearOn = e.target.checked; store.set('snowball-hear', voice.hearOn ? '1' : '0'); });
-$('optRelay').addEventListener('change', e => { voice.relayOnly = e.target.checked; store.set('snowball-relay', voice.relayOnly ? '1' : '0'); for (const id of [...voice.peers.keys()]) closePeer(id); });
+$('optHear').addEventListener('change', e => { voice.hearOn = e.target.checked; store.set('snowball-hear', voice.hearOn ? '1' : '0'); sendVoiceFlags(); if (!voiceActive()) resetPeers(); });
+$('optRelay').addEventListener('change', e => { voice.relayOnly = e.target.checked; store.set('snowball-relay', voice.relayOnly ? '1' : '0'); resetPeers(); });
 $('optMusic').addEventListener('change', e => { musicOn = e.target.checked; store.set('snowball-music', musicOn ? '1' : '0'); });
 $('optSfx').addEventListener('change', e => { sfxOn = e.target.checked; store.set('snowball-sfx', sfxOn ? '1' : '0'); });
 setInterval(() => { if ($('settings').classList.contains('open')) syncSettings(); }, 1000);
@@ -1141,7 +1157,7 @@ document.querySelectorAll('#tbtns button, #camBtns button').forEach(b => {
 // ============================================================
 function startReload() {
   if (state !== 'play' || me.dead || me.reloadT > 0 || me.ammo >= me.maxAmmo) return;
-  me.reloadT = W.RELOAD_TIME; me.charging = false; sfx.reload();
+  me.reloadT = W.RELOAD_TIME * (me.rapid > 0 ? 0.5 : 1); me.charging = false; sfx.reload();
 }
 function dash() {
   if (state !== 'play' || me.dead || me.dashCD > 0) return;
@@ -1210,10 +1226,11 @@ function throwPlayer() {
   const angs = tri ? [-0.15, 0, 0.15] : [0];
   angs.forEach((a, k) => {
     const c = Math.cos(a), s = Math.sin(a);
-    spawnBall({ id: `${myId}.${myCid}.${k}`, owner: 'me', x: ox, z: oz, h: oh, dx: dir.x * c + dir.z * s, dz: -dir.x * s + dir.z * c, spd: ch ? 40 : 32, r: 0.28 + big * 0.14 });
+    spawnBall({ id: `${myId}.${myCid}.${k}`, owner: 'me', x: ox, z: oz, h: oh, dx: dir.x * c + dir.z * s, dz: -dir.x * s + dir.z * c, spd: ch ? 40 : 32, r: 0.28 + big * 0.14, pv: !p.inVillage });
   });
-  send({ t: 'th', cid: myCid, x: r2(ox), z: r2(oz), h: r2(oh), dx: r2(dir.x), dz: r2(dir.z), ch: ch ? 1 : 0, gi: gi ? 1 : 0, tri: tri ? 1 : 0 });
-  p.ammo--; p.cd = 0.15; p.throwAnim = 0.25; sfx.throw();
+  send({ t: 'th', cid: myCid, x: r2(ox), z: r2(oz), h: r2(oh), dx: r2(dir.x), dz: r2(dir.z), ch: ch ? 1 : 0, gi: gi ? 1 : 0, tri: tri ? 1 : 0, pw: p.power > 0 ? 1 : 0 });
+  if (p.infinite <= 0) p.ammo--;
+  p.cd = p.rapid > 0 ? 0.07 : 0.15; p.throwAnim = 0.25; sfx.throw();
   if (p.ammo === 0) startReload();
 }
 const ballGeo = Sph(1, 14, 10);
@@ -1234,7 +1251,8 @@ function giveBuff(kind, g) {
   if (kind === 'heal') p.hp = Math.min(p.maxHp, p.hp + 40);
   if (kind === 'triple') p.triple = 15;
   if (kind === 'giant') p.giant = 15;
-  if (kind === 'fast') p.fast = 15;
+  if (kind === 'fast') p.fast = W.BUFF_TIME;
+  if (kind === 'power' || kind === 'rapid' || kind === 'shield' || kind === 'infinite') p[kind] = W.BUFF_TIME;
 }
 
 // ============================================================
@@ -1259,7 +1277,9 @@ function updateHUD() {
   const h = `${Math.max(0, Math.round(p.hp))} / ${p.maxHp}`;
   const ammo = Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('') + (p.reloadT > 0 ? `<span>눈 뭉치는 중… ${p.reloadT.toFixed(1)}초</span>` : '');
   const buffs = [p.triple > 0 && `<span style="color:#7dd3ff">트리플 샷 ${p.triple.toFixed(0)}s</span>`, p.giant > 0 && `<span style="color:#d0a8ff">왕눈덩이 ${p.giant.toFixed(0)}s</span>`,
-    p.fast > 0 && `<span style="color:#8dffa8">스피드 ${p.fast.toFixed(0)}s</span>`, voice.on && `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>`, p.inVillage && !p.dead && `<span style="color:#ffd34d">🏠 마을 (안전지대)${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>`].filter(Boolean).join('');
+    p.fast > 0 && `<span style="color:#8dffa8">스피드 ${p.fast.toFixed(0)}s</span>`, p.power > 0 && `<span style="color:#ffab6b">공격력 2배 ${p.power.toFixed(0)}s</span>`,
+    p.rapid > 0 && `<span style="color:#fff176">연사 2배 ${p.rapid.toFixed(0)}s</span>`, p.shield > 0 && `<span style="color:#80deea">보호막 ${p.shield.toFixed(0)}s</span>`,
+    p.infinite > 0 && `<span style="color:#ffffff">무한 눈덩이 ${p.infinite.toFixed(0)}s</span>`, voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, !p.dead && (p.inVillage ? `<span style="color:#3ddc84">🏠 안전지대${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>` : '<span style="color:#ff8a8a">⚔️ PvP 구역 · 다른 플레이어도 공격할 수 있어요</span>')].filter(Boolean).join('');
   const lib = camps.filter(c => c.liberated).length;
   let near = null, nd = 1e9; for (const c of camps) if (!c.liberated) { const d = Math.hypot(c.def.x - p.x, c.def.z - p.z); if (d < nd) { nd = d; near = c; } }
   const obj = `🎯 해방된 캠프 <b>${lib} / ${camps.length}</b>` + (near ? `<small>가장 가까운 곳: ${near.def.name} · ${Math.round(nd)}m · 남은 적 ${near.alive}</small>` : '<small>모든 캠프가 평화로워요! 곧 눈사람들이 돌아와요</small>');
@@ -1269,7 +1289,7 @@ function updateHUD() {
   const key = h + ammo + buffs + obj + sc + cb + board;
   if (key !== hudCache) { hudCache = key; const bar = $('hpbar').firstElementChild, ratio = clamp(p.hp / p.maxHp, 0, 1); bar.style.width = (ratio * 100) + '%'; bar.className = ratio > 0.6 ? 'high' : ratio > 0.3 ? 'mid' : ''; $('hpbar').lastElementChild.textContent = h; $('ammo').innerHTML = ammo; $('buffs').innerHTML = buffs; $('objective').innerHTML = obj; $('score').textContent = sc; $('combo').textContent = cb; $('board').innerHTML = board; }
 }
-const mini = $('mini'), mctx = mini.getContext('2d'), MS = 180, WR = 125;
+const mini = $('mini'), mctx = mini.getContext('2d'), MS = 180, WR = 240;
 const mbg = document.createElement('canvas'); mbg.width = mbg.height = MS;
 const toMini = (x, z) => [(x / WR * 0.5 + 0.5) * MS, (z / WR * 0.5 + 0.5) * MS];
 function buildMinimapBg() {
@@ -1284,7 +1304,7 @@ function buildMinimapBg() {
   }
   x.putImageData(img, 0, 0);
   x.fillStyle = '#1d5a35'; for (const t of L.trees) { const [px, pz] = toMini(t.x, t.z); x.fillRect(px - 1, pz - 1, 2, 2); }
-  x.strokeStyle = '#ffd34d80'; x.setLineDash([3, 3]); x.beginPath(); x.arc(MS / 2, MS / 2, W.VILLAGE_SAFE / WR * MS / 2, 0, TAU); x.stroke();
+  x.fillStyle = '#3ddc8440'; x.strokeStyle = '#3ddc84'; x.lineWidth = 1.5; x.beginPath(); x.arc(MS / 2, MS / 2, W.VILLAGE_SAFE / WR * MS / 2, 0, TAU); x.fill(); x.stroke();
   x.fillStyle = '#ffd34d'; x.beginPath(); x.arc(MS / 2, MS / 2, 3, 0, TAU); x.fill();
 }
 function drawMinimap() {
@@ -1321,7 +1341,7 @@ function keysHtml() {
   : `<div class="keys"><b>WASD</b><span>이동 (카메라 기준)</span><b>마우스</b><span>조준 · 적 근처를 가리키면 자동 조준</span>
     <b>좌클릭</b><span>던지기 · 꾹 누르면 강한 눈덩이</span><b>Shift / Space</b><span>대시(잠깐 무적) / 점프로 눈덩이 피하기</span>
     <b>R</b><span>눈 뭉치기(재장전)</span><b>Enter / V</b><span>채팅 / 마이크 켜기·끄기</span><b>⚙️ 또는 Esc</b><span>설정 (보이스 채팅, 음악, 효과음)</span>
-    <b>빨간 줄</b><span>적이 그 방향으로 던질 예정!</span><b>🏠 마을</b><span>안전지대 · 체력/눈덩이 회복</span></div>`;
+    <b>빨간 줄</b><span>적이 그 방향으로 던질 예정!</span><b>🟢 안전지대</b><span>마을의 초록 원 안 · 체력 회복, 공격받지 않음</span><b>⚔️ 원 밖</b><span>다른 플레이어와도 눈싸움(PvP)</span></div>`;
 }
 let overlayKind = null, healthTimer = null;
 function overlay(kind, err = '') {
@@ -1331,7 +1351,7 @@ function overlay(kind, err = '') {
   if (!kind) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
   if (kind === 'title') {
-    el.innerHTML = `<div><h1>🎄 크리스마스 눈싸움 3D</h1><h2>못된 눈사람 군단이 눈마을 주변에 캠프를 세웠어요.<br>전 세계 친구들과 함께 캠프를 해방하고 크리스마스를 지켜주세요!</h2>
+    el.innerHTML = `<div><h1>🎄 크리스마스 눈싸움 3D</h1><h2>못된 눈사람 군단이 눈마을 주변에 캠프 9곳을 세웠어요.<br>캠프를 해방하고, 초록 안전지대 밖에서는 다른 플레이어와도 겨뤄 보세요!</h2>
       <div class="row"><span class="srv" id="srv"><i></i> 서버 확인 중…</span></div>
       <div class="row"><input id="nick" maxlength="12" value="${esc(nick)}" aria-label="닉네임" placeholder="닉네임"></div>
       <div class="row">${swatchHtml()}</div>
@@ -1397,13 +1417,12 @@ function updateMe(dt) {
   if (p.charging) p.charge = Math.min(1, p.charge + dt);
   p.cd = Math.max(0, p.cd - dt); p.dashCD = Math.max(0, p.dashCD - dt);
   if (p.reloadT > 0) { p.reloadT -= dt; if (p.reloadT <= 0) p.ammo = p.maxAmmo; }
-  p.inv = Math.max(0, p.inv - dt); p.triple = Math.max(0, p.triple - dt); p.giant = Math.max(0, p.giant - dt); p.fast = Math.max(0, p.fast - dt);
+  p.inv = Math.max(0, p.inv - dt); for (const k of ['triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite']) p[k] = Math.max(0, p[k] - dt);
   p.throwAnim = Math.max(0, p.throwAnim - dt);
   p.inVillage = inVillage(p.x, p.z);
   if (p.inVillage) {
     p.regenT += dt;
     if (p.regenT > 1.5 && p.hp < p.maxHp) { p.regenT = 0; p.hp = Math.min(p.maxHp, p.hp + 10); popup(p.x, p.y + 3, p.z, '+10', '#7dffb0'); }
-    if (p.ammo < p.maxAmmo && p.reloadT <= 0 && !p.charging && p.cd <= 0) p.ammo = p.maxAmmo;
   } else p.regenT = 0;
   heals.forEach((h, i) => {
     if (h.pending > 0) { h.pending -= dt; if (h.pending <= 0 && h.on) h.model.group.visible = true; return; }
@@ -1415,12 +1434,15 @@ function updateMe(dt) {
   }
   for (const g of gifts) if (g && g.pending > 0) { g.pending -= dt; if (g.pending <= 0 && g.on) g.model.group.visible = true; }
 }
-function hurtMe(dmg) {
+function hurtMe(dmg, by) {
   const p = me;
+  if (p.shield > 0) dmg = Math.ceil(dmg / 2);
+  if (by) { const nm = names.get(by); p.lastAttacker = nm ? nm.n : ''; } else p.lastAttacker = '';
   p.hp -= dmg; p.inv = 0.9; shake = 0.6; sfx.hurt(); p.squash = 0.5;
   popup(p.x, p.y + 3, p.z, `-${dmg}`, '#ff6b6b');
   $('hurt').style.opacity = 1; setTimeout(() => $('hurt').style.opacity = 0, 160);
   if (p.hp <= 0) { p.hp = 0; p.dead = true; p.respawnT = 5; p.charging = false; burst(p.x, p.y + 1, p.z, 40, 0xffffff, 8); }
+  if (p.shield > 0) burst(p.x, p.y + 1.2, p.z, 10, 0x80deea, 4);
 }
 function updateBalls(dt) {
   for (const b of [...balls.values()]) {
@@ -1436,8 +1458,19 @@ function updateBalls(dt) {
       continue;
     }
     if (b.owner !== 'enemy') {
+      // PvP: 안전지대 밖에서 던진 남의 눈덩이가 안전지대 밖의 나를 맞힘 (맞은 사람이 판정)
+      if (b.owner === 'remote' && b.pv && !b.ghost && !me.dead && !me.inVillage && Math.hypot(b.x - me.x, b.z - me.z) < 0.6 + b.r && y > me.y - 0.1 && y < me.y + 2.4) {
+        killBall(b); burst(b.x, y, b.z, 18, 0xffffff, 7);
+        send({ t: 'hurt', id: b.id });
+        if (me.inv <= 0) hurtMe((b.dmg || 1) * W.PVP_DMG, b.from);
+        continue;
+      }
       for (const e of enemies.values()) {
         if (Math.hypot(b.x - e.x, b.z - e.z) < e.T.r + b.r && y > e.y - 0.3 && y < e.y + e.T.h) { b.mesh.visible = false; b.ghost = true; break; }
+      }
+      if (!b.ghost && b.pv) for (const r of remotes.values()) {
+        if (r.dead || r.id === b.from || inVillage(r.x, r.z)) continue;
+        if (Math.hypot(b.x - r.x, b.z - r.z) < 0.6 + b.r && y > r.y - 0.1 && y < r.y + 2.4) { b.mesh.visible = false; b.ghost = true; if (b.owner === 'me') { sfx.hit(); popup(r.x, r.y + 3, r.z, '명중!', '#ff8a8a'); } break; }
       }
       if (b.ghost) { b.ghostT = (b.ghostT || 0) + dt; if (b.ghostT > 0.6) killBall(b); }
     } else {
@@ -1533,6 +1566,7 @@ function render(dt) {
   const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0);
   animElf(elf, p.x, p.y, p.z, p.face, Math.hypot(p.vx, p.vz) > 0.5 && p.onGround, flags, p.walk, dt, p.squash);
   elf.held.visible = elf.held.visible && p.ammo > 0;
+  shieldMesh.visible = p.shield > 0 && !p.dead; if (shieldMesh.visible) { shieldMesh.position.set(p.x, p.y + 1.3, p.z); shieldMesh.material.opacity = 0.18 + 0.08 * Math.sin(time * 6); }
   elf.held.scale.setScalar(1 + ((p.charging && p.charge >= 0.5 ? 1 : 0) + (p.giant > 0 ? 1 : 0)) * 0.5);
   for (const r of remotes.values()) {
     r.model.group.visible = !r.dead;
@@ -1639,12 +1673,22 @@ function render(dt) {
   renderer.render(scene, camera);
 }
 let myTag = null;
+const shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.7, 24, 16), new THREE.MeshBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.2, depthWrite: false }));
+shieldMesh.visible = false; scene.add(shieldMesh);
 
 // ============================================================
 //  초기화
 // ============================================================
 buildTerrain();
 buildVillage();
+// 안전지대 경계: 땅 위 초록 원
+{
+  const y = FLATS[0].h + 0.08;
+  const edge = new THREE.Mesh(new THREE.RingGeometry(W.VILLAGE_SAFE - 0.35, W.VILLAGE_SAFE + 0.35, 128), new THREE.MeshBasicMaterial({ color: 0x3ddc84, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }));
+  edge.rotation.x = -Math.PI / 2; edge.position.y = y; edge.renderOrder = 1; scene.add(edge);
+  const fill = new THREE.Mesh(new THREE.CircleGeometry(W.VILLAGE_SAFE, 96), new THREE.MeshBasicMaterial({ color: 0x3ddc84, transparent: true, opacity: 0.07, depthWrite: false }));
+  fill.rotation.x = -Math.PI / 2; fill.position.y = y - 0.02; fill.renderOrder = 1; scene.add(fill);
+}
 L.camps.forEach(buildCamp);
 buildForest();
 buildMinimapBg();
@@ -1660,6 +1704,7 @@ window.__game = {
   teleport(x, z) { me.x = x; me.z = z; }, cam(d) { camDist = d; },
   throwAt(x, z) { mouse.has = false; aimTarget = null; aim.set(x, heightAt(x, z), z); me.charging = true; me.charge = 0; me.cd = 0; throwPlayer(); },
   chat(s) { send({ t: 'chat', s }); },
+  get voice() { return { on: voice.on, hear: voice.hearOn, peers: [...voice.peers.values()].map(p => ({ id: p.id, st: p.pc.connectionState, sig: p.pc.signalingState })), remotes: [...remotes.values()].map(r => ({ id: r.id, vl: r.vl, vt: r.vt, link: needLink(r) })), myId }; },
 };
 }
 boot();

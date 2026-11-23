@@ -173,7 +173,7 @@ function populateCamp(c) {
 }
 function openSpot(minFromPlayers = 0) {
   for (let k = 0; k < 200; k++) {
-    const x = rand(-100, 100), z = rand(-100, 100);
+    const x = rand(-200, 200), z = rand(-200, 200);
     if (Math.hypot(x, z) < 16) continue;
     if (camps.some(c => Math.hypot(x - c.def.x, z - c.def.z) < c.R + 3)) continue;
     let near = false; for (const p of players.values()) if (Math.hypot(x - p.x, z - p.z) < minFromPlayers) near = true;
@@ -183,9 +183,10 @@ function openSpot(minFromPlayers = 0) {
   }
   return { x: rand(-30, 30), z: rand(30, 40) };
 }
-function placeGift(i) { const s = openSpot(25); gifts[i] = { x: s.x, z: s.z, on: true, ti: Math.floor(Math.random() * 4), respawn: 0 }; }
+const randGift = () => Math.floor(Math.random() * W.GIFT_KINDS.length);
+function placeGift(i) { const s = openSpot(25); gifts[i] = { x: s.x, z: s.z, on: true, ti: randGift(), respawn: 0 }; }
 camps.forEach(populateCamp);
-for (let i = 0; i < 18; i++) placeGift(i);
+for (let i = 0; i < 36; i++) placeGift(i);
 
 // ============================================================
 //  접속 처리
@@ -201,7 +202,7 @@ function onConnect(conn) {
       if (players.size >= MAX_PLAYERS) { conn.send({ t: 'full', max: MAX_PLAYERS }); return conn.close(); }
       const id = nextId++;
       p = { id, conn, n: cleanName(m.n) || '꼬마요정' + id, c: clamp(m.c | 0, 0, 5), x: rand(-3, 3), z: 12 + rand(-2, 2), y: 0, face: Math.PI, vx: 0, vz: 0,
-        flags: 0, hp: W.MAX_HP, dead: false, score: 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, voice: false, joined: Date.now() };
+        flags: 0, hp: W.MAX_HP, dead: false, score: 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, vl: false, vt: false, lastHitBy: 0, lastHitAt: 0, joined: Date.now() };
       p.y = heightAt(p.x, p.z);
       players.set(id, p);
       conn.send({ t: 'welcome', id, server: SERVER_NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c]),
@@ -229,7 +230,12 @@ function handle(p, m) {
       p.vx = clamp(num(m.vx), -40, 40); p.vz = clamp(num(m.vz), -40, 40);
       p.flags = m.fl | 0; p.hp = clamp(m.hp | 0, 0, W.MAX_HP);
       const dead = !!m.d;
-      if (dead && !p.dead) { p.score = Math.max(0, p.score - 300); p.combo = 0; }
+      if (dead && !p.dead) {
+        p.score = Math.max(0, p.score - 300); p.combo = 0;
+        const a = players.get(p.lastHitBy);
+        if (a && a !== p && Date.now() - p.lastHitAt < 6000) { a.score += W.KO_POINTS; a.kills++; broadcast({ t: 'ko', a: a.id, v: p.id }); }
+        p.lastHitBy = 0;
+      }
       p.dead = dead;
       break;
     }
@@ -239,20 +245,28 @@ function handle(p, m) {
       const x = num(m.x, p.x), z = num(m.z, p.z);
       if (Math.hypot(x - p.x, z - p.z) > 4) return;
       let dx = num(m.dx), dz = num(m.dz); const dl = Math.hypot(dx, dz); if (dl < 0.5) return; dx /= dl; dz /= dl;
-      const ch = !!m.ch, gi = !!m.gi, big = (ch ? 1 : 0) + (gi ? 1 : 0);
+      const ch = !!m.ch, gi = !!m.gi, big = (ch ? 1 : 0) + (gi ? 1 : 0), pw = m.pw ? 2 : 1;
+      const pv = !inVillage(p.x, p.z);          // 안전지대 밖에서 던진 눈덩이만 플레이어를 맞힐 수 있다
       const angs = m.tri ? [-0.15, 0, 0.15] : [0];
       const h = clamp(num(m.h, W.BALL_H), 0.5, 8), cid = m.cid | 0;
       angs.forEach((a, k) => {
         const c = Math.cos(a), s = Math.sin(a), bx = dx * c + dz * s, bz = -dx * s + dz * c;
-        const b = { id: `${p.id}.${cid}.${k}`, owner: p.id, x, z, h, dx: bx, dz: bz, spd: ch ? 40 : 32, r: 0.28 + big * 0.14, dmg: 1 + big, dist: 0, max: W.PLAYER_RANGE, fall: 0, hit: false };
+        const b = { id: `${p.id}.${cid}.${k}`, owner: p.id, x, z, h, dx: bx, dz: bz, spd: ch ? 40 : 32, r: 0.28 + big * 0.14, dmg: (1 + big) * pw, pv, dist: 0, max: W.PLAYER_RANGE, fall: 0, hit: false };
         balls.set(b.id, b);
-        broadcast({ t: 'b', id: b.id, o: p.id, x: r1(x), z: r1(z), h: r1(h), dx: r2(bx), dz: r2(bz), s: b.spd, r: r2(b.r) }, p);
+        broadcast({ t: 'b', id: b.id, o: p.id, x: r1(x), z: r1(z), h: r1(h), dx: r2(bx), dz: r2(bz), s: b.spd, r: r2(b.r), dm: b.dmg, pv: pv ? 1 : 0 }, p);
       });
       break;
     }
     case 'hurt': {               // 적 눈덩이에 맞음 (맞은 사람이 직접 알림)
       const b = balls.get(String(m.id));
-      if (b && b.owner === 'e') { endBall(b, true); p.combo = 0; }
+      if (!b) break;
+      if (b.owner === 'e') { endBall(b, true); p.combo = 0; }
+      else if (b.pv && b.owner !== p.id && !inVillage(p.x, p.z)) {     // PvP: 다른 플레이어의 눈덩이에 맞음
+        b.hit = true; balls.delete(b.id);
+        broadcast({ t: 'be', id: b.id, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z) });
+        p.lastHitBy = b.owner; p.lastHitAt = Date.now();
+        const a = players.get(b.owner); if (a) a.score += 5;
+      }
       break;
     }
     case 'gift': {
@@ -269,13 +283,13 @@ function handle(p, m) {
       broadcast({ t: 'hoff', i, by: p.id });
       break;
     }
-    case 'voice': {              // 보이스 채팅 참여/해제
-      p.voice = !!m.on;
+    case 'voice': {              // 보이스 채팅: 듣기(l) / 말하기(k)
+      p.vl = !!m.l; p.vt = !!m.k;
       break;
     }
     case 'rtc': {                // WebRTC 연결 신호 전달 (서버는 내용을 보지 않고 상대에게만 넘긴다)
       const to = players.get(m.to | 0);
-      if (!to || to === p || !p.voice || !to.voice || !m.d || typeof m.d !== 'object') return;
+      if (!to || to === p || !(p.vl || p.vt) || !(to.vl || to.vt) || !m.d || typeof m.d !== 'object') return;
       if (JSON.stringify(m.d).length > 20000) return;
       to.conn.send({ t: 'rtc', from: p.id, d: m.d });
       break;
@@ -383,7 +397,7 @@ function liberate(c, by) {
   for (const p of players.values()) if (p === by || Math.hypot(p.x - c.def.x, p.z - c.def.z) < 55) { p.score += bonus; helpers.push(p.id); }
   broadcast({ t: 'lib', c: c.idx, by: by ? by.n : '', bonus, helpers });
   log(`${c.def.name} 해방 by ${by ? by.n : '?'}`);
-  const i = gifts.findIndex(g => !g.on); if (i >= 0) { gifts[i] = { x: c.def.x + 3, z: c.def.z + 3, on: true, ti: Math.floor(Math.random() * 4), respawn: 0 }; }
+  const i = gifts.findIndex(g => !g.on); if (i >= 0) { gifts[i] = { x: c.def.x + 3, z: c.def.z + 3, on: true, ti: randGift(), respawn: 0 }; }
   if (camps.every(k => k.liberated)) {
     for (const p of players.values()) p.score += 2000;
     broadcast({ t: 'allfree' });
@@ -392,13 +406,13 @@ function liberate(c, by) {
 }
 function step(dt) {
   const active = players.size > 0;
-  for (const p of players.values()) p.tokens = Math.min(8, p.tokens + dt * 7);
+  for (const p of players.values()) p.tokens = Math.min(12, p.tokens + dt * 14);
   if (active) {
     patrolT -= dt;
     if (patrolT <= 0) {
       patrolT = 14;
       let patrols = 0; for (const e of enemies.values()) if (!e.camp) patrols++;
-      if (patrols < 3 + Math.min(5, Math.floor(players.size / 2))) { const s = openSpot(55); if (Math.hypot(s.x, s.z) > 45) addEnemy('penguin', s.x, s.z, null); }
+      if (patrols < 6 + Math.min(6, Math.floor(players.size / 2))) { const s = openSpot(55); if (Math.hypot(s.x, s.z) > 45) addEnemy('penguin', s.x, s.z, null); }
     }
     const tg = targets();
     for (const e of enemies.values()) aiEnemy(e, dt, tg);
@@ -438,7 +452,7 @@ function step(dt) {
 }
 let tick = 0;
 function snapshot() {
-  const ps = [...players.values()].map(p => [p.id, r1(p.x), r1(p.z), r1(p.y), r2(p.face), r1(p.vx), r1(p.vz), p.flags, p.hp, p.dead ? 1 : 0, p.score, p.voice ? 1 : 0]);
+  const ps = [...players.values()].map(p => [p.id, r1(p.x), r1(p.z), r1(p.y), r2(p.face), r1(p.vx), r1(p.vz), p.flags, p.hp, p.dead ? 1 : 0, p.score, (p.vl ? 1 : 0) | (p.vt ? 2 : 0)]);
   const cs = camps.map(c => [c.liberated ? 1 : 0, c.alive, Math.ceil(Math.max(0, c.respawnT))]);
   const gs = gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]);
   const hs = heals.map(h => (h.on ? 1 : 0));

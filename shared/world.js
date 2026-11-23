@@ -14,16 +14,23 @@
     return f;
   }
 
-  const LIMIT = 112;
-  const VILLAGE_SAFE = 28;
+  // 맵 크기: 플레이 가능 범위 ±224 (예전의 2배). 가장자리 바깥은 산으로 막힌다.
+  const LIMIT = 224, EDGE = 216, HALF = 290;
+  const VILLAGE_SAFE = 28;            // 마을 안전지대 반지름. 이 밖에서는 플레이어끼리 PvP 가능
   const CAMPS = [
-    { x: 55,  z: -40, name: '얼음 언덕 캠프',    snow: 2, peng: 0 },
-    { x: -62, z: -42, name: '소나무 숲 캠프',    snow: 3, peng: 1 },
-    { x: -66, z: 52,  name: '꽁꽁 호수 캠프',    snow: 3, peng: 2 },
-    { x: 62,  z: 58,  name: '눈보라 골짜기 캠프', snow: 4, peng: 3 },
-    { x: 0,   z: -92, name: '눈사람 왕의 요새',  snow: 3, peng: 2, boss: true },
+    // 바깥 고리: 마을에서 길이 이어진 큰 캠프
+    { x: 110,  z: -80,  name: '얼음 언덕 캠프',    snow: 2, peng: 1 },
+    { x: -124, z: -84,  name: '소나무 숲 캠프',    snow: 3, peng: 1 },
+    { x: -132, z: 104,  name: '꽁꽁 호수 캠프',    snow: 3, peng: 2 },
+    { x: 124,  z: 116,  name: '눈보라 골짜기 캠프', snow: 4, peng: 3 },
+    { x: 0,    z: -184, name: '눈사람 왕의 요새',  snow: 3, peng: 2, boss: true },
+    // 안쪽 고리: 길 사이 눈밭의 작은 캠프
+    { x: 75,   z: 0,    name: '진저브레드 캠프',   snow: 2, peng: 1, mid: true },
+    { x: 0,    z: 75,   name: '사탕지팡이 캠프',   snow: 2, peng: 1, mid: true },
+    { x: -75,  z: 0,    name: '쿠키 언덕 캠프',    snow: 2, peng: 1, mid: true },
+    { x: -38,  z: -65,  name: '고드름 숲 캠프',    snow: 2, peng: 1, mid: true },
   ];
-  const LAKE = { x: -24, z: 70, r: 15 };
+  const LAKE = { x: -48, z: 150, r: 22 };
 
   function baseH(x, z) {
     return 2.2 * Math.sin(x * 0.045) * Math.cos(z * 0.04) + 0.9 * Math.sin(x * 0.12 + z * 0.08)
@@ -42,10 +49,10 @@
       if (d < f.outer) { const t = smooth(clamp((d - f.inner) / (f.outer - f.inner), 0, 1)); h = f.h + (h - f.h) * t; }
     }
     const e = Math.max(Math.abs(x), Math.abs(z));
-    if (e > 108) { const k = e - 108; h += k * k * 0.06 + k * 0.35; }
+    if (e > EDGE) { const k = e - EDGE; h += k * k * 0.06 + k * 0.35; }
     return h;
   }
-  const PATHS = CAMPS.map(c => [0, 0, c.x, c.z]);
+  const PATHS = CAMPS.filter(c => !c.mid).map(c => [0, 0, c.x, c.z]);
   function pathDist(x, z) {
     let best = 1e9;
     for (const [ax, az, bx, bz] of PATHS) {
@@ -117,7 +124,7 @@
     for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; data.lamps.push({ x: Math.cos(a) * 12, z: Math.sin(a) * 12, light: i % 2 === 0 }); }
     for (const [, , bx, bz] of PATHS) {
       const L = Math.hypot(bx, bz), nx = bx / L, nz = bz / L;
-      for (let d = 34; d < L - 16; d += 20) data.lamps.push({ x: nx * d - nz * 3.4, z: nz * d + nx * 3.4, light: false });
+      for (let d = 34; d < L - 16; d += 24) data.lamps.push({ x: nx * d - nz * 3.4, z: nz * d + nx * 3.4, light: false });
     }
     for (const l of data.lamps) addCollider({ t: 'c', x: l.x, z: l.z, r: 0.3, h: 5 });
     addCollider({ t: 'c', x: 8, z: 9, r: 1, h: 3 });
@@ -150,13 +157,13 @@
       for (const s of spots) if (Math.abs(s.x - x) < minD && Math.abs(s.z - z) < minD && Math.hypot(s.x - x, s.z - z) < minD) return false;
       return true;
     };
-    for (let i = 0; i < 2600 && spots.length < 460; i++) {
-      const x = R.range(-140, 140), z = R.range(-140, 140);
+    for (let i = 0; i < 9000 && spots.length < 1500; i++) {
+      const x = R.range(-HALF + 10, HALF - 10), z = R.range(-HALF + 10, HALF - 10);
       if (ok(x, z, 3.6)) spots.push({ x, z, s: R.range(0.75, 1.55), r: R.range(0, TAU), heavy: R() < 0.3 });
     }
     for (const s of spots) { addCollider({ t: 'c', x: s.x, z: s.z, r: 0.55 * s.s + 0.3, h: 5.2 * s.s }); data.trees.push(s); }
-    for (let i = 0; i < 400 && data.rocks.length < 70; i++) {
-      const x = R.range(-120, 120), z = R.range(-120, 120);
+    for (let i = 0; i < 1500 && data.rocks.length < 220; i++) {
+      const x = R.range(-LIMIT, LIMIT), z = R.range(-LIMIT, LIMIT);
       if (ok(x, z, 5)) { const r = { x, z, s: R.range(0.6, 1.6) }; data.rocks.push(r); addCollider({ t: 'c', x, z, r: r.s * 1.05, h: r.s * 1.3 }); }
     }
     // 힐팩: 길 중간과 캠프 바깥, 숲 속 빈터에 고정 배치
@@ -170,8 +177,8 @@
       const d = Math.hypot(c.x, c.z), nx = c.x / d, nz = c.z / d, Rr = c.boss ? 24 : 19;
       data.heals.push(freeSpot(c.x - nx * Rr - nz * 6, c.z - nz * Rr + nx * 6));
     }
-    for (let i = 0; i < 400 && data.heals.length < 16; i++) {
-      const x = R.range(-100, 100), z = R.range(-100, 100);
+    for (let i = 0; i < 2000 && data.heals.length < 32; i++) {
+      const x = R.range(-200, 200), z = R.range(-200, 200);
       if (Math.hypot(x, z) < 40 || data.heals.some(h => Math.hypot(h.x - x, h.z - z) < 30)) continue;
       if (CAMPS.some(c => Math.hypot(x - c.x, z - c.z) < 20)) continue;
       const o = freeSpot(x, z); if (Math.hypot(o.x - x, o.z - z) < 0.01) data.heals.push(o);
@@ -190,7 +197,9 @@
       boss:    { id: 2, hp: 40, r: 1.9, h: 6.3, speed: 3.0, cool: [1.6, 2.4], wind: 0.9, range: 15, maxRange: 30, spd: 15, err: 0.05, pts: 2000, scale: 2.2, dmg: 20 },
     },
     TYPE_BY_ID: ['snowman', 'penguin', 'boss'],
-    GIFT_KINDS: ['heal', 'triple', 'giant', 'fast'],
+    // 선물 버프: 체력, 트리플, 왕눈덩이, 스피드, 공격력 2배, 연사 2배, 보호막, 무한 눈덩이
+    GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite'],
+    BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = World;
   else root.World = World;
