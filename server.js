@@ -412,12 +412,21 @@ function aiEnemy(e, dt, tg) {
   for (const t of tg) { const dd = Math.hypot(t.x - e.x, t.z - e.z); if (dd < d) { d = dd; tgt = t; } }
   let nearest = 1e9; for (const p of players.values()) nearest = Math.min(nearest, Math.hypot(p.x - e.x, p.z - e.z));
   e.far = nearest > 95;
-  const aggroR = e.type === 'badsanta' ? 28 : 25;
+  const aggroR = T.boss ? 32 : e.type === 'badsanta' ? 28 : 25;
   if (tgt && d < aggroR) e.aggro = true;
   if (!tgt || d > aggroR + 18) e.aggro = false;
-  if (Math.hypot(e.x - e.home.x, e.z - e.home.z) > 40) e.aggro = false;
+  if (Math.hypot(e.x - e.home.x, e.z - e.home.z) > (T.boss ? 75 : 40)) e.aggro = false;
   let mx = 0, mz = 0, spd = T.speed;
-  if (e.aggro && tgt) {
+  if (e.aggro && tgt && T.melee) {
+    // 근거리형(하프물범): 곧장 다가가서, 가까우면 몸을 일으켰다가(예고) 배치기로 주변을 내려친다
+    const dx = tgt.x - e.x, dz = tgt.z - e.z;
+    if (e.wind > 0) { e.wind -= dt; if (e.wind <= 0) { meleeStrike(e); e.cool = rand(...T.cool); } }
+    else {
+      e.faceT = Math.atan2(dx, dz);
+      if (d > T.range) { mx = dx / d; mz = dz / d; }
+      e.cool -= dt; if (e.cool <= 0 && d < T.reach - 0.4) e.wind = T.wind;
+    }
+  } else if (e.aggro && tgt) {
     const dx = tgt.x - e.x, dz = tgt.z - e.z;
     e.faceT = Math.atan2(dx, dz);
     if (d > T.range + 3) { mx = dx / d; mz = dz / d; } else if (d < T.range - 4) { mx = -dx / d; mz = -dz / d; }
@@ -440,6 +449,16 @@ function aiEnemy(e, dt, tg) {
   pushOut(e, T.r);
   if (igloos.size) W.iglooPushFull(e, T.r, igList());
   if (e.faceT !== undefined) e.face = angLerp(e.face, e.faceT, Math.min(1, dt * 6));
+}
+// 배치기: 반경 안의 플레이어에게 피해 (안전지대·이글루 안은 안전)
+function meleeStrike(e) {
+  const T = e.T, ig = igList();
+  broadcast({ t: 'slam', e: e.id, x: r1(e.x), z: r1(e.z), r: T.reach });
+  for (const p of players.values()) {
+    if (p.dead || inVillage(p.x, p.z) || Math.hypot(p.x - e.x, p.z - e.z) > T.reach + 0.6) continue;
+    if (ig.length && W.iglooAt(ig, p.x, p.z)) continue;
+    p.conn.send({ t: 'dmg', id: 'm' + (nextEBall++), a: T.dmg, by: 0, src: e.type });
+  }
 }
 function enemyThrow(e, target) {
   const T = e.T;
@@ -492,22 +511,35 @@ function applyHit(e, b, goOn) {
   if (p) {
     p.combo++; p.best = Math.max(p.best, p.combo);
     const mult = Math.min(4, 1 + Math.floor(p.combo / 3) * 0.5);
-    pts = e.hp <= 0 ? Math.round(e.T.pts * mult) : 10;
+    pts = e.hp <= 0 ? (e.T.boss ? e.T.pts : Math.round(e.T.pts * mult)) : 10;
     p.score += pts; if (e.hp <= 0) p.kills++;
   }
   broadcast({ t: 'hit', id: b.id, e: e.id, by: b.owner, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z), k: e.hp <= 0 ? 1 : 0, pts, cb: p ? p.combo : 0, go: goOn ? 1 : 0 });
   if (e.hp <= 0 && enemies.has(e.id)) {
     enemies.delete(e.id);
     if (e.spawn) { e.spawn.eid = 0; e.spawn.timer = W.MOB_RESPAWN; }
-    if (e.type === 'badsanta') for (let i = 0; i < W.SANTA_DROPS; i++) {   // 나쁜 산타는 선물을 떨어뜨린다
-      const a = rand(0, TAU), o = { x: e.x + Math.cos(a) * 1.6, z: e.z + Math.sin(a) * 1.6 }; pushOut(o, 0.8);
+    const nDrop = e.T.drops || (Math.random() < (e.T.drop || 0) ? 1 : 0);    // 산타 2개, 보스 4개, 나머지는 확률로 1개
+    if (e.T.boss) { bossTimer = W.BOSS_RESPAWN; broadcast({ t: 'boss', on: 0, by: p ? p.id : 0, type: e.type }); log(`보스 처치 by ${p ? p.n : '?'}`); }
+    for (let i = 0; i < nDrop; i++) {
+      const a = rand(0, TAU), rr = e.T.boss ? 2.6 : 1.6, o = { x: e.x + Math.cos(a) * rr, z: e.z + Math.sin(a) * rr }; pushOut(o, 0.8);
       const d = { id: nextDrop++, x: o.x, z: o.z, k: W.GIFT_KINDS[Math.floor(Math.random() * W.GIFT_KINDS.length)], ttl: W.DROP_TTL };
       drops.set(d.id, d); broadcast({ t: 'drop', id: d.id, x: r1(d.x), z: r1(d.z), k: d.k, by: p ? p.id : 0 });
     }
   }
 }
+// 보스: 맵의 랜덤한 곳에 한 마리. 쓰러지면 90초 뒤 다른 곳에 다시
+let bossTimer = W.BOSS_FIRST;
+function spawnBoss() {
+  let s = null;
+  for (let k = 0; k < 50 && !s; k++) { const c = openSpot(40); if (Math.hypot(c.x, c.z) > 70 && !W.onIce(c.x, c.z)) s = c; }
+  if (!s) { bossTimer = 10; return; }
+  const e = addEnemy('seal', s.x, s.z, null); e.boss = true;
+  broadcast({ t: 'boss', on: 1, x: r1(s.x), z: r1(s.z), type: 'seal' });
+  log(`보스 등장 (${s.x.toFixed(0)}, ${s.z.toFixed(0)})`);
+}
 function step(dt) {
   const active = players.size > 0;
+  if (active && ![...enemies.values()].some(e => e.T.boss)) { bossTimer -= dt; if (bossTimer <= 0) spawnBoss(); }
   for (const p of players.values()) p.tokens = Math.min(20, p.tokens + dt * 24);
   if (active) {
     const tg = targets();
@@ -568,12 +600,12 @@ function snapshot() {
   const ps = [...players.values()].map(p => [p.id, r1(p.x), r1(p.z), r1(p.y), r2(p.face), r1(p.vx), r1(p.vz), p.flags, p.hp, p.dead ? 1 : 0, p.score, (p.vl ? 1 : 0) | (p.vt ? 2 : 0)]);
   const gs = gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]);
   const hs = heals.map(h => (h.on ? 1 : 0));
-  const es = [...enemies.values()];
+  const es = [...enemies.values()], bossRows = es.filter(e => e.T.boss).map(e => [e.id, r1(e.x), r1(e.z), e.hp, e.max]);
   for (const p of players.values()) {
     if (!p.ready || p.conn.congested) continue;
     const near = es.filter(e => Math.abs(e.x - p.x) < 110 && Math.abs(e.z - p.z) < 110)
       .map(e => [e.id, e.T.id, r1(e.x), r1(e.z), r2(e.face), e.hp, e.max, e.wind > 0 ? 1 : 0, e.flash > 0 ? 1 : 0, e.moving, e.slow > 0 ? 1 : 0]);
-    p.conn.send({ t: 's', p: ps, e: near, g: tick % 10 === 0 ? gs : undefined, h: tick % 10 === 0 ? hs : undefined, cb: p.combo });
+    p.conn.send({ t: 's', p: ps, e: near, g: tick % 10 === 0 ? gs : undefined, h: tick % 10 === 0 ? hs : undefined, cb: p.combo, bs: tick % 10 === 0 ? bossRows : undefined });
   }
 }
 let last = Date.now();
