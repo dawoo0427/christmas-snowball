@@ -27,13 +27,16 @@
   #hpbar i.mid { background:linear-gradient(90deg,#ffb300,#ffd34d); }
   #hpbar i.high { background:linear-gradient(90deg,#2ecc71,#7dffb0); }
   #hpbar span { position:relative; display:block; text-align:center; font-family:var(--display); font-size:14px; line-height:16px; color:#fff; text-shadow:0 1px 2px #000; }
-  #teaBtn { position:fixed; right:calc(14px + env(safe-area-inset-right,0px)); bottom:calc(14px + env(safe-area-inset-bottom,0px)); display:none; z-index:3;
-    font-family:var(--display); font-size:18px; padding:10px 18px; border-radius:24px; border:2px solid #ffffff80; background:#6d4c41e6; color:#fff; cursor:pointer; box-shadow:0 3px 0 #3e2723; }
-  #teaBtn:active { transform:translateY(2px); box-shadow:0 1px 0 #3e2723; }
-  #teaBtn.on { background:#3ddc84e6; box-shadow:0 3px 0 #1b7a45; }
-  body.playing.safe #teaBtn { display:block; }
-  body.touch #teaBtn { bottom:calc(88px + env(safe-area-inset-bottom,0px)); font-size:13px; padding:5px 10px; border-width:1.5px; border-radius:16px; box-shadow:0 2px 0 #3e2723; }
-  body.touch #teaBtn small { display:none; }
+  #actBtns { position:fixed; right:calc(14px + env(safe-area-inset-right,0px)); bottom:calc(14px + env(safe-area-inset-bottom,0px)); display:flex; gap:8px; align-items:flex-end; z-index:3; }
+  #actBtns .act { display:none; font-family:var(--display); font-size:18px; padding:10px 18px; border-radius:24px; border:2px solid #ffffff80; background:#6d4c41e6; color:#fff; cursor:pointer; box-shadow:0 3px 0 #3e2723; white-space:nowrap; }
+  #actBtns .act:active { transform:translateY(2px); box-shadow:0 1px 0 #3e2723; }
+  #actBtns .act.on { background:#3ddc84e6; box-shadow:0 3px 0 #1b7a45; }
+  #sitBtn { background:#8d6e63e6 !important; }
+  #sitBtn.on { background:#ffb74de6 !important; box-shadow:0 3px 0 #a86b12 !important; }
+  body.playing.safe #teaBtn, body.playing.nearfire #sitBtn { display:block; }
+  body.touch #actBtns { bottom:calc(88px + env(safe-area-inset-bottom,0px)); flex-direction:column-reverse; gap:6px; }
+  body.touch #actBtns .act { font-size:13px; padding:5px 10px; border-width:1.5px; border-radius:16px; box-shadow:0 2px 0 #3e2723; }
+  body.touch #actBtns .act small { display:none; }
   #gear { position:fixed; right:calc(202px + env(safe-area-inset-right,0px)); top:calc(12px + env(safe-area-inset-top,0px)); width:42px; height:42px; border-radius:50%; border:2px solid #ffffff60;
     background:#0b1430c8; color:#fff; font-size:20px; cursor:pointer; display:none; z-index:3; }
   body.playing #gear { display:block; }
@@ -186,10 +189,10 @@
 <div class="panel" id="net">서버와 연결이 불안정해요…</div>
 <div class="panel" id="help">
   WASD 이동 · Shift 대시 · Space 점프 · 마우스 조준 · 좌클릭 던지기(꾹: 강한 눈덩이)<br>
-  R 재장전 · Q/E 또는 우클릭 드래그 카메라 회전 · 휠 줌 · Enter 채팅 · V 마이크 · T 티타임 · Esc 설정
+  R 재장전 · Q/E 또는 우클릭 드래그 카메라 회전 · 휠 줌 · Enter 채팅 · V 마이크 · F 앉기 · T 티타임 · Esc 설정
 </div>
 <button id="gear" aria-label="설정 열기" title="설정">⚙️</button>
-<button id="teaBtn" aria-label="티타임">☕ 티타임 <small>(T)</small></button>
+<div id="actBtns"><button id="sitBtn" class="act" aria-label="모닥불 앞에 앉기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button></div>
 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <h3 id="setTitle">설정</h3>
   <label class="opt" for="optHear"><span>다른 사람 목소리 듣기<small>마이크 없이도 근처 플레이어 목소리가 들려요</small></span><input type="checkbox" id="optHear" checked></label>
@@ -709,7 +712,7 @@ const balls = new Map();               // id -> 눈덩이
 let gifts = [], popups = [], cid = 1;
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
-    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, tea: 0, rest: 0, restT: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
+    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, tea: 0, rest: 0, restT: 0, sit: -1, dashT: 0, dashCD: 0, dx: 0, dz: 0,
     walk: 0, throwAnim: 0, regenT: 0, inVillage: true, dead: false, respawnT: 0, squash: 0 };
 }
 
@@ -1070,6 +1073,8 @@ function toggleSettings(open) {
 $('gear').addEventListener('click', () => { audio(); toggleSettings(true); });
 $('teaBtn').addEventListener('click', e => { e.stopPropagation(); audio(); startTea(); });
 $('teaBtn').addEventListener('pointerdown', e => e.stopPropagation());
+$('sitBtn').addEventListener('click', e => { e.stopPropagation(); audio(); toggleSit(); });
+$('sitBtn').addEventListener('pointerdown', e => e.stopPropagation());
 $('setClose').addEventListener('click', () => toggleSettings(false));
 $('settings').addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); toggleSettings(false); } });
 $('optVoice').addEventListener('change', e => setVoice(e.target.checked));
@@ -1102,6 +1107,7 @@ addEventListener('keydown', e => {
     if (k === 'enter') { e.preventDefault(); openChat(); }
     if (k === 'v') toggleMic();
     if (k === 't') startTea();
+    if (k === 'f') toggleSit();
     if (k === 'escape') toggleSettings();
   }
   if (k === 'm') { musicOn = !musicOn; store.set('snowball-music', musicOn ? '1' : '0'); toast(musicOn ? '♪ 음악 켜짐' : '음악 꺼짐', '', 1); syncSettings(); }
@@ -1174,6 +1180,18 @@ document.querySelectorAll('#tbtns button, #camBtns button').forEach(b => {
 // ============================================================
 //  플레이어 행동
 // ============================================================
+// 모닥불 앞 통나무 의자에 앉기
+function seatTaken(i) { const st = W.SEATS[i]; for (const r of remotes.values()) if ((r.flags & 64) && Math.hypot(r.x - st.x, r.z - st.z) < 0.5) return true; return false; }
+function standUp() { if (me.sit < 0) return; const st = W.SEATS[me.sit]; me.sit = -1; me.y = heightAt(st.x, st.z); }
+function toggleSit() {
+  if (state !== 'play' || !me || me.dead) return;
+  if (me.sit >= 0) { standUp(); return; }
+  if (Math.hypot(me.x - W.BONFIRE.x, me.z - W.BONFIRE.z) > W.SIT_RANGE) { toast('🪑 모닥불 가까이 가야 앉을 수 있어요', '', 1.8); return; }
+  let best = -1, bd = 1e9;
+  W.SEATS.forEach((st, i) => { if (seatTaken(i)) return; const d = Math.hypot(st.x - me.x, st.z - me.z); if (d < bd) { bd = d; best = i; } });
+  if (best < 0) { toast('🪑 빈자리가 없어요', '조금 기다려 주세요', 1.8); return; }
+  me.sit = best; me.charging = false; me.vx = me.vz = 0; me.dashT = 0;
+}
 function startTea() {
   if (state !== 'play' || !me || me.dead) return;
   if (me.tea > 0) { me.tea = 0; return; }
@@ -1304,7 +1322,7 @@ function updateHUD() {
   const buffs = [p.triple > 0 && `<span style="color:#7dd3ff">트리플 샷 ${p.triple.toFixed(0)}s</span>`, p.giant > 0 && `<span style="color:#d0a8ff">왕눈덩이 ${p.giant.toFixed(0)}s</span>`,
     p.fast > 0 && `<span style="color:#8dffa8">스피드 ${p.fast.toFixed(0)}s</span>`, p.power > 0 && `<span style="color:#ffab6b">공격력 2배 ${p.power.toFixed(0)}s</span>`,
     p.rapid > 0 && `<span style="color:#fff176">연사 2배 ${p.rapid.toFixed(0)}s</span>`, p.shield > 0 && `<span style="color:#80deea">보호막 ${p.shield.toFixed(0)}s</span>`,
-    p.infinite > 0 && `<span style="color:#ffffff">무한 눈덩이 ${p.infinite.toFixed(0)}s</span>`, voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, p.tea > 0 && '<span style="color:#ffcc80">☕ 티타임 중… 따뜻해요</span>', p.rest && !p.dead && `<span style="color:#ffb74d">🔥 모닥불에서 쉬는 중${p.hp < p.maxHp ? ' · 체력 회복' : ''}</span>`,
+    p.infinite > 0 && `<span style="color:#ffffff">무한 눈덩이 ${p.infinite.toFixed(0)}s</span>`, voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, p.tea > 0 && '<span style="color:#ffcc80">☕ 티타임 중… 따뜻해요</span>', p.rest && !p.dead && `<span style="color:#ffb74d">🔥 모닥불${p.sit >= 0 ? ' 앞에 앉아' : '에서'} 쉬는 중${p.hp < p.maxHp ? ' · 체력 회복' : ''}</span>`,
     !p.dead && (p.inVillage ? `<span style="color:#3ddc84">🏠 안전지대${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>` : '<span style="color:#ff8a8a">⚔️ PvP 구역 · 다른 플레이어도 공격할 수 있어요</span>')].filter(Boolean).join('');
   const lib = camps.filter(c => c.liberated).length;
   let near = null, nd = 1e9; for (const c of camps) if (!c.liberated) { const d = Math.hypot(c.def.x - p.x, c.def.z - p.z); if (d < nd) { nd = d; near = c; } }
@@ -1368,7 +1386,7 @@ function keysHtml() {
   : `<div class="keys"><b>WASD</b><span>이동 (카메라 기준)</span><b>마우스</b><span>조준 · 적 근처를 가리키면 자동 조준</span>
     <b>좌클릭</b><span>던지기 · 꾹 누르면 강한 눈덩이</span><b>Shift / Space</b><span>대시(잠깐 무적) / 점프로 눈덩이 피하기</span>
     <b>R</b><span>눈 뭉치기(재장전)</span><b>Enter / V</b><span>채팅 / 마이크 켜기·끄기</span><b>⚙️ 또는 Esc</b><span>설정 (보이스 채팅, 음악, 효과음)</span>
-    <b>빨간 줄</b><span>적이 그 방향으로 던질 예정!</span><b>🟢 안전지대</b><span>마을의 초록 원 안 · 체력 회복, 공격받지 않음</span><b>🔥 모닥불 · ☕ T</b><span>모닥불 옆에서 쉬면 빠르게 회복 · 안전지대에서 티타임</span><b>⚔️ 원 밖</b><span>다른 플레이어와도 눈싸움(PvP)</span></div>`;
+    <b>빨간 줄</b><span>적이 그 방향으로 던질 예정!</span><b>🟢 안전지대</b><span>마을의 초록 원 안 · 체력 회복, 공격받지 않음</span><b>🔥 모닥불 · F · T</b><span>모닥불 옆에서 쉬면 빠르게 회복 · F로 의자에 앉기 · T로 티타임</span><b>⚔️ 원 밖</b><span>다른 플레이어와도 눈싸움(PvP)</span></div>`;
 }
 let overlayKind = null, healthTimer = null;
 function overlay(kind, err = '') {
@@ -1425,6 +1443,7 @@ function updateMe(dt) {
   let ix = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0) + touch.move.x;
   let iz = (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0) + touch.move.z;
   const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
+  if (p.sit >= 0 && (il > 0.15 || keys[' '] || p.charging || p.dashT > 0)) standUp();
   if (il > 0.15 || p.charging || p.dashT > 0 || !p.onGround) p.tea = 0;
   const w = screenToWorldDir(ix, iz);
   const speed = (p.fast > 0 ? 12 : 8.5) * (p.charging ? 0.65 : 1);
@@ -1437,11 +1456,13 @@ function updateMe(dt) {
   const gh = heightAt(p.x, p.z);
   if (!p.onGround) { p.vy -= 26 * dt; p.y += p.vy * dt; if (p.y <= gh) { p.y = gh; p.vy = 0; p.onGround = true; p.squash = 0.3; burst(p.x, gh + 0.1, p.z, 6, 0xffffff, 3, 1); } }
   else p.y = gh;
+  if (p.sit >= 0) { const st = W.SEATS[p.sit]; p.x = st.x; p.z = st.z; p.vx = p.vz = 0; p.vy = 0; p.onGround = true; p.y = heightAt(st.x, st.z) + W.BENCH_TOP - 0.4; }
   const mv = Math.hypot(p.vx, p.vz); if (mv > 0.5) p.walk += dt * mv * 1.3;
   p.squash *= Math.pow(0.001, dt);
   updateAim();
   if (!isTouch || touch.aim || p.charging || mv < 0.5) p.face = angLerp(p.face, aimTarget && (p.charging || !isTouch) ? Math.atan2(aimTarget.x - p.x, aimTarget.z - p.z) : Math.atan2(aim.x - p.x, aim.z - p.z), Math.min(1, dt * 14));
   else p.face = angLerp(p.face, Math.atan2(p.vx, p.vz), Math.min(1, dt * 10));
+  if (p.sit >= 0) p.face = W.SEATS[p.sit].face;
   if (p.charging) p.charge = Math.min(1, p.charge + dt);
   p.cd = Math.max(0, p.cd - dt); p.dashCD = Math.max(0, p.dashCD - dt);
   if (p.reloadT > 0) { p.reloadT -= dt; if (p.reloadT <= 0) p.ammo = p.maxAmmo; }
@@ -1452,7 +1473,7 @@ function updateMe(dt) {
   // 모닥불 근처에서 쉬면 체력 회복
   const nearFire = Math.hypot(p.x - W.BONFIRE.x, p.z - W.BONFIRE.z) < W.BONFIRE.healR;
   if (nearFire && mv < 0.6 && !p.charging) p.restT += dt; else p.restT = 0;
-  p.rest = p.restT > 0.8;
+  p.rest = p.restT > 0.8 || (p.sit >= 0 && nearFire);
   if (p.rest && p.hp < p.maxHp) {
     p.fireAcc = (p.fireAcc || 0) + W.FIRE_HEAL * dt;
     if (p.fireAcc >= W.FIRE_HEAL) { p.fireAcc -= W.FIRE_HEAL; p.hp = Math.min(p.maxHp, p.hp + W.FIRE_HEAL); popup(p.x, p.y + 3, p.z, `🔥+${W.FIRE_HEAL}`, '#ffb74d'); }
@@ -1564,7 +1585,7 @@ function step(dt) {
     net.sendT -= dt;
     if (net.sendT <= 0) {
       net.sendT = 1 / 15;
-      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0) | (p.tea > 0 ? 32 : 0);
+      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit >= 0 ? 64 : 0);
       send({ t: 'p', x: r2(p.x), z: r2(p.z), y: r2(p.y), f: r2(p.face), vx: r1(p.vx), vz: r1(p.vz), fl, hp: p.hp, d: p.dead ? 1 : 0 });
     }
     $('net').style.display = net.open && performance.now() - net.lastMsg > 2500 ? 'block' : 'none';
@@ -1590,18 +1611,27 @@ function animElf(m, x, y, z, face, moving, flags, walk, dt, squash = 0) {
   m.bd.position.y = bob; m.bd.scale.set(1 + k * 0.5, 1 - k, 1 + k * 0.5);
   m.pom.position.x = Math.sin(time * 4 + walk) * 0.06;
   m.held.visible = !throwing && !reloading;
-  // 티타임: 머그컵을 들어 홀짝이는 동작 (2초 주기)
+  // 앉기: 통나무 의자에 걸터앉아 다리를 앞으로, 손은 무릎 위에
+  const sitting = flags & 64;
+  if (sitting) {
+    m.legL.rotation.x = m.legR.rotation.x = -1.45;
+    m.bd.position.y = 0; m.bd.scale.set(1, 1, 1);
+    m.armR.rotation.x = -0.55; m.armR.rotation.z = 0.12; m.armL.rotation.x = -0.55; m.armL.rotation.z = -0.12;
+  }
+  // 티타임: 컵 입구를 입술에 대고, 바닥 쪽을 들어 올려 홀짝인다 (2.2초 주기)
   const tea = flags & 32;
   m.mug.visible = !!tea; m.bd.rotation.x = 0;
   if (tea) {
     m.held.visible = false;
     const ph = (time % 2.2) / 2.2, k = ph < 0.25 ? smoothK(ph / 0.25) : ph < 0.6 ? 1 : ph < 0.85 ? 1 - smoothK((ph - 0.6) / 0.25) : 0;
-    m.mug.position.set(lerp(-0.34, -0.1, k), lerp(0.85, 1.38, k), lerp(0.5, 0.7, k));
-    m.mug.rotation.set(lerp(0, 0.9, k), 0, lerp(0, 0.25, k));
-    m.armR.rotation.x = lerp(-0.9, -2.15, k); m.armR.rotation.z = lerp(-0.1, 0.55, k);
-    m.armL.rotation.x = -0.7; m.armL.rotation.z = 0.05;
-    m.bd.rotation.x = -0.1 * k;
-    m.steam.forEach((sp, i) => { const t = (time * 0.7 + i / 3) % 1; sp.position.set(Math.sin(t * 6 + i) * 0.06, 0.25 + t * 0.6, 0); sp.material.opacity = (1 - t) * 0.5 * (1 - k * 0.6); sp.scale.setScalar(0.18 + t * 0.3); });
+    // 쉴 때: 가슴 앞에 똑바로 든 컵 / 마실 때: 입 앞으로 올리고 입구가 얼굴 쪽을 향하도록 기울임(-x 회전)
+    m.mug.position.set(lerp(-0.28, -0.04, k), lerp(0.95, 1.33, k), lerp(0.58, 0.78, k));
+    m.mug.rotation.set(lerp(0, -1.0, k), 0, 0);
+    // 오른팔은 컵을 향해 뻗고, 왼팔은 컵 아래를 받친다
+    m.armR.rotation.x = lerp(-1.45, -1.96, k); m.armR.rotation.z = lerp(0.29, 0.47, k);
+    m.armL.rotation.x = lerp(-1.3, -1.7, k); m.armL.rotation.z = lerp(-0.35, -0.45, k);
+    m.bd.rotation.x = -0.08 * k;      // 마실 때 고개를 살짝 뒤로
+    m.steam.forEach((sp, i) => { const t = (time * 0.7 + i / 3) % 1; sp.position.set(Math.sin(t * 6 + i) * 0.06, 0.25 + t * 0.6, 0); sp.material.opacity = (1 - t) * 0.5 * (1 - k) * (1 - k); sp.scale.setScalar(0.18 + t * 0.3); });
   }
 }
 const smoothK = t => t * t * (3 - 2 * t);
@@ -1614,7 +1644,7 @@ function render(dt) {
   const p = me;
   const blink = p.inv > 0 && p.dashT <= 0 && Math.floor(p.inv * 14) % 2;
   elf.group.visible = !p.dead && !blink;
-  const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0);
+  const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit >= 0 ? 64 : 0);
   animElf(elf, p.x, p.y, p.z, p.face, Math.hypot(p.vx, p.vz) > 0.5 && p.onGround, flags, p.walk, dt, p.squash);
   elf.held.visible = elf.held.visible && p.ammo > 0;
   shieldMesh.visible = p.shield > 0 && !p.dead; if (shieldMesh.visible) { shieldMesh.position.set(p.x, p.y + 1.3, p.z); shieldMesh.material.opacity = 0.18 + 0.08 * Math.sin(time * 6); }
@@ -1664,7 +1694,9 @@ function render(dt) {
   }
   animFire(dt);
   document.body.classList.toggle('safe', !!(me && me.inVillage && !me.dead && state === 'play'));
+  document.body.classList.toggle('nearfire', !!(me && !me.dead && state === 'play' && (me.sit >= 0 || Math.hypot(me.x - W.BONFIRE.x, me.z - W.BONFIRE.z) < W.SIT_RANGE)));
   $('teaBtn').classList.toggle('on', me.tea > 0);
+  { const sb = $('sitBtn'), on = me.sit >= 0, html = on ? '🙋 일어나기 <small>(F)</small>' : '🪑 앉기 <small>(F)</small>'; sb.classList.toggle('on', on); if (sb._h !== html) { sb._h = html; sb.innerHTML = html; } }
   if (friendly) { friendly.bd.scale.y = 1 + Math.sin(time * 2) * 0.02; friendly.armL.rotation.x = Math.sin(time * 4) * 0.6 - 0.4; }
 
   camYaw = angLerp(camYaw, camYawT, Math.min(1, dt * 8));

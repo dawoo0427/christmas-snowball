@@ -19,6 +19,14 @@
   const VILLAGE_SAFE = 28;            // 마을 안전지대 반지름. 이 밖에서는 플레이어끼리 PvP 가능
   const BONFIRE = { x: 0, z: 0, r: 3.2, healR: 11 };      // 마을 중앙의 대형 모닥불
   const VILLAGE_TREES = [{ x: -12.5, z: 7.2, s: 0.45 }, { x: 12.5, z: -7.2, s: 0.45 }];   // 모닥불 양옆의 작은 크리스마스트리
+  // 모닥불을 둘러싼 통나무 의자 6개, 의자마다 2자리. 앉으면 모닥불을 바라본다
+  const BENCH_R = 7.2, BENCH_TOP = 0.76;
+  const BENCHES = Array.from({ length: 6 }, (_, i) => {
+    const a = i / 6 * TAU + 0.25, x = BONFIRE.x + Math.cos(a) * BENCH_R, z = BONFIRE.z + Math.sin(a) * BENCH_R;
+    const tx = -Math.sin(a), tz = Math.cos(a);              // 의자 길이 방향
+    return { a, x, z, seats: [-0.65, 0.65].map(o => ({ x: x + tx * o, z: z + tz * o, face: Math.atan2(BONFIRE.x - (x + tx * o), BONFIRE.z - (z + tz * o)) })) };
+  });
+  const SEATS = BENCHES.flatMap(b => b.seats);
   const CAMPS = [
     // 바깥 고리: 마을에서 길이 이어진 큰 캠프
     { x: 110,  z: -80,  name: '얼음 언덕 캠프',    snow: 2, peng: 1 },
@@ -202,7 +210,7 @@
     TYPE_BY_ID: ['snowman', 'penguin', 'boss'],
     // 선물 버프: 체력, 트리플, 왕눈덩이, 스피드, 공격력 2배, 연사 2배, 보호막, 무한 눈덩이
     GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite'],
-    BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, VILLAGE_TREES, FIRE_HEAL: 12, TEA_TIME: 4.5,
+    BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, VILLAGE_TREES, BENCHES, SEATS, BENCH_TOP, FIRE_HEAL: 12, TEA_TIME: 4.5, SIT_RANGE: 11,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = World;
   else root.World = World;
