@@ -11,7 +11,6 @@ const PORT = +process.env.PORT || 3000;
 const SERVER_NAME = process.env.SERVER_NAME || '눈마을 1서버';
 const MAX_PLAYERS = +process.env.MAX_PLAYERS || 60;
 const TICK = 30, SNAP_EVERY = 2;                   // 30Hz 시뮬레이션, 15Hz 상태 전송
-const CAMP_RESPAWN = +process.env.CAMP_RESPAWN || 180;   // 해방된 캠프가 다시 점령되기까지(초)
 // Cloudflare Realtime TURN (보이스 채팅 중계). 키는 환경변수에만 두고 브라우저에는 임시 자격 증명만 준다.
 const TURN_KEY_ID = process.env.TURN_KEY_ID || '';
 const TURN_KEY_API_TOKEN = process.env.TURN_KEY_API_TOKEN || '';
@@ -148,34 +147,25 @@ server.on('upgrade', (req, socket) => {
 const players = new Map();      // id -> player
 const enemies = new Map();      // id -> enemy
 const balls = new Map();        // id -> ball
-let nextId = 1, nextEnemy = 1, nextEBall = 1, patrolT = 10;
-const camps = W.layout.camps.map(c => ({ idx: c.idx, def: c.def, R: c.R, alive: 0, liberated: false, respawnT: 0 }));
+let nextId = 1, nextEnemy = 1, nextEBall = 1;
+// 필드 몬스터 스폰 지점: 몬스터가 죽으면 MOB_RESPAWN초 뒤 같은 자리에서 다시 나타난다
+const spawns = W.layout.spawns.map(sp => ({ ...sp, eid: 0, timer: 0 }));
 const gifts = [];
 const heals = W.layout.heals.map(h => ({ x: h.x, z: h.z, on: true, respawn: 0 }));
 const HEAL_RESPAWN = 25;
 
 function broadcast(obj, except) { const s = JSON.stringify(obj), buf = Buffer.from(s); for (const p of players.values()) if (p !== except && p.ready) p.conn.frame(1, buf); }
-function addEnemy(type, x, z, camp) {
+function addEnemy(type, x, z, spawn) {
   const T = TYPES[type];
-  const e = { id: nextEnemy++, type, T, x, z, hp: T.hp, max: T.hp, camp, home: { x, z }, aggro: false, cool: rand(1, 2.5), wind: 0, flash: 0,
+  const e = { id: nextEnemy++, type, T, x, z, hp: T.hp, max: T.hp, spawn, home: { x, z }, aggro: false, cool: rand(1, 2.5), wind: 0, flash: 0,
     kx: 0, kz: 0, face: rand(0, TAU), faceT: undefined, strafe: 0, strafeT: 0, wanderT: 0, tx: x, tz: z, shots: 0, moving: 0, far: false };
-  enemies.set(e.id, e); if (camp) camp.alive++;
+  enemies.set(e.id, e); if (spawn) spawn.eid = e.id;
   return e;
-}
-function populateCamp(c) {
-  for (const e of [...enemies.values()]) if (e.camp === c) enemies.delete(e.id);
-  c.alive = 0; c.liberated = false; c.respawnT = 0;
-  const d = c.def, list = [];
-  for (let i = 0; i < d.snow; i++) list.push('snowman');
-  for (let i = 0; i < d.peng; i++) list.push('penguin');
-  if (d.boss) list.push('boss');
-  list.forEach((t, i) => { const a = i / list.length * TAU + 0.4, r = t === 'boss' ? 4 : rand(4, 7.5); addEnemy(t, d.x + Math.cos(a) * r, d.z + Math.sin(a) * r, c); });
 }
 function openSpot(minFromPlayers = 0) {
   for (let k = 0; k < 200; k++) {
     const x = rand(-200, 200), z = rand(-200, 200);
     if (Math.hypot(x, z) < 16) continue;
-    if (camps.some(c => Math.hypot(x - c.def.x, z - c.def.z) < c.R + 3)) continue;
     let near = false; for (const p of players.values()) if (Math.hypot(x - p.x, z - p.z) < minFromPlayers) near = true;
     if (near) continue;
     const o = { x, z }; pushOut(o, 1.5); if (Math.hypot(o.x - x, o.z - z) > 0.01) continue;
@@ -185,7 +175,7 @@ function openSpot(minFromPlayers = 0) {
 }
 const randGift = () => Math.floor(Math.random() * W.GIFT_KINDS.length);
 function placeGift(i) { const s = openSpot(25); gifts[i] = { x: s.x, z: s.z, on: true, ti: randGift(), respawn: 0 }; }
-camps.forEach(populateCamp);
+for (const sp of spawns) addEnemy(sp.type, sp.x, sp.z, sp);
 for (let i = 0; i < 36; i++) placeGift(i);
 
 // ============================================================
@@ -206,7 +196,7 @@ function onConnect(conn) {
       p.y = heightAt(p.x, p.z);
       players.set(id, p);
       conn.send({ t: 'welcome', id, server: SERVER_NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c]),
-        camps: camps.map(c => [c.liberated ? 1 : 0, c.alive, Math.ceil(c.respawnT)]), g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)) });
+        g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)) });
       broadcast({ t: 'pj', id, n: p.n, c: p.c }, p);
       log(`입장 ${p.n}#${id} (현재 ${players.size}명)`);
       return;
@@ -272,7 +262,7 @@ function handle(p, m) {
     case 'gift': {
       const i = m.i | 0, g = gifts[i];
       if (!g || !g.on || p.dead || Math.hypot(g.x - p.x, g.z - p.z) > 3.5) return;
-      g.on = false; g.respawn = 40; p.score += 50;
+      g.on = false; g.respawn = W.GIFT_RESPAWN; p.score += 50;
       broadcast({ t: 'gift', i, by: p.id, k: W.GIFT_KINDS[g.ti] });
       break;
     }
@@ -320,10 +310,10 @@ function aiEnemy(e, dt, tg) {
   for (const t of tg) { const dd = Math.hypot(t.x - e.x, t.z - e.z); if (dd < d) { d = dd; tgt = t; } }
   let nearest = 1e9; for (const p of players.values()) nearest = Math.min(nearest, Math.hypot(p.x - e.x, p.z - e.z));
   e.far = nearest > 95;
-  const aggroR = e.type === 'boss' ? 32 : 25;
+  const aggroR = e.type === 'badsanta' ? 28 : 25;
   if (tgt && d < aggroR) e.aggro = true;
   if (!tgt || d > aggroR + 18) e.aggro = false;
-  if (e.camp && Math.hypot(e.x - e.home.x, e.z - e.home.z) > 34) e.aggro = false;
+  if (Math.hypot(e.x - e.home.x, e.z - e.home.z) > 40) e.aggro = false;
   let mx = 0, mz = 0, spd = T.speed;
   if (e.aggro && tgt) {
     const dx = tgt.x - e.x, dz = tgt.z - e.z;
@@ -335,7 +325,7 @@ function aiEnemy(e, dt, tg) {
     else { e.cool -= dt; if (e.cool <= 0 && d < T.maxRange) e.wind = T.wind; }
   } else if (!e.far) {
     e.wind = 0; e.wanderT -= dt;
-    if (e.wanderT <= 0) { e.wanderT = rand(2, 5); const a = rand(0, TAU), r = rand(0, e.camp ? 6 : 12); e.tx = e.home.x + Math.cos(a) * r; e.tz = e.home.z + Math.sin(a) * r; }
+    if (e.wanderT <= 0) { e.wanderT = rand(2, 5); const a = rand(0, TAU), r = rand(0, 10); e.tx = e.home.x + Math.cos(a) * r; e.tz = e.home.z + Math.sin(a) * r; }
     const tx = e.tx - e.x, tz = e.tz - e.z, td = Math.hypot(tx, tz);
     if (td > 0.6) { mx = tx / td; mz = tz / td; spd *= 0.45; e.faceT = Math.atan2(tx, tz); }
   } else { e.wind = 0; e.moving = 0; return; }
@@ -354,17 +344,15 @@ function enemyThrow(e, target) {
   const tx = target.x + target.vx * tFlight * 0.6, tz = target.z + target.vz * tFlight * 0.6;
   const base = Math.atan2(tx - e.x, tz - e.z);
   const angs = [];
-  if (e.type === 'boss') {
-    if (e.shots % 3 === 2) for (let i = 0; i < 14; i++) angs.push({ a: i / 14 * TAU, spd: T.spd * 0.8 });
-    else for (let i = -2; i <= 2; i++) angs.push({ a: base + i * 0.22, spd: T.spd });
-  } else angs.push({ a: base + rand(-T.err, T.err), spd: T.spd });
+  if (T.spread) for (let i = 0; i < T.spread; i++) angs.push({ a: base + (i - (T.spread - 1) / 2) * 0.2, spd: T.spd });
+  else angs.push({ a: base + rand(-T.err, T.err), spd: T.spd });
   e.shots++; e.face = base;
-  const r = e.type === 'boss' ? 0.45 : 0.3, h = e.type === 'boss' ? 2.2 : W.BALL_H;
+  const r = e.type === 'badsanta' ? 0.36 : 0.3, h = W.BALL_H;
   for (const s of angs) {
     const dx = Math.sin(s.a), dz = Math.cos(s.a);
     const b = { id: 'e' + (nextEBall++), owner: 'e', x: e.x + dx * (T.r + 0.3), z: e.z + dz * (T.r + 0.3), h, dx, dz, spd: s.spd, r, dmg: T.dmg, dist: 0, max: 34, fall: 0 };
     balls.set(b.id, b);
-    broadcast({ t: 'b', id: b.id, o: 'e', x: r1(b.x), z: r1(b.z), h: r1(h), dx: r2(dx), dz: r2(dz), s: r1(b.spd), r: r2(r), dm: T.dmg });
+    broadcast({ t: 'b', id: b.id, o: 'e', x: r1(b.x), z: r1(b.z), h: r1(h), dx: r2(dx), dz: r2(dz), s: r1(b.spd), r: r2(r), dm: T.dmg, k: T.ball || 0 });
   }
 }
 function endBall(b, silent) {
@@ -376,44 +364,24 @@ function applyHit(e, b) {
   const p = players.get(b.owner);
   e.hp -= b.dmg; e.flash = 0.15; e.aggro = true;
   e.kx = b.dx * 10 / e.T.scale; e.kz = b.dz * 10 / e.T.scale;
-  if (e.camp) for (const o of enemies.values()) if (o.camp === e.camp) o.aggro = true;
+  for (const o of enemies.values()) if (o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 16) o.aggro = true;   // 근처 동료도 화가 난다
   let pts = 0;
   if (p) {
     p.combo++; p.best = Math.max(p.best, p.combo);
     const mult = Math.min(4, 1 + Math.floor(p.combo / 3) * 0.5);
-    pts = e.hp <= 0 ? Math.round((e.camp ? e.T.pts : 75) * mult) : 10;
+    pts = e.hp <= 0 ? Math.round(e.T.pts * mult) : 10;
     p.score += pts; if (e.hp <= 0) p.kills++;
   }
   broadcast({ t: 'hit', id: b.id, e: e.id, by: b.owner, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z), k: e.hp <= 0 ? 1 : 0, pts, cb: p ? p.combo : 0 });
   if (e.hp <= 0) {
     enemies.delete(e.id);
-    if (e.camp) { e.camp.alive--; if (e.camp.alive <= 0) liberate(e.camp, p); }
-  }
-}
-function liberate(c, by) {
-  c.liberated = true; c.respawnT = CAMP_RESPAWN;
-  const bonus = c.def.boss ? 5000 : 1000;
-  const helpers = [];
-  for (const p of players.values()) if (p === by || Math.hypot(p.x - c.def.x, p.z - c.def.z) < 55) { p.score += bonus; helpers.push(p.id); }
-  broadcast({ t: 'lib', c: c.idx, by: by ? by.n : '', bonus, helpers });
-  log(`${c.def.name} 해방 by ${by ? by.n : '?'}`);
-  const i = gifts.findIndex(g => !g.on); if (i >= 0) { gifts[i] = { x: c.def.x + 3, z: c.def.z + 3, on: true, ti: randGift(), respawn: 0 }; }
-  if (camps.every(k => k.liberated)) {
-    for (const p of players.values()) p.score += 2000;
-    broadcast({ t: 'allfree' });
-    log('모든 캠프 해방!');
+    if (e.spawn) { e.spawn.eid = 0; e.spawn.timer = W.MOB_RESPAWN; }
   }
 }
 function step(dt) {
   const active = players.size > 0;
   for (const p of players.values()) p.tokens = Math.min(12, p.tokens + dt * 14);
   if (active) {
-    patrolT -= dt;
-    if (patrolT <= 0) {
-      patrolT = 14;
-      let patrols = 0; for (const e of enemies.values()) if (!e.camp) patrols++;
-      if (patrols < 6 + Math.min(6, Math.floor(players.size / 2))) { const s = openSpot(55); if (Math.hypot(s.x, s.z) > 45) addEnemy('penguin', s.x, s.z, null); }
-    }
     const tg = targets();
     for (const e of enemies.values()) aiEnemy(e, dt, tg);
     const list = [...enemies.values()];
@@ -429,7 +397,7 @@ function step(dt) {
     if (b.dist > b.max) { b.fall += 22 * dt; b.h -= b.fall * dt; }
     else if (b.h < 2) b.h += (W.BALL_H - b.h) * Math.min(1, dt * 3);
     const y = heightAt(b.x, b.z) + b.h;
-    if (b.h <= 0.1 || Math.abs(b.x) > 140 || Math.abs(b.z) > 140 || hitsCollider(b.x, y, b.z, b.r)) { endBall(b, b.owner !== 'e'); continue; }
+    if (b.h <= 0.1 || Math.abs(b.x) > W.HALF || Math.abs(b.z) > W.HALF || hitsCollider(b.x, y, b.z, b.r)) { endBall(b, b.owner !== 'e'); continue; }
     if (b.owner !== 'e') {
       for (const e of enemies.values()) {
         if (Math.hypot(b.x - e.x, b.z - e.z) < e.T.r + b.r && y > heightAt(e.x, e.z) - 0.3 && y < heightAt(e.x, e.z) + e.T.h) {
@@ -438,22 +406,21 @@ function step(dt) {
       }
     }
   }
-  // 선물, 캠프 재점령
+  // 선물·힐팩·필드 몬스터 리젠
   gifts.forEach((g, i) => { if (!g.on) { g.respawn -= dt; if (g.respawn <= 0) placeGift(i); } });
   heals.forEach((h, i) => { if (!h.on) { h.respawn -= dt; if (h.respawn <= 0) { h.on = true; broadcast({ t: 'hon', i }); } } });
-  for (const c of camps) if (c.liberated) {
-    c.respawnT -= dt;
-    if (c.respawnT <= 0) {
-      let close = false; for (const p of players.values()) if (Math.hypot(p.x - c.def.x, p.z - c.def.z) < 40) close = true;
-      if (close) c.respawnT = 10;
-      else { populateCamp(c); broadcast({ t: 'camp', c: c.idx }); }
-    }
+  for (const sp of spawns) {
+    if (sp.eid) continue;
+    sp.timer -= dt;
+    if (sp.timer > 0) continue;
+    let close = false; for (const p of players.values()) if (!p.dead && Math.hypot(p.x - sp.x, p.z - sp.z) < 14) close = true;
+    if (close) sp.timer = 2;                     // 바로 옆에 사람이 있으면 잠깐 미룬다
+    else addEnemy(sp.type, sp.x, sp.z, sp);
   }
 }
 let tick = 0;
 function snapshot() {
   const ps = [...players.values()].map(p => [p.id, r1(p.x), r1(p.z), r1(p.y), r2(p.face), r1(p.vx), r1(p.vz), p.flags, p.hp, p.dead ? 1 : 0, p.score, (p.vl ? 1 : 0) | (p.vt ? 2 : 0)]);
-  const cs = camps.map(c => [c.liberated ? 1 : 0, c.alive, Math.ceil(Math.max(0, c.respawnT))]);
   const gs = gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]);
   const hs = heals.map(h => (h.on ? 1 : 0));
   const es = [...enemies.values()];
@@ -461,7 +428,7 @@ function snapshot() {
     if (!p.ready || p.conn.congested) continue;
     const near = es.filter(e => Math.abs(e.x - p.x) < 110 && Math.abs(e.z - p.z) < 110)
       .map(e => [e.id, e.T.id, r1(e.x), r1(e.z), r2(e.face), e.hp, e.max, e.wind > 0 ? 1 : 0, e.flash > 0 ? 1 : 0, e.moving]);
-    p.conn.send({ t: 's', p: ps, e: near, c: cs, g: tick % 10 === 0 ? gs : undefined, h: tick % 10 === 0 ? hs : undefined, cb: p.combo });
+    p.conn.send({ t: 's', p: ps, e: near, g: tick % 10 === 0 ? gs : undefined, h: tick % 10 === 0 ? hs : undefined, cb: p.combo });
   }
 }
 let last = Date.now();

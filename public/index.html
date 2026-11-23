@@ -441,40 +441,6 @@ function buildVillage() {
   L.lamps.forEach(buildLamp);
   friendly = makeSnowman('friend'); friendly.group.position.set(L.friendly.x, heightAt(L.friendly.x, L.friendly.z), L.friendly.z); friendly.group.rotation.y = 0.8; scene.add(friendly.group);
 }
-const camps = [];
-function buildCamp(cl) {
-  const def = cl.def, y = heightAt(def.x, def.z);
-  const wallMat = mat(0xdfe8fb), topMat = mat(0xf6f9ff);
-  for (const w of cl.walls) {
-    const g = new THREE.Group(); g.position.set(w.x, heightAt(w.x, w.z) - 0.2, w.z); g.rotation.y = w.rot; scene.add(g);
-    mk(Box(w.len, 1.8, 1.1), wallMat, 0, 0.9, 0, g);
-    for (let k = 0; k < Math.round(w.len / 1.1); k++) mk(Box(0.95, 0.35, 1.0), topMat, -w.len / 2 + 0.55 + k * 1.1, 1.95, 0, g);
-  }
-  const ig = new THREE.Group(); ig.position.set(cl.igloo.x, heightAt(cl.igloo.x, cl.igloo.z) - 0.1, cl.igloo.z); ig.rotation.y = cl.igloo.rot; scene.add(ig);
-  mk(new THREE.SphereGeometry(2.4, 14, 8, 0, TAU, 0, Math.PI / 2), mat(0xeef4ff), 0, 0, 0, ig);
-  const door = mk(new THREE.CylinderGeometry(0.9, 0.9, 1.6, 10, 1, false, 0, Math.PI), mat(0xe2ebfb), 0, 0, 2.1, ig); door.rotation.x = Math.PI / 2; door.rotation.z = Math.PI / 2;
-  mk(Box(1.2, 1.1, 0.1), mat(0x1a2238), 0, 0.5, 2.9, ig, false);
-  for (const t of cl.towers) {
-    const ty = heightAt(t.x, t.z);
-    mk(Cyl(1.2, 1.6, 7, 8), mat(0xa9d8ff, { em: 0x204060, rough: 0.3 }), t.x, ty + 3.5, t.z);
-    mk(Cone(1.6, 2.4, 8), mat(0x7fb8ef, { rough: 0.3 }), t.x, ty + 8.2, t.z);
-    glow(0x66ccff, 6, t.x, ty + 7, t.z, null, 0.8);
-  }
-  const flag = new THREE.Group(); flag.position.set(def.x, y, def.z); scene.add(flag);
-  mk(Cyl(0.09, 0.09, 5.2, 6), mat(0x2a2a33), 0, 2.6, 0, flag);
-  const cloth = new THREE.Group(); cloth.position.set(0, 4.5, 0); flag.add(cloth);
-  mk(Box(1.9, 1.15, 0.06), mat(0x3a1a4a), 0.98, 0, 0, cloth);
-  mk(Box(0.5, 0.5, 0.08), mat(0xff3b3b, { em: 0x440000 }), 0.98, 0, 0, cloth);
-  const lib = new THREE.Group(); lib.position.set(def.x, y, def.z); lib.visible = false; scene.add(lib);
-  mk(Cyl(0.25, 0.3, 1, 6), mat(0x5a3a22), 0, 0.5, 0, lib);
-  [[2.2, 2.4, 0.8], [1.7, 2.1, 2.2], [1.1, 1.8, 3.4]].forEach(([r, h, b]) => mk(Cone(r, h, 9), mat(0x1d6b3a), 0, b + h / 2, 0, lib));
-  for (let i = 0; i < 18; i++) { const f = deco(), a = deco() * TAU, rr = 2.1 * (1 - f * 0.8) + 0.1; mk(Sph(0.13, 6, 4), mat([0xff4d4d, 0xffd34d, 0x4dc3ff, 0xff7dd8][i % 4], { basic: true }), Math.cos(a) * rr, 1 + f * 3.8, Math.sin(a) * rr, lib, false); }
-  mk(Sph(0.32, 8, 6), mat(0xffd34d, { em: 0xffc020, emI: 2 }), 0, 5.4, 0, lib, false);
-  glow(0xffd860, 6, 0, 5.4, 0, lib, 1);
-  const light = new THREE.PointLight(0xffcf80, 0, 24, 1.5); light.position.set(def.x, y + 4, def.z); scene.add(light);
-  camps.push({ def, idx: cl.idx, R: cl.R, flag, cloth, lib, light, alive: 0, liberated: false, respawn: 0 });
-}
-function setCampLiberated(c, lib) { c.liberated = lib; c.flag.visible = !lib; c.lib.visible = lib; c.light.intensity = lib ? 1.4 : 0; }
 
 // ============================================================
 //  귀여운 캐릭터 모델 (모두 +z 방향을 바라봄)
@@ -595,6 +561,70 @@ const GIFT_INFO = {
   power: { color: 0xff6d00, label: '공격력 2배!', c: '#ffab6b' }, rapid: { color: 0xfdd835, label: '연사 속도 2배!', c: '#fff176' },
   shield: { color: 0x00bcd4, label: '보호막! 피해 절반', c: '#80deea' }, infinite: { color: 0xeceff1, label: '무한 눈덩이!', c: '#ffffff' },
 };
+// 나쁜 산타: 빨간 옷, 흰 수염, 화난 눈썹, 등에 석탄 자루
+function makeSanta() {
+  const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
+  const red = toon(0xc62828, true), white = toon(0xffffff), skin = toon(0xffd2b8), black = toon(0x1a1420);
+  mk(Sph(0.62, 20, 16), red, 0, 0.85, 0, bd).scale.set(1, 1.05, 0.95);
+  mk(Torus(0.56, 0.11), white, 0, 0.36, 0, bd).rotation.x = Math.PI / 2;
+  mk(Cyl(0.6, 0.62, 0.16, 18), black, 0, 0.78, 0, bd);
+  mk(Box(0.26, 0.2, 0.06), toon(0xffd34d), 0, 0.78, 0.6, bd);
+  mk(Box(0.12, 0.7, 0.06), white, 0, 1.05, 0.56, bd);
+  const head = new THREE.Group(); head.position.set(0, 1.65, 0); bd.add(head);
+  mk(Sph(0.5, 20, 16), skin, 0, 0, 0, head);
+  mk(Sph(0.44, 16, 12), white, 0, -0.26, 0.24, head).scale.set(1.1, 0.95, 0.7);       // 수염
+  for (const sd of [-1, 1]) { const ms = mk(Sph(0.13, 10, 8), white, sd * 0.13, -0.1, 0.45, head, false); ms.scale.set(1.4, 0.7, 0.8); }
+  mk(Sph(0.08, 8, 6), toon(0xff7b7b), 0, -0.02, 0.5, head, false);                 // 빨간 코
+  eyes(head, 0.1, 0.44, 0.18, 0.85);
+  for (const sd of [-1, 1]) { const b = mk(Box(0.22, 0.06, 0.05), black, sd * 0.18, 0.27, 0.45, head, false); b.rotation.z = sd * 0.45; }
+  const hat = new THREE.Group(); hat.position.set(0, 0.32, -0.04); hat.rotation.set(-0.35, 0, -0.25); head.add(hat);
+  mk(Cone(0.5, 0.95, 16), red, 0, 0.48, 0, hat); mk(Torus(0.47, 0.12), white, 0, 0, 0, hat).rotation.x = Math.PI / 2;
+  mk(Sph(0.14, 10, 8), white, 0, 0.98, 0, hat);
+  const sack = mk(Sph(0.5, 14, 12), toon(0x5d4030), 0, 1.15, -0.62, bd); sack.scale.set(1, 1.15, 0.8);
+  mk(Sph(0.18, 10, 8), toon(0x2b2b33), 0.05, 1.72, -0.66, bd);                       // 자루 밖으로 삐져나온 석탄
+  const arm = sd => {
+    const p = new THREE.Group(); p.position.set(sd * 0.6, 1.2, 0); p.rotation.z = sd * 0.35; bd.add(p);
+    mk(Cyl(0.13, 0.13, 0.5, 10), red, 0, -0.25, 0, p); mk(Torus(0.13, 0.05), white, 0, -0.5, 0, p).rotation.x = Math.PI / 2;
+    mk(Sph(0.16, 10, 8), black, 0, -0.62, 0, p);
+    return p;
+  };
+  const armL = arm(1), armR = arm(-1);
+  for (const sd of [-1, 1]) mk(Sph(0.2, 10, 8), black, sd * 0.25, 0.1, 0.08, g).scale.set(1, 0.6, 1.4);
+  const held = mk(Sph(0.3, 12, 10), toon(0x37373f), 0, -0.85, 0, armR); held.visible = false;
+  return { group: g, bd, armL, armR, held, body: red };
+}
+// 나쁜 루돌프: 네 발 사슴, 큰 뿔, 반짝이는 빨간 코, 화난 눈썹
+function makeRudolph() {
+  const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
+  const brown = toon(0x8d5a34, true), light = toon(0xd9a777), dark = toon(0x3e2614);
+  mk(Sph(0.55, 18, 14), brown, 0, 1.05, -0.05, bd).scale.set(0.9, 0.85, 1.35);
+  mk(Sph(0.4, 14, 10), light, 0, 0.92, 0.1, bd).scale.set(0.8, 0.7, 1.2);
+  mk(Torus(0.24, 0.06), toon(0xd32f2f), 0, 1.35, 0.5, bd).rotation.x = 1.1;            // 빨간 목줄
+  mk(Sph(0.08, 8, 6), toon(0xffd34d), 0, 1.22, 0.7, bd, false);                         // 방울
+  const head = new THREE.Group(); head.position.set(0, 1.6, 0.68); bd.add(head);
+  mk(Sph(0.36, 16, 12), brown, 0, 0, 0, head).scale.set(1, 1, 1.05);
+  mk(Sph(0.22, 12, 10), light, 0, -0.1, 0.27, head).scale.set(1, 0.85, 1);
+  const nose = mk(Sph(0.11, 12, 10), new THREE.MeshBasicMaterial({ color: 0xff2020 }), 0, -0.05, 0.47, head, false);
+  glow(0xff3030, 1.4, 0, -0.05, 0.5, head, 2);
+  eyes(head, 0.1, 0.3, 0.15, 0.75);
+  for (const sd of [-1, 1]) {
+    const b = mk(Box(0.17, 0.05, 0.04), dark, sd * 0.15, 0.22, 0.31, head, false); b.rotation.z = sd * 0.5;
+    const ear = mk(Cone(0.1, 0.3, 8), brown, sd * 0.33, 0.18, -0.05, head); ear.rotation.z = -sd * 1.2;
+    const ant = new THREE.Group(); ant.position.set(sd * 0.18, 0.3, -0.08); ant.rotation.z = -sd * 0.35; head.add(ant);
+    mk(Cyl(0.04, 0.05, 0.6, 6), dark, 0, 0.3, 0, ant);
+    const t1 = mk(Cyl(0.03, 0.04, 0.3, 6), dark, sd * 0.1, 0.38, 0, ant); t1.rotation.z = -sd * 0.9;
+    const t2 = mk(Cyl(0.03, 0.04, 0.26, 6), dark, -sd * 0.06, 0.52, 0.04, ant); t2.rotation.z = sd * 0.7;
+  }
+  const legs = [];
+  for (const [lx, lz] of [[-0.28, 0.42], [0.28, 0.42], [-0.28, -0.48], [0.28, -0.48]]) {
+    const leg = new THREE.Group(); leg.position.set(lx, 0.8, lz); g.add(leg);
+    mk(Cyl(0.08, 0.07, 0.72, 8), brown, 0, -0.36, 0, leg); mk(Cyl(0.09, 0.09, 0.1, 8), dark, 0, -0.75, 0, leg);
+    legs.push(leg);
+  }
+  mk(Sph(0.12, 8, 6), toon(0xffffff), 0, 1.15, -0.78, bd);                              // 꼬리
+  const held = mk(Sph(0.28, 12, 10), toon(0xff6b6b), 0, 2.4, 0.4, bd); held.visible = false;
+  return { group: g, bd, head, nose, legs, held, body: brown };
+}
 function makeGift(color) {
   const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
   mk(Box(1, 1, 1), mat(color), 0, 0, 0, inner);
@@ -748,7 +778,6 @@ function onMsg(m) {
       myId = m.id; serverName = m.server || '';
       for (const [id, n, c] of m.players) names.set(id, { n, c });
       me = newPlayer(m.x, m.z); myScore = 0; myCombo = 0; myKills = 0; playTime = 0;
-      (m.camps || []).forEach((row, i) => applyCamp(i, row, true));
       if (m.g) applyGifts(m.g);
       if (m.h) m.h.forEach((on, i) => setHeal(i, !!on));
       camYaw = camYawT = 0;
@@ -756,7 +785,7 @@ function onMsg(m) {
       for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = '';
       document.body.classList.add('playing');
       state = 'play'; overlay(null); audio();
-      toast(`${esc(serverName)} 입장!`, '못된 눈사람들의 캠프를 친구들과 함께 해방하세요');
+      toast(`${esc(serverName)} 입장!`, '설원의 몬스터를 물리치고 점수를 모아 보세요');
       feed(`<span class="sys">${esc(serverName)}에 들어왔어요. 지금 ${names.size}명이 놀고 있어요.</span>`);
       break;
     }
@@ -764,7 +793,7 @@ function onMsg(m) {
     case 'pj': names.set(m.id, { n: m.n, c: m.c }); feed(`<span class="sys">${esc(m.n)} 님이 들어왔어요</span>`); break;
     case 'pl': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">${esc(nm.n)} 님이 나갔어요</span>`); names.delete(m.id); const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } closePeer(m.id); break; }
     case 's': applySnapshot(m); break;
-    case 'b': if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || (m.o === 'e' ? 15 : 1), pv: !!m.pv }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
+    case 'b': if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || (m.o === 'e' ? 15 : 1), pv: !!m.pv, kind: m.k | 0 }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
     case 'be': { const b = balls.get(m.id); if (b) { killBall(b); burst(m.x, m.y, m.z, b.r > 0.4 ? 16 : 8, 0xeef4ff, 5, 2); } break; }
     case 'hit': {
       const b = balls.get(m.id); if (b) killBall(b);
@@ -779,19 +808,6 @@ function onMsg(m) {
       if (m.k && e) killEnemy(e);
       break;
     }
-    case 'lib': {
-      const c = camps[m.c]; if (!c) break;
-      setCampLiberated(c, true);
-      burst(c.def.x, heightAt(c.def.x, c.def.z) + 4, c.def.z, 90, 0xffd34d, 12, 6);
-      const mine = (m.helpers || []).includes(myId);
-      if (mine && !me.dead) me.hp = me.maxHp;
-      sfx.win();
-      toast(`${c.def.name} 해방!`, (m.by ? `${esc(m.by)} 님의 마지막 한 방! ` : '') + (mine ? `+${m.bonus}점 · 체력 회복` : ''), 3);
-      feed(`<span class="sys">🎉 ${esc(m.by || '누군가')} 님이 ${c.def.name}을(를) 해방했어요</span>`);
-      break;
-    }
-    case 'camp': { const c = camps[m.c]; if (c) { setCampLiberated(c, false); feed(`<span class="sys">⚠️ ${c.def.name}에 눈사람들이 다시 몰려왔어요!</span>`); } break; }
-    case 'allfree': toast('🎅 크리스마스를 지켰어요!', '모든 캠프 해방! 모두에게 +2000점', 4); sfx.win(); feed('<span class="sys">🎄 서버 전체가 힘을 합쳐 모든 캠프를 해방했어요!</span>'); break;
     case 'gift': {
       const g = gifts[m.i]; if (g) { g.on = false; g.model.group.visible = false; }
       if (m.by === myId) giveBuff(m.k, g);
@@ -824,13 +840,6 @@ function onMsg(m) {
     }
   }
 }
-function applyCamp(i, row, quiet) {
-  const c = camps[i]; if (!c) return;
-  const [lib, alive, respawn] = row;
-  if (!!lib !== c.liberated) setCampLiberated(c, !!lib);
-  c.alive = alive | 0; c.respawn = respawn | 0;
-  void quiet;
-}
 function applyGifts(list) {
   list.forEach((row, i) => {
     const [x, z, on, ti] = row; const kind = W.GIFT_KINDS[ti] || 'heal';
@@ -861,7 +870,6 @@ function applySnapshot(m) {
     if (flash) e.flash = Math.max(e.flash, 0.1);
   }
   for (const [id, e] of enemies) if (!ids.has(id)) { removeEnemy(e); enemies.delete(id); }
-  m.c.forEach((row, i) => applyCamp(i, row));
   if (m.g) applyGifts(m.g);
   if (m.h) m.h.forEach((on, i) => setHeal(i, !!on));
   if (typeof m.cb === 'number') myCombo = m.cb;
@@ -875,17 +883,17 @@ function addRemote(id, nm) {
 function removeRemote(r) { scene.remove(r.model.group); r.tag.remove(); }
 function addEnemy(id, type, x, z, face) {
   const T = TYPES[type];
-  const model = type === 'penguin' ? makePenguin() : makeSnowman(type === 'boss' ? 'boss' : 'normal');
+  const model = type === 'penguin' ? makePenguin() : type === 'rudolph' ? makeRudolph() : type === 'badsanta' ? makeSanta() : makeSnowman('normal');
   model.group.scale.setScalar(T.scale); scene.add(model.group);
   const e = { id, type, T, model, x, z, tx: x, tz: z, y: heightAt(x, z), face, tface: face, hp: T.hp, max: T.hp, wind: 0, flash: 0, moving: 0, walk: 0, squash: 0, bar: null, tele: null };
   enemies.set(id, e); return e;
 }
 function removeEnemy(e) { scene.remove(e.model.group); if (e.bar) e.bar.remove(); if (e.tele) scene.remove(e.tele); }
 function killEnemy(e) {
-  burst(e.x, e.y + e.T.h * 0.5, e.z, e.type === 'boss' ? 80 : 36, 0xffffff, e.type === 'boss' ? 14 : 9, 4);
-  burst(e.x, e.y + e.T.h * 0.7, e.z, 8, e.type === 'penguin' ? 0x22304a : 0xff8a1f, 6);
+  burst(e.x, e.y + e.T.h * 0.5, e.z, e.type === 'badsanta' ? 60 : 36, 0xffffff, e.type === 'badsanta' ? 11 : 9, 4);
+  burst(e.x, e.y + e.T.h * 0.7, e.z, 10, { penguin: 0x22304a, rudolph: 0x8d5a34, badsanta: 0xd32f2f }[e.type] || 0xff8a1f, 6);
   if (Math.hypot(e.x - me.x, e.z - me.z) < 45) sfx.pop();
-  if (e.type === 'boss') shake = 1.2;
+  if (e.type === 'badsanta') shake = 0.6;
   removeEnemy(e); enemies.delete(e.id);
 }
 
@@ -1277,9 +1285,9 @@ function throwPlayer() {
   if (p.ammo === 0) startReload();
 }
 const ballGeo = Sph(1, 14, 10);
-const ballMatP = toon(0xffffff), ballMatE = toon(0xbcd4ff);
+const ballMatP = toon(0xffffff), ballMatE = toon(0xbcd4ff), ballMatK = [ballMatE, toon(0x37373f), toon(0xff6b6b)];
 function spawnBall(o) {
-  const mesh = new THREE.Mesh(ballGeo, o.owner === 'enemy' ? ballMatE : ballMatP); mesh.scale.setScalar(o.r); mesh.castShadow = true; scene.add(mesh);
+  const mesh = new THREE.Mesh(ballGeo, o.owner === 'enemy' ? (ballMatK[o.kind | 0] || ballMatE) : ballMatP); mesh.scale.setScalar(o.r); mesh.castShadow = true; scene.add(mesh);
   const b = { ...o, mesh, dist: 0, max: o.owner === 'enemy' ? 34 : PLAYER_RANGE, fall: 0 };
   mesh.position.set(b.x, heightAt(b.x, b.z) + b.h, b.z);
   balls.set(b.id, b);
@@ -1324,9 +1332,9 @@ function updateHUD() {
     p.rapid > 0 && `<span style="color:#fff176">연사 2배 ${p.rapid.toFixed(0)}s</span>`, p.shield > 0 && `<span style="color:#80deea">보호막 ${p.shield.toFixed(0)}s</span>`,
     p.infinite > 0 && `<span style="color:#ffffff">무한 눈덩이 ${p.infinite.toFixed(0)}s</span>`, voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, p.tea > 0 && '<span style="color:#ffcc80">☕ 티타임 중… 따뜻해요</span>', p.rest && !p.dead && `<span style="color:#ffb74d">🔥 모닥불${p.sit >= 0 ? ' 앞에 앉아' : '에서'} 쉬는 중${p.hp < p.maxHp ? ' · 체력 회복' : ''}</span>`,
     !p.dead && (p.inVillage ? `<span style="color:#3ddc84">🏠 안전지대${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>` : '<span style="color:#ff8a8a">⚔️ PvP 구역 · 다른 플레이어도 공격할 수 있어요</span>')].filter(Boolean).join('');
-  const lib = camps.filter(c => c.liberated).length;
-  let near = null, nd = 1e9; for (const c of camps) if (!c.liberated) { const d = Math.hypot(c.def.x - p.x, c.def.z - p.z); if (d < nd) { nd = d; near = c; } }
-  const obj = `🎯 해방된 캠프 <b>${lib} / ${camps.length}</b>` + (near ? `<small>가장 가까운 곳: ${near.def.name} · ${Math.round(nd)}m · 남은 적 ${near.alive}</small>` : '<small>모든 캠프가 평화로워요! 곧 눈사람들이 돌아와요</small>');
+  let nearN = 0, danger = ''; for (const e of enemies.values()) { const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < 40) { nearN++; if (e.type === 'badsanta') danger = ' · 🎅 나쁜 산타 주의!'; } }
+  const zone = Math.hypot(p.x, p.z), area = zone < W.VILLAGE_SAFE ? '마을' : zone < 110 ? '눈밭 (눈사람·펭귄)' : zone < 170 ? '숲 (나쁜 루돌프 출몰)' : '먼 설원 (나쁜 산타 출몰)';
+  const obj = `⚔️ 처치 <b>${myKills}</b>` + `<small>${area} · 근처 몬스터 ${nearN}${danger}</small>`;
   const sc = `${myScore.toLocaleString()}점`, cb = myCombo >= 3 ? `${myCombo} 콤보 x${Math.min(4, 1 + Math.floor(myCombo / 3) * 0.5).toFixed(1)}` : '';
   const all = [{ id: myId, n: nick, score: myScore, c: colorIdx }, ...[...remotes.values()].map(r => ({ id: r.id, n: r.n, score: r.score, c: r.c }))].sort((a, b) => b.score - a.score);
   const board = `<div>🟢 ${esc(serverName)} · ${all.length}명 접속</div>` + all.slice(0, 5).map((q, i) => `<div class="${q.id === myId ? 'me' : ''}">${i + 1}. <b style="color:${q.id === myId ? 'var(--gold)' : ELF_CSS[q.c % 6]}">${esc(q.n)}</b> ${q.score.toLocaleString()}</div>`).join('');
@@ -1355,12 +1363,6 @@ function buildMinimapBg() {
 function drawMinimap() {
   mctx.clearRect(0, 0, MS, MS); mctx.drawImage(mbg, 0, 0);
   mctx.textAlign = 'center'; mctx.font = 'bold 9px sans-serif';
-  for (const c of camps) {
-    const [x, z] = toMini(c.def.x, c.def.z);
-    mctx.fillStyle = c.liberated ? '#4dff88' : (c.def.boss ? '#ff3b6b' : '#ff7043');
-    mctx.beginPath(); mctx.arc(x, z, c.def.boss ? 7 : 5.5, 0, TAU); mctx.fill();
-    mctx.fillStyle = '#000'; mctx.fillText(c.liberated ? '✓' : (c.def.boss ? '♛' : c.alive), x, z + 3);
-  }
   mctx.fillStyle = '#ffd34d'; for (const g of gifts) if (g && g.on && g.pending <= 0) { const [x, z] = toMini(g.x, g.z); mctx.fillRect(x - 1.5, z - 1.5, 3, 3); }
   mctx.fillStyle = '#5dff9a'; for (const h of heals) if (h.on) { const [x, z] = toMini(h.x, h.z); mctx.fillRect(x - 2.5, z - 0.8, 5, 1.6); mctx.fillRect(x - 0.8, z - 2.5, 1.6, 5); }
   mctx.fillStyle = '#ff5252';
@@ -1396,7 +1398,7 @@ function overlay(kind, err = '') {
   if (!kind) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
   if (kind === 'title') {
-    el.innerHTML = `<div><h1>🎄 크리스마스 눈싸움 3D</h1><h2>못된 눈사람 군단이 눈마을 주변에 캠프 9곳을 세웠어요.<br>캠프를 해방하고, 초록 안전지대 밖에서는 다른 플레이어와도 겨뤄 보세요!</h2>
+    el.innerHTML = `<div><h1>🎄 크리스마스 눈싸움 3D</h1><h2>눈마을 밖 설원에 못된 눈사람, 펭귄, 나쁜 루돌프, 나쁜 산타가 돌아다녀요.<br>멀리 갈수록 강해져요! 초록 안전지대 밖에서는 다른 플레이어와도 겨뤄 보세요.</h2>
       <div class="row"><span class="srv" id="srv"><i></i> 서버 확인 중…</span></div>
       <div class="row"><input id="nick" maxlength="12" value="${esc(nick)}" aria-label="닉네임" placeholder="닉네임"></div>
       <div class="row">${swatchHtml()}</div>
@@ -1510,7 +1512,7 @@ function updateBalls(dt) {
     else if (b.h < 2) b.h = lerp(b.h, BALL_H, Math.min(1, dt * 3));
     const y = heightAt(b.x, b.z) + b.h;
     b.mesh.position.set(b.x, y, b.z);
-    if (b.h <= 0.1 || hitsCollider(b.x, y, b.z, b.r) || Math.abs(b.x) > 140 || Math.abs(b.z) > 140) {
+    if (b.h <= 0.1 || hitsCollider(b.x, y, b.z, b.r) || Math.abs(b.x) > W.HALF || Math.abs(b.z) > W.HALF) {
       killBall(b); burst(b.x, y, b.z, b.r > 0.4 ? 16 : 8, 0xeef4ff, 5, 2);
       if (Math.hypot(b.x - me.x, b.z - me.z) < 30) sfx.splat();
       continue;
@@ -1670,6 +1672,13 @@ function render(dt) {
     g.position.set(e.x, e.y, e.z); g.rotation.y = e.face;
     const hop = e.moving ? Math.abs(Math.sin(e.walk * 1.4)) : 0;
     if (e.type === 'penguin') { m.bd.rotation.z = Math.sin(e.walk * 2) * 0.2; m.bd.rotation.x = e.wind > 0 ? -0.3 : 0; g.position.y += hop * 0.08; }
+    else if (e.type === 'rudolph') {
+      const sw = e.moving ? Math.sin(e.walk * 1.6) * 0.7 : 0;
+      m.legs[0].rotation.x = sw; m.legs[3].rotation.x = sw; m.legs[1].rotation.x = -sw; m.legs[2].rotation.x = -sw;
+      m.head.rotation.x = e.wind > 0 ? -0.5 : Math.sin(time * 2 + e.id) * 0.08;
+      g.position.y += hop * 0.12;
+      m.nose.material.color.setHSL(0, 1, 0.45 + 0.15 * Math.sin(time * 6 + e.id));
+    }
     else {
       m.armR.rotation.x = lerp(m.armR.rotation.x, e.wind > 0 ? 2.5 : Math.sin(e.walk) * 0.3, Math.min(1, dt * 10));
       m.armL.rotation.x = -Math.sin(e.walk) * 0.3;
@@ -1682,12 +1691,12 @@ function render(dt) {
     if (e.wind > 0) {
       if (!e.tele) e.tele = telegraph();
       e.tele.visible = true; e.tele.position.set(e.x, e.y + 0.25, e.z); e.tele.rotation.y = e.face;
-      e.tele.scale.set(e.type === 'boss' ? 2.4 : 1, 1, e.T.maxRange * 0.9); e.tele.material.opacity = 0.2 + 0.25 * (0.5 + 0.5 * Math.sin(time * 20));
+      e.tele.scale.set(e.type === 'badsanta' ? 2 : 1, 1, e.T.maxRange * 0.9); e.tele.material.opacity = 0.2 + 0.25 * (0.5 + 0.5 * Math.sin(time * 20));
     } else if (e.tele) e.tele.visible = false;
     if (state === 'play' && e.hp < e.max) {
       const s = toScreen(new THREE.Vector3(e.x, e.y + e.T.h + 0.6, e.z));
       if (s.ok) {
-        if (!e.bar) { e.bar = document.createElement('div'); e.bar.className = 'hp' + (e.type === 'boss' ? ' boss' : ''); e.bar.innerHTML = '<i></i>'; $('labels').appendChild(e.bar); }
+        if (!e.bar) { e.bar = document.createElement('div'); e.bar.className = 'hp' + (e.type === 'badsanta' ? ' boss' : ''); e.bar.innerHTML = '<i></i>'; $('labels').appendChild(e.bar); }
         e.bar.style.left = s.x + 'px'; e.bar.style.top = s.y + 'px'; e.bar.firstChild.style.width = (e.hp / e.max * 100) + '%'; e.bar.style.display = '';
       } else if (e.bar) e.bar.style.display = 'none';
     } else if (e.bar) e.bar.style.display = 'none';
@@ -1731,7 +1740,6 @@ function render(dt) {
   for (const b of twinkleBulbs) b.m.material.color.copy(b.c).multiplyScalar(0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 3 + b.ph)));
   for (const gl of glows) gl.s.scale.setScalar(gl.base * (0.85 + 0.15 * Math.sin(time * 3 * gl.sp + gl.ph)));
   for (const st of stars) st.rotation.y = time * 0.8;
-  for (const c of camps) if (!c.liberated) c.cloth.rotation.y = Math.sin(time * 3 + c.idx) * 0.3;
   for (let i = 0; i < PMAX; i++) {
     const q = parts[i];
     if (!q || q.life <= 0) { pPos[i * 3 + 1] = -999; continue; }
@@ -1813,7 +1821,6 @@ function animFire(dt) {
   const fill = new THREE.Mesh(new THREE.CircleGeometry(W.VILLAGE_SAFE, 96), new THREE.MeshBasicMaterial({ color: 0x3ddc84, transparent: true, opacity: 0.07, depthWrite: false }));
   fill.rotation.x = -Math.PI / 2; fill.position.y = y - 0.02; fill.renderOrder = 1; scene.add(fill);
 }
-L.camps.forEach(buildCamp);
 buildForest();
 buildMinimapBg();
 me = newPlayer();
@@ -1823,9 +1830,9 @@ for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style
 state = 'title'; overlay(location.protocol === 'file:' ? 'file' : 'title');
 requestAnimationFrame(frame);
 window.__game = {
-  get state() { return state; }, get me() { return me; }, get enemies() { return enemies; }, get camps() { return camps; }, get remotes() { return remotes; },
+  get state() { return state; }, get me() { return me; }, get enemies() { return enemies; }, get remotes() { return remotes; },
   get score() { return myScore; }, get balls() { return balls; }, get myId() { return myId; },
-  teleport(x, z) { me.x = x; me.z = z; }, cam(d) { camDist = d; }, face(a) { me.face = a; },
+  teleport(x, z) { me.x = x; me.z = z; }, showcase(x, z) { [makeSnowman('normal'), makePenguin(), makeRudolph(), makeSanta()].forEach((m, i) => { const px = x - 4.5 + i * 3; m.group.position.set(px, heightAt(px, z), z); if (i === 3) m.group.scale.setScalar(1.25); scene.add(m.group); }); }, cam(d) { camDist = d; }, face(a) { me.face = a; },
   throwAt(x, z) { mouse.has = false; aimTarget = null; aim.set(x, heightAt(x, z), z); me.charging = true; me.charge = 0; me.cd = 0; throwPlayer(); },
   chat(s) { send({ t: 'chat', s }); },
   get voice() { return { on: voice.on, hear: voice.hearOn, peers: [...voice.peers.values()].map(p => ({ id: p.id, st: p.pc.connectionState, sig: p.pc.signalingState })), remotes: [...remotes.values()].map(r => ({ id: r.id, vl: r.vl, vt: r.vt, link: needLink(r) })), myId }; },

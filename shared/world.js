@@ -27,19 +27,8 @@
     return { a, x, z, seats: [-0.65, 0.65].map(o => ({ x: x + tx * o, z: z + tz * o, face: Math.atan2(BONFIRE.x - (x + tx * o), BONFIRE.z - (z + tz * o)) })) };
   });
   const SEATS = BENCHES.flatMap(b => b.seats);
-  const CAMPS = [
-    // 바깥 고리: 마을에서 길이 이어진 큰 캠프
-    { x: 110,  z: -80,  name: '얼음 언덕 캠프',    snow: 2, peng: 1 },
-    { x: -124, z: -84,  name: '소나무 숲 캠프',    snow: 3, peng: 1 },
-    { x: -132, z: 104,  name: '꽁꽁 호수 캠프',    snow: 3, peng: 2 },
-    { x: 124,  z: 116,  name: '눈보라 골짜기 캠프', snow: 4, peng: 3 },
-    { x: 0,    z: -184, name: '눈사람 왕의 요새',  snow: 3, peng: 2, boss: true },
-    // 안쪽 고리: 길 사이 눈밭의 작은 캠프
-    { x: 75,   z: 0,    name: '진저브레드 캠프',   snow: 2, peng: 1, mid: true },
-    { x: 0,    z: 75,   name: '사탕지팡이 캠프',   snow: 2, peng: 1, mid: true },
-    { x: -75,  z: 0,    name: '쿠키 언덕 캠프',    snow: 2, peng: 1, mid: true },
-    { x: -38,  z: -65,  name: '고드름 숲 캠프',    snow: 2, peng: 1, mid: true },
-  ];
+  // 마을에서 뻗어 나가는 길 5개의 끝 지점 (캠프는 없어졌고 길과 가로등은 이정표로 남김)
+  const ROAD_ENDS = [{ x: 110, z: -80 }, { x: -124, z: -84 }, { x: -132, z: 104 }, { x: 124, z: 116 }, { x: 0, z: -184 }];
   const LAKE = { x: -48, z: 150, r: 22 };
 
   function baseH(x, z) {
@@ -48,7 +37,6 @@
   }
   const FLATS = [
     { x: 0, z: 0, inner: 32, outer: 44 },
-    ...CAMPS.map(c => ({ x: c.x, z: c.z, inner: c.boss ? 19 : 14, outer: c.boss ? 30 : 23 })),
     { x: LAKE.x, z: LAKE.z, inner: LAKE.r + 1, outer: LAKE.r + 10, lower: -1.4 },
   ];
   FLATS.forEach(f => { f.h = baseH(f.x, f.z) + (f.lower || 0); });
@@ -62,7 +50,7 @@
     if (e > EDGE) { const k = e - EDGE; h += k * k * 0.06 + k * 0.35; }
     return h;
   }
-  const PATHS = CAMPS.filter(c => !c.mid).map(c => [0, 0, c.x, c.z]);
+  const PATHS = ROAD_ENDS.map(c => [0, 0, c.x, c.z]);
   function pathDist(x, z) {
     let best = 1e9;
     for (const [ax, az, bx, bz] of PATHS) {
@@ -119,7 +107,7 @@
   // ---- 배치 생성 (결정적) ----
   function build() {
     const R = rng(20261225);
-    const data = { trees: [], rocks: [], houses: [], lamps: [], camps: [], friendly: { x: 8, z: 9 } };
+    const data = { trees: [], rocks: [], houses: [], lamps: [], spawns: [], friendly: { x: 8, z: 9 } };
     // 마을
     for (const t of VILLAGE_TREES) addCollider({ t: 'c', x: t.x, z: t.z, r: 4.8 * t.s + 0.3, h: 16 * t.s });
     const wallCols = [0x9b5a3c, 0x6d7fa6, 0x7c9a6a, 0xb07a4a, 0x8d5b8f];
@@ -139,27 +127,6 @@
     for (const l of data.lamps) addCollider({ t: 'c', x: l.x, z: l.z, r: 0.3, h: 5 });
     addCollider({ t: 'c', x: 8, z: 9, r: 1, h: 3 });
     addCollider({ t: 'c', x: BONFIRE.x, z: BONFIRE.z, r: BONFIRE.r, h: 1.6 });
-    // 캠프
-    CAMPS.forEach((def, idx) => {
-      const Rc = def.boss ? 15 : 10, n = def.boss ? 9 : 6, len = def.boss ? 6.5 : 5;
-      const camp = { idx, def, R: Rc, walls: [], igloo: null, towers: [] };
-      for (let i = 0; i < n; i++) {
-        const a = i / n * TAU + R.range(-0.12, 0.12) + idx * 0.4;
-        const x = def.x + Math.cos(a) * Rc, z = def.z + Math.sin(a) * Rc, rot = Math.atan2(-Math.cos(a), -Math.sin(a));
-        camp.walls.push({ x, z, rot, len });
-        addCollider({ t: 'b', x, z, hw: len / 2, hd: 0.6, rot, h: 2.3 });
-      }
-      const ia = idx * 1.3 + 0.8, ix = def.x + Math.cos(ia) * (Rc - 4.5), iz = def.z + Math.sin(ia) * (Rc - 4.5);
-      camp.igloo = { x: ix, z: iz, rot: Math.atan2(def.x - ix, def.z - iz) };
-      addCollider({ t: 'c', x: ix, z: iz, r: 2.5, h: 2.6 });
-      if (def.boss) for (let i = 0; i < 4; i++) {
-        const a = i / 4 * TAU + Math.PI / 4, tx = def.x + Math.cos(a) * (Rc + 2), tz = def.z + Math.sin(a) * (Rc + 2);
-        camp.towers.push({ x: tx, z: tz });
-        addCollider({ t: 'c', x: tx, z: tz, r: 1.6, h: 9 });
-      }
-      addCollider({ t: 'c', x: def.x, z: def.z, r: 0.6, h: 5 });
-      data.camps.push(camp);
-    });
     // 숲과 바위
     const spots = [];
     const ok = (x, z, minD) => {
@@ -177,37 +144,49 @@
       const x = R.range(-LIMIT, LIMIT), z = R.range(-LIMIT, LIMIT);
       if (ok(x, z, 5)) { const r = { x, z, s: R.range(0.6, 1.6) }; data.rocks.push(r); addCollider({ t: 'c', x, z, r: r.s * 1.05, h: r.s * 1.3 }); }
     }
-    // 힐팩: 길 중간과 캠프 바깥, 숲 속 빈터에 고정 배치
+    // 힐팩: 길 중간과 숲 속 빈터에 고정 배치
     data.heals = [];
     const freeSpot = (x, z) => { const o = { x, z }; pushOut(o, 1.6); return o; };
     for (const [, , bx, bz] of PATHS) {
       const Lp = Math.hypot(bx, bz), nx = bx / Lp, nz = bz / Lp;
       data.heals.push(freeSpot(nx * Lp * 0.55 + nz * 2.5, nz * Lp * 0.55 - nx * 2.5));
     }
-    for (const c of CAMPS) {
-      const d = Math.hypot(c.x, c.z), nx = c.x / d, nz = c.z / d, Rr = c.boss ? 24 : 19;
-      data.heals.push(freeSpot(c.x - nx * Rr - nz * 6, c.z - nz * Rr + nx * 6));
-    }
     for (let i = 0; i < 2000 && data.heals.length < 32; i++) {
       const x = R.range(-200, 200), z = R.range(-200, 200);
       if (Math.hypot(x, z) < 40 || data.heals.some(h => Math.hypot(h.x - x, h.z - z) < 30)) continue;
-      if (CAMPS.some(c => Math.hypot(x - c.x, z - c.z) < 20)) continue;
       const o = freeSpot(x, z); if (Math.hypot(o.x - x, o.z - z) < 0.01) data.heals.push(o);
+    }
+    // 필드 몬스터 스폰 지점: 마을에서 멀수록 강한 몬스터. 죽으면 같은 자리에서 다시 생긴다
+    const pick = (d) => {
+      const t = R();
+      if (d < 110) return t < 0.6 ? 'snowman' : 'penguin';
+      if (d < 170) return t < 0.35 ? 'snowman' : t < 0.6 ? 'penguin' : 'rudolph';
+      return t < 0.2 ? 'snowman' : t < 0.35 ? 'penguin' : t < 0.68 ? 'rudolph' : 'badsanta';
+    };
+    for (let i = 0; i < 6000 && data.spawns.length < 75; i++) {
+      const x = R.range(-LIMIT + 12, LIMIT - 12), z = R.range(-LIMIT + 12, LIMIT - 12), d = Math.hypot(x, z);
+      if (d < 48 || onIce(x, z) || data.spawns.some(sp => Math.hypot(sp.x - x, sp.z - z) < 17)) continue;
+      const o = freeSpot(x, z); if (Math.hypot(o.x - x, o.z - z) > 0.01) continue;
+      data.spawns.push({ id: data.spawns.length, x, z, type: pick(d) });
     }
     return data;
   }
   const layout = build();
 
   const World = {
-    TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, CAMPS, LAKE, FLATS, PATHS,
+    TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ROAD_ENDS, LAKE, FLATS, PATHS,
     heightAt, pathDist, onIce, inVillage, pushOut, hitsCollider, colliders, layout,
     BALL_H: 1.35, PLAYER_RANGE: 34, MAX_HP: 100, HEAL_AMOUNT: 35, RELOAD_TIME: 2.0,
     TYPES: {
       snowman: { id: 0, hp: 3, r: 0.9, h: 2.9, speed: 4.2, cool: [1.9, 3.0], wind: 0.65, range: 13, maxRange: 24, spd: 17, err: 0.12, pts: 100, scale: 1, dmg: 15 },
       penguin: { id: 1, hp: 2, r: 0.7, h: 2.0, speed: 8.5, cool: [1.3, 2.1], wind: 0.5, range: 10, maxRange: 20, spd: 20, err: 0.1, pts: 150, scale: 1, dmg: 12 },
-      boss:    { id: 2, hp: 40, r: 1.9, h: 6.3, speed: 3.0, cool: [1.6, 2.4], wind: 0.9, range: 15, maxRange: 30, spd: 15, err: 0.05, pts: 2000, scale: 2.2, dmg: 20 },
+      // 나쁜 루돌프: 빠르게 달려들어 빨간 눈덩이를 빠르게 던진다
+      rudolph:  { id: 2, hp: 4, r: 0.95, h: 2.4, speed: 9.5, cool: [1.0, 1.7], wind: 0.4, range: 11, maxRange: 20, spd: 24, err: 0.08, pts: 220, scale: 1, dmg: 14, ball: 2 },
+      // 나쁜 산타: 덩치 큰 정예. 석탄 눈덩이를 3발씩 부채꼴로 던진다
+      badsanta: { id: 3, hp: 10, r: 1.1, h: 3.6, speed: 3.6, cool: [1.7, 2.5], wind: 0.8, range: 14, maxRange: 26, spd: 18, err: 0.05, pts: 450, scale: 1.25, dmg: 18, ball: 1, spread: 3 },
     },
-    TYPE_BY_ID: ['snowman', 'penguin', 'boss'],
+    TYPE_BY_ID: ['snowman', 'penguin', 'rudolph', 'badsanta'],
+    MOB_RESPAWN: 20, GIFT_RESPAWN: 20,
     // 선물 버프: 체력, 트리플, 왕눈덩이, 스피드, 공격력 2배, 연사 2배, 보호막, 무한 눈덩이
     GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite'],
     BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, VILLAGE_TREES, BENCHES, SEATS, BENCH_TOP, FIRE_HEAL: 12, TEA_TIME: 4.5, SIT_RANGE: 11,
