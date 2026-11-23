@@ -186,17 +186,46 @@
       badsanta: { id: 3, hp: 10, r: 1.1, h: 3.6, speed: 3.6, cool: [1.7, 2.5], wind: 0.8, range: 14, maxRange: 26, spd: 18, err: 0.05, pts: 450, scale: 1.25, dmg: 18, ball: 1, spread: 3 },
     },
     TYPE_BY_ID: ['snowman', 'penguin', 'rudolph', 'badsanta'],
-    MOB_RESPAWN: 20, GIFT_RESPAWN: 20,
+    MOB_RESPAWN: 20, GIFT_RESPAWN: 10, HEAL_RESPAWN: 10,
     DROP_TTL: 30, SANTA_DROPS: 2,
     // 캐릭터 꾸미기 선택지 개수 (화면 쪽 이름 목록과 순서를 맞춘다)
-    LOOK_SLOTS: { a: 6, h: 9, f: 5, k: 4, b: 4, c: 6 },
+    // a 캐릭터, h 머리, e 눈, n 코, m 입, r 귀, k 목, b 등, c 옷 색
+    LOOK_SLOTS: { a: 6, h: 9, e: 7, n: 5, m: 6, r: 6, k: 4, b: 4, c: 6 },
     cleanLook(o) {
       const L = World.LOOK_SLOTS, out = {};
-      for (const key in L) { const v = o && typeof o === 'object' ? o[key] | 0 : 0; out[key] = v >= 0 && v < L[key] ? v : 0; }
+      o = o && typeof o === 'object' ? Object.assign({}, o) : {};
+      if (o.f && o.e == null && o.n == null && o.m == null) {      // 예전 '얼굴' 한 칸 → 눈·코·입으로 옮김
+        if (o.f === 1) o.n = 1; if (o.f === 2) o.m = 1; if (o.f === 3) o.e = 1; if (o.f === 4) o.e = 2;
+      }
+      for (const key in L) { const v = o[key] | 0; out[key] = v >= 0 && v < L[key] ? v : 0; }
       return out;
     },
-    // 선물 버프: 체력, 트리플, 왕눈덩이, 스피드, 공격력 2배, 연사 2배, 보호막, 무한 눈덩이
-    GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite'],
+    // 선물: 체력, 트리플, 왕눈덩이, 스피드, 공격력, 연사, 보호막, 무한 눈덩이 + 공격형(관통, 폭발, 얼음, 저격, 연발)
+    GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite', 'pierce', 'boom', 'ice', 'snipe', 'double'],
+    // 보호막 말고는 시간 제한 없이 쓰러질 때까지 유지, 먹을수록 중첩 (최대 단계)
+    STACK_MAX: { triple: 3, giant: 4, fast: 3, power: 4, rapid: 3, infinite: 1, pierce: 4, boom: 4, ice: 4, snipe: 3, double: 2 },
+    STACK_KEYS: ['triple', 'giant', 'power', 'snipe', 'pierce', 'boom', 'ice', 'double'],   // 눈덩이에 실리는 효과
+    cleanStacks(o) {
+      const out = {}; o = o && typeof o === 'object' ? o : {};
+      for (const k of World.STACK_KEYS) out[k] = Math.max(0, Math.min(World.STACK_MAX[k], o[k] | 0));
+      return out;
+    },
+    // 한 번 던질 때 나가는 눈덩이들: 트리플 단계마다 양옆으로 한 발씩, 연발 단계마다 조금 느린 한 줄 더
+    volley(s) {
+      const out = []; let k = 0;
+      for (let j = 0; j <= s.double; j++) for (let i = -s.triple; i <= s.triple; i++) out.push({ k: k++, a: i * 0.13, sm: 1 - j * 0.17 });
+      return out;
+    },
+    // 눈덩이 능력치 (서버와 화면이 같은 계산을 쓴다)
+    ballStats(s, ch) {
+      const big = (ch ? 1 : 0) + s.giant;
+      return {
+        r: 0.28 + Math.min(big, 3) * 0.14, dmg: (1 + big) * (1 + s.power),
+        spd: (ch ? 40 : 32) * (1 + 0.2 * s.snipe), max: World.PLAYER_RANGE * (1 + 0.4 * s.snipe),
+        pierce: s.pierce, boom: s.boom ? 2.5 + s.boom : 0, ice: s.ice ? 1.5 + s.ice : 0,
+      };
+    },
+    pvpDmg(dmg) { return Math.min(40, Math.round(dmg * World.PVP_DMG)); },
     BUFF_TIME: 15, PVP_DMG: 12, KO_POINTS: 200, EDGE, HALF, BONFIRE, VILLAGE_TREES, BENCHES, SEATS, BENCH_TOP, FIRE_HEAL: 12, TEA_TIME: 4.5, SIT_RANGE: 11,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = World;

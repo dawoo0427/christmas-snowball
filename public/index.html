@@ -479,14 +479,24 @@ const ELF_CSS = ['#ff6b6b', '#6fb3ff', '#c48dff', '#ffb74d', '#4dd0b0', '#ff7fb0
 const LOOK = {
   a: ['요정', '꼬마 산타', '눈사람', '펭귄', '루돌프', '진저브레드'],
   h: ['기본', '요정 모자', '산타 모자', '루돌프 머리띠', '털모자', '귀마개', '왕관', '실크햇', '없음'],
-  f: ['없음', '루돌프 코', '산타 수염', '동그란 안경', '선글라스'],
+  e: ['기본', '동그란 안경', '선글라스', '하트 안경', '별 안경', '외눈 안경', '윙크'],
+  n: ['기본', '루돌프 코', '당근 코', '황금 코', '반창고'],
+  m: ['미소', '산타 수염', '콧수염', '메롱', '사탕 물기', '깜짝 입'],
+  r: ['기본', '요정 귀', '곰 귀', '토끼 귀', '고양이 귀', '방울 귀걸이'],
   k: ['없음', '목도리', '방울 목걸이', '나비넥타이'],
   b: ['없음', '선물 자루', '빨간 망토', '천사 날개'],
 };
 const BASE_HAT = [1, 2, 7, 5, 3, 8];        // 아바타별 '기본' 모자
-const lookKey = l => `${l.a}.${l.h}.${l.f}.${l.k}.${l.b}.${l.c}`;
+const lookKey = l => Object.keys(W.LOOK_SLOTS).map(k => l[k] | 0).join('.');
+let starGeo = null;
+function getStarGeo() {
+  if (starGeo) return starGeo;
+  const sh = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.065 : 0.15, x = Math.cos(a) * r, y = Math.sin(a) * r; if (i) sh.lineTo(x, y); else sh.moveTo(x, y); }
+  return (starGeo = new THREE.ShapeGeometry(sh));
+}
 function makeAvatar(look) {
-  const L = Object.assign({ a: 0, h: 0, f: 0, k: 0, b: 0, c: 0 }, look);
+  const L = W.cleanLook(look);
   const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
   const cloth = toon(ELF_COLORS[L.c % 6]), white = toon(0xffffff), black = toon(0x1a1420), gold = toon(0xffd34d);
   const base = L.a;
@@ -512,16 +522,52 @@ function makeAvatar(look) {
   if (base === 3) mk(Sph(0.5, 16, 12), white, 0, -0.06, 0.2, head).scale.set(1, 0.95, 0.75);      // 펭귄 얼굴 흰 부분
   if (base === 4) mk(Sph(0.3, 14, 10), toon(0xd9a777), 0, -0.14, 0.44, head).scale.set(1.1, 0.8, 0.6); // 루돌프 주둥이
   const fz = base === 5 ? 0.42 : 0.55;
-  eyes(head, 0.04, fz, 0.22); cheeks(head, -0.11, fz - 0.05, 0.36);
-  if (base === 5) { for (const sd of [-1, 1]) mk(Torus(0.12, 0.02, Math.PI), white, sd * 0.22, 0.14, fz + 0.02, head, false); smile(head, -0.18, fz + 0.04, 0.09, 0xffffff); }
-  else if (L.f !== 2) smile(head, -0.16, 0.6);
-  if (base === 2) { const n = mk(Cone(0.08, 0.32, 10), toon(0xff8a1f), 0, -0.05, 0.72, head); n.rotation.x = Math.PI / 2; }
-  else if (base === 3) { const n = mk(Cone(0.09, 0.22, 8), toon(0xffa726), 0, -0.06, 0.66, head); n.rotation.x = Math.PI / 2; }
-  else if (base === 4) { if (L.f !== 1) mk(Sph(0.08, 10, 8), toon(0x3e2614), 0, -0.08, 0.64, head, false); }
-  else if (L.f !== 1) mk(Sph(0.06, 8, 6), toon(0xffb39c), 0, -0.06, 0.62, head, false);
-  if (base === 0) for (const sd of [-1, 1]) { const ear = mk(Cone(0.13, 0.42, 10), P.head, sd * 0.62, 0.04, -0.05, head); ear.rotation.z = -sd * 1.15; }
-  if (base === 1) for (const sd of [-1, 1]) mk(Sph(0.12, 10, 8), P.head, sd * 0.6, 0, 0, head).scale.set(0.6, 1, 1);
-  if (base === 4) for (const sd of [-1, 1]) { const ear = mk(Sph(0.13, 10, 8), P.head, sd * 0.6, 0.14, -0.05, head); ear.scale.set(1.6, 0.5, 0.8); ear.rotation.z = sd * 0.4; }
+  // 눈 (윙크는 한쪽 눈을 감은 모양)
+  if (L.e === 6) {
+    const e1 = mk(Sph(0.1, 12, 10), toon(0x1a1420), 0.22, 0.04, fz, head, false); e1.scale.set(1, 1.35, 0.6);
+    mk(Sph(0.035, 8, 6), shine, 0.25, 0.095, fz + 0.05, head, false);
+    mk(Torus(0.075, 0.022, Math.PI), toon(0x1a1420), -0.22, 0.01, fz + 0.02, head, false);
+  } else eyes(head, 0.04, fz, 0.22);
+  cheeks(head, -0.11, fz - 0.05, 0.36);
+  // 입
+  const my = base === 5 ? -0.18 : -0.16, mz = base === 5 ? fz + 0.04 : 0.6;
+  if (base === 5) for (const sd of [-1, 1]) mk(Torus(0.12, 0.02, Math.PI), white, sd * 0.22, 0.14, fz + 0.02, head, false);
+  if (L.m === 0 || L.m === 2 || L.m === 3 || L.m === 4) smile(head, my, mz, base === 5 ? 0.09 : 0.07, base === 5 ? 0xffffff : 0x5a2230);
+  if (L.m === 1) { mk(Sph(0.42, 16, 12), white, 0, -0.32, 0.3, head).scale.set(1.15, 0.95, 0.65); for (const sd of [-1, 1]) { const ms = mk(Sph(0.13, 10, 8), white, sd * 0.13, -0.14, 0.56, head, false); ms.scale.set(1.5, 0.7, 0.8); } }
+  if (L.m === 2) for (const sd of [-1, 1]) { const ms = mk(Sph(0.09, 10, 8), toon(0x5d4037), sd * 0.1, my + 0.07, mz + 0.02, head, false); ms.scale.set(1.6, 0.6, 0.7); ms.rotation.z = sd * 0.35; }
+  if (L.m === 3) mk(Sph(0.06, 10, 8), toon(0xff6f91), 0.02, my - 0.07, mz - 0.01, head, false).scale.set(1, 0.8, 0.6);
+  if (L.m === 4) {
+    const cane = new THREE.Group(); cane.position.set(0.06, my - 0.05, mz - 0.02); cane.rotation.set(0.5, 0.5, 0); head.add(cane);
+    const stick = mk(Cyl(0.028, 0.028, 0.34, 8), toon(0xe53935), 0, 0, 0.15, cane, false); stick.rotation.x = Math.PI / 2;
+    for (const zz of [0.07, 0.17, 0.27]) { const band = mk(Cyl(0.031, 0.031, 0.035, 8), white, 0, 0, zz, cane, false); band.rotation.x = Math.PI / 2; }
+    const hook = mk(Torus(0.06, 0.028, Math.PI), toon(0xe53935), 0.06, 0, 0.32, cane, false); hook.rotation.set(Math.PI / 2, 0, 0);
+  }
+  if (L.m === 5) mk(Torus(0.045, 0.022), toon(0x5a2230), 0, my - 0.02, mz - 0.02, head, false);
+  // 코 (기본 코는 캐릭터마다 다름)
+  const nz = base === 5 ? 0.46 : base === 4 ? 0.66 : 0.63, defNose = L.n === 0 || L.n === 4;
+  if (base === 2) { if (defNose) { const n = mk(Cone(0.08, 0.32, 10), toon(0xff8a1f), 0, -0.05, 0.72, head); n.rotation.x = Math.PI / 2; } }
+  else if (base === 3) { if (defNose) { const n = mk(Cone(0.09, 0.22, 8), toon(0xffa726), 0, -0.06, 0.66, head); n.rotation.x = Math.PI / 2; } }
+  else if (base === 4) { if (defNose) mk(Sph(0.08, 10, 8), toon(0x3e2614), 0, -0.08, 0.64, head, false); }
+  else if (defNose) mk(Sph(0.06, 8, 6), toon(0xffb39c), 0, -0.06, nz - 0.01, head, false);
+  if (L.n === 1) { mk(Sph(0.12, 12, 10), new THREE.MeshBasicMaterial({ color: 0xff2020 }), 0, -0.07, nz, head, false); glow(0xff3030, 1.2, 0, -0.07, nz + 0.04, head, 2); }
+  if (L.n === 2) { const n = mk(Cone(0.08, 0.34, 10), toon(0xff8a1f), 0, -0.06, nz + 0.12, head, false); n.rotation.x = Math.PI / 2; }
+  if (L.n === 3) { mk(Sph(0.11, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffd34d }), 0, -0.07, nz, head, false); glow(0xffe082, 1.1, 0, -0.07, nz + 0.04, head, 2); }
+  if (L.n === 4) { const bnd = mk(Box(0.3, 0.08, 0.03), toon(0xf1c27d), 0, -0.02, nz + 0.03, head, false); bnd.rotation.z = 0.45; mk(Box(0.08, 0.06, 0.035), toon(0xe0a96d), 0, -0.02, nz + 0.035, head, false); }
+  // 귀 (기본 귀가 있는 캐릭터: 요정·꼬마 산타·루돌프)
+  if (L.r === 0 || L.r === 5) {
+    if (base === 0) for (const sd of [-1, 1]) { const ear = mk(Cone(0.13, 0.42, 10), P.head, sd * 0.62, 0.04, -0.05, head); ear.rotation.z = -sd * 1.15; }
+    if (base === 1) for (const sd of [-1, 1]) mk(Sph(0.12, 10, 8), P.head, sd * 0.6, 0, 0, head).scale.set(0.6, 1, 1);
+    if (base === 4) for (const sd of [-1, 1]) { const ear = mk(Sph(0.13, 10, 8), P.head, sd * 0.6, 0.14, -0.05, head); ear.scale.set(1.6, 0.5, 0.8); ear.rotation.z = sd * 0.4; }
+  }
+  if (L.r === 1) for (const sd of [-1, 1]) { const ear = mk(Cone(0.13, 0.42, 10), P.head, sd * 0.62, 0.04, -0.05, head); ear.rotation.z = -sd * 1.15; }
+  if (L.r === 2) for (const sd of [-1, 1]) { mk(Sph(0.17, 12, 10), P.head, sd * 0.42, 0.5, -0.05, head); mk(Sph(0.09, 10, 8), toon(0xffb3c6), sd * 0.42, 0.5, 0.07, head, false).scale.set(1, 1, 0.5); }
+  if (L.r === 3) for (const sd of [-1, 1]) {
+    const ear = new THREE.Group(); ear.position.set(sd * 0.2, 0.58, -0.08); ear.rotation.z = -sd * 0.22; head.add(ear);
+    mk(Sph(0.12, 12, 10), P.head, 0, 0.26, 0, ear).scale.set(0.8, 2.4, 0.6);
+    mk(Sph(0.06, 10, 8), toon(0xffb3c6), 0, 0.26, 0.05, ear, false).scale.set(0.8, 2.2, 0.4);
+  }
+  if (L.r === 4) for (const sd of [-1, 1]) { const ear = mk(Cone(0.16, 0.32, 4), P.head, sd * 0.36, 0.58, -0.02, head); ear.rotation.set(0, Math.PI / 4, -sd * 0.35); }
+  if (L.r === 5) for (const sd of [-1, 1]) { mk(Cyl(0.012, 0.012, 0.1, 4), gold, sd * 0.58, -0.25, 0.02, head, false); mk(Sph(0.065, 10, 8), gold, sd * 0.58, -0.33, 0.02, head, false); }
   if (base <= 1) for (let i = -2; i <= 2; i++) mk(Sph(0.15, 10, 8), toon(base ? 0xd9d9d9 : 0x8a5a33), i * 0.17, 0.4 - Math.abs(i) * 0.03, 0.42, head, false);
   // 모자
   const hat = L.h === 0 ? BASE_HAT[base] : L.h;
@@ -543,11 +589,19 @@ function makeAvatar(look) {
   if (hat === 5) { mk(new THREE.TorusGeometry(0.62, 0.05, 6, 24, Math.PI), cloth, 0, -0.2, 0, hg).rotation.z = 0; for (const sd of [-1, 1]) mk(Sph(0.22, 12, 10), toon(0xffc0d0), sd * 0.62, -0.38, 0, hg); }
   if (hat === 6) { hg.position.y = 0.5; mk(new THREE.CylinderGeometry(0.32, 0.32, 0.26, 14, 1, true), gold, 0, 0, 0, hg); for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; mk(Cone(0.08, 0.22, 6), gold, Math.cos(a) * 0.32, 0.2, Math.sin(a) * 0.32, hg); mk(Sph(0.05, 6, 4), toon(0xff1744), Math.cos(a) * 0.32, 0.33, Math.sin(a) * 0.32, hg, false); } }
   if (hat === 7) { hg.position.y = 0.45; hg.rotation.z = 0.15; mk(Cyl(0.5, 0.5, 0.05, 18), black, 0, 0, 0, hg); mk(Cyl(0.34, 0.34, 0.55, 18), black, 0, 0.28, 0, hg); mk(Cyl(0.35, 0.35, 0.1, 18), cloth, 0, 0.08, 0, hg); }
-  // 얼굴 장식
-  if (L.f === 1) { mk(Sph(0.12, 12, 10), new THREE.MeshBasicMaterial({ color: 0xff2020 }), 0, -0.07, base === 4 ? 0.66 : 0.64, head, false); glow(0xff3030, 1.2, 0, -0.07, 0.68, head, 2); }
-  if (L.f === 2) { mk(Sph(0.42, 16, 12), white, 0, -0.32, 0.3, head).scale.set(1.15, 0.95, 0.65); for (const sd of [-1, 1]) { const ms = mk(Sph(0.13, 10, 8), white, sd * 0.13, -0.14, 0.56, head, false); ms.scale.set(1.5, 0.7, 0.8); } }
-  if (L.f === 3) { for (const sd of [-1, 1]) mk(new THREE.TorusGeometry(0.13, 0.025, 6, 18), toon(0x6d4c41), sd * 0.22, 0.04, fz + 0.06, head, false); mk(Box(0.16, 0.03, 0.03), toon(0x6d4c41), 0, 0.06, fz + 0.07, head, false); }
-  if (L.f === 4) { for (const sd of [-1, 1]) mk(Box(0.24, 0.15, 0.04), black, sd * 0.2, 0.05, fz + 0.06, head, false); mk(Box(0.62, 0.04, 0.04), black, 0, 0.1, fz + 0.06, head, false); }
+  // 눈 장식
+  if (L.e === 1) { for (const sd of [-1, 1]) mk(new THREE.TorusGeometry(0.13, 0.025, 6, 18), toon(0x6d4c41), sd * 0.22, 0.04, fz + 0.06, head, false); mk(Box(0.16, 0.03, 0.03), toon(0x6d4c41), 0, 0.06, fz + 0.07, head, false); }
+  if (L.e === 2) { for (const sd of [-1, 1]) mk(Box(0.24, 0.15, 0.04), black, sd * 0.2, 0.05, fz + 0.06, head, false); mk(Box(0.62, 0.04, 0.04), black, 0, 0.1, fz + 0.06, head, false); }
+  if (L.e === 3) {
+    const hc = toon(0xff4f8b);
+    for (const sd of [-1, 1]) {
+      for (const hx of [-0.055, 0.055]) mk(Sph(0.075, 10, 8), hc, sd * 0.22 + hx, 0.08, fz + 0.07, head, false).scale.set(1, 1, 0.4);
+      const tip = mk(Cone(0.115, 0.14, 4), hc, sd * 0.22, -0.01, fz + 0.07, head, false); tip.rotation.set(0, Math.PI / 4, Math.PI); tip.scale.z = 0.4;
+    }
+    mk(Box(0.14, 0.025, 0.03), hc, 0, 0.08, fz + 0.08, head, false);
+  }
+  if (L.e === 4) { for (const sd of [-1, 1]) mk(getStarGeo(), gold, sd * 0.22, 0.05, fz + 0.08, head, false); mk(Box(0.14, 0.025, 0.03), gold, 0, 0.07, fz + 0.08, head, false); }
+  if (L.e === 5) { mk(new THREE.TorusGeometry(0.14, 0.022, 6, 18), gold, 0.22, 0.04, fz + 0.07, head, false); const ch = mk(Cyl(0.008, 0.008, 0.42, 4), gold, 0.34, -0.17, fz, head, false); ch.rotation.z = 0.25; }
   // 목 장식
   if (L.k === 1) { mk(Torus(0.44, 0.12), toon(0xd32f2f), 0, 1.15, 0, bd).rotation.x = Math.PI / 2; mk(Box(0.2, 0.5, 0.08), toon(0xd32f2f), 0.25, 0.92, 0.42, bd).rotation.z = 0.2; for (const y of [0.8, 0.98]) mk(Box(0.21, 0.05, 0.09), white, 0.25 + (y - 0.92) * 0.2, y, 0.42, bd, false); }
   if (L.k === 2) { mk(Torus(0.42, 0.04), toon(0xd32f2f), 0, 1.15, 0, bd).rotation.x = Math.PI / 2; mk(Sph(0.11, 10, 8), gold, 0, 1.03, 0.44, bd); }
@@ -639,9 +693,15 @@ function makePenguin() {
 const GIFT_INFO = {
   heal: { color: 0xe53935, label: '체력 +40', c: '#ff8fa3' }, triple: { color: 0x1e88e5, label: '트리플 샷!', c: '#7dd3ff' },
   giant: { color: 0x8e24aa, label: '왕눈덩이!', c: '#d0a8ff' }, fast: { color: 0x43a047, label: '스피드 업!', c: '#8dffa8' },
-  power: { color: 0xff6d00, label: '공격력 2배!', c: '#ffab6b' }, rapid: { color: 0xfdd835, label: '연사 속도 2배!', c: '#fff176' },
+  power: { color: 0xff6d00, label: '공격력 UP!', c: '#ffab6b' }, rapid: { color: 0xfdd835, label: '연사 UP! 눈덩이 수 증가', c: '#fff176' },
   shield: { color: 0x00bcd4, label: '보호막! 피해 절반', c: '#80deea' }, infinite: { color: 0xeceff1, label: '무한 눈덩이!', c: '#ffffff' },
+  pierce: { color: 0x90a4ae, label: '관통 눈덩이!', c: '#cfd8dc' }, boom: { color: 0xb71c1c, label: '폭발 눈덩이!', c: '#ff7043' },
+  ice: { color: 0xb3e5fc, label: '얼음 눈덩이!', c: '#b3e5fc' }, snipe: { color: 0x3949ab, label: '저격 눈덩이!', c: '#9fa8ff' },
+  double: { color: 0xf06292, label: '연발 샷!', c: '#ff9ec4' },
 };
+// 버프 이름 (HUD 표시용), 단계는 ×숫자
+const BUFF_NAME = { triple: ['트리플 샷', '#7dd3ff'], giant: ['왕눈덩이', '#d0a8ff'], fast: ['스피드', '#8dffa8'], power: ['공격력', '#ffab6b'], rapid: ['연사', '#fff176'], infinite: ['무한 눈덩이', '#ffffff'],
+  pierce: ['관통', '#cfd8dc'], boom: ['폭발', '#ff7043'], ice: ['얼음', '#b3e5fc'], snipe: ['저격', '#9fa8ff'], double: ['연발', '#ff9ec4'] };
 // 나쁜 산타: 빨간 옷, 흰 수염, 화난 눈썹, 등에 석탄 자루
 function makeSanta() {
   const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
@@ -835,7 +895,7 @@ const balls = new Map();               // id -> 눈덩이
 let gifts = [], popups = [], cid = 1;
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
-    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, tea: 0, rest: 0, restT: 0, sit: -1, dashT: 0, dashCD: 0, dx: 0, dz: 0,
+    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, slowT: 0, tea: 0, rest: 0, restT: 0, sit: -1, dashT: 0, dashCD: 0, dx: 0, dz: 0,
     walk: 0, throwAnim: 0, regenT: 0, inVillage: true, dead: false, respawnT: 0, squash: 0 };
 }
 
@@ -912,10 +972,11 @@ function onMsg(m) {
     case 'pj': names.set(m.id, { n: m.n, c: m.c, look: m.look || { c: m.c } }); feed(`<span class="sys">${esc(m.n)} 님이 들어왔어요</span>`); break;
     case 'pl': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">${esc(nm.n)} 님이 나갔어요</span>`); names.delete(m.id); const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } closePeer(m.id); break; }
     case 's': applySnapshot(m); break;
-    case 'b': if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || (m.o === 'e' ? 15 : 1), pv: !!m.pv, kind: m.k | 0 }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
+    case 'b': if (m.o !== 'e') { if (!balls.has(m.id + '.0')) spawnVolley({ id: m.id, owner: 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, ch: m.ch, st: m.st, pv: m.pv }); break; }
+      if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || (m.o === 'e' ? 15 : 1), pv: !!m.pv, kind: m.k | 0 }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
     case 'be': { const b = balls.get(m.id); if (b) { killBall(b); burst(m.x, m.y, m.z, b.r > 0.4 ? 16 : 8, 0xeef4ff, 5, 2); } break; }
     case 'hit': {
-      const b = balls.get(m.id); if (b) killBall(b);
+      const b = balls.get(m.id); if (b && !m.go) killBall(b);
       burst(m.x, m.y, m.z, 14, 0xffffff, 7);
       const e = enemies.get(m.e);
       if (e) { e.flash = 0.15; e.squash = 0.4; }
@@ -925,6 +986,11 @@ function onMsg(m) {
         if (m.k) myKills++;
       }
       if (m.k && e) killEnemy(e);
+      break;
+    }
+    case 'boom': {               // 폭발 눈덩이
+      burst(m.x, heightAt(m.x, m.z) + 1, m.z, 36, 0xff7043, m.r * 2.2); burst(m.x, heightAt(m.x, m.z) + 1, m.z, 16, 0xffd34d, m.r * 1.5);
+      if (Math.hypot(m.x - me.x, m.z - me.z) < 40) { tone(90, 0.35, 'sawtooth', 0.07, -50); if (m.by === myId) shake = Math.max(shake, 0.35); }
       break;
     }
     case 'gift': {
@@ -937,7 +1003,7 @@ function onMsg(m) {
       if (appliedHits.has(m.id)) break;
       appliedHits.add(m.id); if (appliedHits.size > 400) appliedHits.clear();
       const b = balls.get(m.id); if (b) killBall(b);
-      if (!me.dead && me.inv <= 0 && !me.inVillage) hurtMe(m.a | 0, m.by);
+      if (!me.dead && me.inv <= 0 && !me.inVillage) { hurtMe(m.a | 0, m.by); if (m.ic) me.slowT = Math.max(me.slowT, +m.ic); }
       break;
     }
     case 'drop': {
@@ -1002,11 +1068,11 @@ function applySnapshot(m) {
   for (const [id, r] of remotes) if (!seen.has(id)) { removeRemote(r); remotes.delete(id); closePeer(id); }
   const ids = new Set();
   for (const row of m.e) {
-    const [id, tid, x, z, face, hp, max, wind, flash, moving] = row;
+    const [id, tid, x, z, face, hp, max, wind, flash, moving, slow] = row;
     ids.add(id);
     let e = enemies.get(id);
     if (!e) e = addEnemy(id, TYPE_BY_ID[tid] || 'snowman', x, z, face);
-    e.tx = x; e.tz = z; e.tface = face; e.hp = hp; e.max = max; e.wind = wind; e.moving = moving;
+    e.tx = x; e.tz = z; e.tface = face; e.hp = hp; e.max = max; e.wind = wind; e.moving = moving; e.slow = slow;
     if (flash) e.flash = Math.max(e.flash, 0.1);
   }
   for (const [id, e] of enemies) if (!ids.has(id)) { removeEnemy(e); enemies.delete(id); }
@@ -1351,7 +1417,7 @@ function startTea() {
 }
 function startReload() {
   if (state !== 'play' || me.dead || me.reloadT > 0 || me.ammo >= me.maxAmmo) return;
-  me.reloadT = W.RELOAD_TIME * (me.rapid > 0 ? 0.5 : 1); me.charging = false; sfx.reload();
+  me.reloadT = W.RELOAD_TIME / (1 + me.rapid); me.charging = false; sfx.reload();
 }
 function dash() {
   if (state !== 'play' || me.dead || me.dashCD > 0) return;
@@ -1413,28 +1479,35 @@ function aimDir() {
 function throwPlayer() {
   const p = me; p.charging = false;
   if (!canThrow() || p.cd > 0) return;
-  const ch = p.charge >= 0.5, gi = p.giant > 0, big = (ch ? 1 : 0) + (gi ? 1 : 0), tri = p.triple > 0;
+  const ch = p.charge >= 0.5 ? 1 : 0, st = myStacks();
   const dir = aimDir(); p.face = Math.atan2(dir.x, dir.z);
   const ox = p.x + dir.x * 0.6, oz = p.z + dir.z * 0.6, oh = (p.y - heightAt(p.x, p.z)) + BALL_H;
   const myCid = cid++;
-  const angs = tri ? [-0.15, 0, 0.15] : [0];
-  angs.forEach((a, k) => {
-    const c = Math.cos(a), s = Math.sin(a);
-    spawnBall({ id: `${myId}.${myCid}.${k}`, owner: 'me', x: ox, z: oz, h: oh, dx: dir.x * c + dir.z * s, dz: -dir.x * s + dir.z * c, spd: ch ? 40 : 32, r: 0.28 + big * 0.14, pv: !p.inVillage });
-  });
-  send({ t: 'th', cid: myCid, x: r2(ox), z: r2(oz), h: r2(oh), dx: r2(dir.x), dz: r2(dir.z), ch: ch ? 1 : 0, gi: gi ? 1 : 0, tri: tri ? 1 : 0, pw: p.power > 0 ? 1 : 0 });
+  spawnVolley({ id: `${myId}.${myCid}`, owner: 'me', from: myId, x: ox, z: oz, h: oh, dx: dir.x, dz: dir.z, ch, st, pv: !p.inVillage });
+  send({ t: 'th', cid: myCid, x: r2(ox), z: r2(oz), h: r2(oh), dx: r2(dir.x), dz: r2(dir.z), ch, st });
   if (p.infinite <= 0) p.ammo--;
-  p.cd = p.rapid > 0 ? 0.07 : 0.15; p.throwAnim = 0.25; sfx.throw();
+  p.cd = Math.max(0.05, 0.15 / (1 + p.rapid)); p.throwAnim = 0.25; sfx.throw();
   if (p.ammo === 0) startReload();
 }
 const ballGeo = Sph(1, 14, 10);
+const ballMatFx = { boom: toon(0xff7043), ice: toon(0x9fe3ff), pierce: toon(0xb0bec5) };
 const ballMatP = toon(0xffffff), ballMatE = toon(0xbcd4ff), ballMatK = [ballMatE, toon(0x37373f), toon(0xff6b6b)];
 function spawnBall(o) {
-  const mesh = new THREE.Mesh(ballGeo, o.owner === 'enemy' ? (ballMatK[o.kind | 0] || ballMatE) : ballMatP); mesh.scale.setScalar(o.r); mesh.castShadow = true; scene.add(mesh);
+  const mesh = new THREE.Mesh(ballGeo, o.owner === 'enemy' ? (ballMatK[o.kind | 0] || ballMatE) : (ballMatFx[o.fx] || ballMatP)); mesh.scale.setScalar(o.r); mesh.castShadow = true; scene.add(mesh);
   const b = { ...o, mesh, dist: 0, max: o.owner === 'enemy' ? 34 : PLAYER_RANGE, fall: 0 };
   mesh.position.set(b.x, heightAt(b.x, b.z) + b.h, b.z);
   balls.set(b.id, b);
   return b;
+}
+// 한 번 던진 눈덩이들을 펼친다 (서버와 같은 규칙: world.js volley/ballStats)
+function spawnVolley(o) {
+  const st = W.cleanStacks(o.st), bs = W.ballStats(st, o.ch);
+  const fx = st.boom ? 'boom' : st.ice ? 'ice' : st.pierce ? 'pierce' : '';
+  for (const v of W.volley(st)) {
+    const c = Math.cos(v.a), sn = Math.sin(v.a);
+    const b = spawnBall({ id: `${o.id}.${v.k}`, owner: o.owner, from: o.from, x: o.x, z: o.z, h: o.h, dx: o.dx * c + o.dz * sn, dz: -o.dx * sn + o.dz * c, spd: bs.spd * v.sm, r: bs.r, dmg: bs.dmg, pv: !!o.pv, pierce: bs.pierce, ice: bs.ice, fx });
+    b.max = bs.max;
+  }
 }
 function killBall(b) { scene.remove(b.mesh); balls.delete(b.id); }
 function giveBuff(kind, g) {
@@ -1443,11 +1516,15 @@ function giveBuff(kind, g) {
   if (g) burst(g.x, heightAt(g.x, g.z) + 1, g.z, 26, info.color, 7);
   popup(p.x, p.y + 3.2, p.z, info.label, info.c);
   if (kind === 'heal') p.hp = Math.min(p.maxHp, p.hp + 40);
-  if (kind === 'triple') p.triple = 15;
-  if (kind === 'giant') p.giant = 15;
-  if (kind === 'fast') p.fast = W.BUFF_TIME;
-  if (kind === 'power' || kind === 'rapid' || kind === 'shield' || kind === 'infinite') p[kind] = W.BUFF_TIME;
+  else if (kind === 'shield') p.shield = W.BUFF_TIME;
+  else if (W.STACK_MAX[kind]) {          // 시간 제한 없이 쓰러질 때까지 유지, 먹을수록 중첩
+    if (p[kind] < W.STACK_MAX[kind]) p[kind]++;
+    const lv = p[kind], mx = W.STACK_MAX[kind];
+    if (mx > 1) popup(p.x, p.y + 3.9, p.z, lv >= mx ? `${BUFF_NAME[kind][0]} MAX!` : `${BUFF_NAME[kind][0]} ×${lv}`, info.c);
+    if (kind === 'rapid') { p.maxAmmo = 10 * (1 + p.rapid); p.ammo = p.maxAmmo; p.reloadT = 0; }   // 연사: 최대 눈덩이 수도 늘어남
+  }
 }
+const myStacks = () => W.cleanStacks(me);
 
 // ============================================================
 //  HUD
@@ -1469,11 +1546,10 @@ let hudCache = '';
 function updateHUD() {
   const p = me;
   const h = `${Math.max(0, Math.round(p.hp))} / ${p.maxHp}`;
-  const ammo = Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('') + (p.reloadT > 0 ? `<span>눈 뭉치는 중… ${p.reloadT.toFixed(1)}초</span>` : '');
-  const buffs = [p.triple > 0 && `<span style="color:#7dd3ff">트리플 샷 ${p.triple.toFixed(0)}s</span>`, p.giant > 0 && `<span style="color:#d0a8ff">왕눈덩이 ${p.giant.toFixed(0)}s</span>`,
-    p.fast > 0 && `<span style="color:#8dffa8">스피드 ${p.fast.toFixed(0)}s</span>`, p.power > 0 && `<span style="color:#ffab6b">공격력 2배 ${p.power.toFixed(0)}s</span>`,
-    p.rapid > 0 && `<span style="color:#fff176">연사 2배 ${p.rapid.toFixed(0)}s</span>`, p.shield > 0 && `<span style="color:#80deea">보호막 ${p.shield.toFixed(0)}s</span>`,
-    p.infinite > 0 && `<span style="color:#ffffff">무한 눈덩이 ${p.infinite.toFixed(0)}s</span>`, voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, p.tea > 0 && '<span style="color:#ffcc80">☕ 티타임 중… 따뜻해요</span>', p.rest && !p.dead && `<span style="color:#ffb74d">🔥 모닥불${p.sit >= 0 ? ' 앞에 앉아' : '에서'} 쉬는 중${p.hp < p.maxHp ? ' · 체력 회복' : ''}</span>`,
+  const ammo = (p.infinite ? '<span style="color:#fff;margin:0">❄ 무한</span>' : p.maxAmmo > 20 ? `<span style="color:#fff;margin:0">❄ ${p.ammo} / ${p.maxAmmo}</span>` : Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('')) + (p.reloadT > 0 ? `<span>눈 뭉치는 중… ${p.reloadT.toFixed(1)}초</span>` : '');
+  const stk = Object.keys(BUFF_NAME).filter(k => p[k] > 0).map(k => `<b style="color:${BUFF_NAME[k][1]};font-weight:400">${BUFF_NAME[k][0]}${W.STACK_MAX[k] > 1 ? ' ×' + p[k] : ''}</b>`).join(' · ');
+  const buffs = [stk && `<span style="max-width:240px">${stk}</span>`, p.shield > 0 && `<span style="color:#80deea">보호막 ${p.shield.toFixed(0)}s</span>`, p.slowT > 0 && '<span style="color:#b3e5fc">🧊 얼어서 느려짐</span>',
+    voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, p.tea > 0 && '<span style="color:#ffcc80">☕ 티타임 중… 따뜻해요</span>', p.rest && !p.dead && `<span style="color:#ffb74d">🔥 모닥불${p.sit >= 0 ? ' 앞에 앉아' : '에서'} 쉬는 중${p.hp < p.maxHp ? ' · 체력 회복' : ''}</span>`,
     !p.dead && (p.inVillage ? `<span style="color:#3ddc84">🏠 안전지대${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>` : '<span style="color:#ff8a8a">⚔️ PvP 구역 · 다른 플레이어도 공격할 수 있어요</span>')].filter(Boolean).join('');
   let nearN = 0, danger = ''; for (const e of enemies.values()) { const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < 40) { nearN++; if (e.type === 'badsanta') danger = ' · 🎅 나쁜 산타 주의!'; } }
   const zone = Math.hypot(p.x, p.z), area = zone < W.VILLAGE_SAFE ? '마을' : zone < 110 ? '눈밭 (눈사람·펭귄)' : zone < 170 ? '숲 (나쁜 루돌프 출몰)' : '먼 설원 (나쁜 산타 출몰)';
@@ -1564,7 +1640,7 @@ function overlay(kind, err = '') {
     check(); healthTimer = setInterval(check, 5000);
   }
   if (kind === 'custom') {
-    const slots = [['a', '캐릭터'], ['h', '머리'], ['f', '얼굴'], ['k', '목'], ['b', '등']];
+    const slots = [['a', '캐릭터'], ['h', '머리'], ['e', '눈'], ['n', '코'], ['m', '입'], ['r', '귀'], ['k', '목'], ['b', '등']];
     el.innerHTML = `<div><h1>👕 캐릭터 꾸미기</h1>
       <div class="custom"><canvas id="pv" width="440" height="520" aria-label="캐릭터 미리보기"></canvas><div>
         ${slots.map(([key, label]) => `<div class="slot"><b>${label}</b><div class="chips">${LOOK[key].map((n, i) => `<button data-k="${key}" data-v="${i}" class="${myLook[key] === i ? 'sel' : ''}">${n}</button>`).join('')}</div></div>`).join('')}
@@ -1594,7 +1670,7 @@ function overlay(kind, err = '') {
 }
 function lookSummary(l) {
   const hat = l.h === 0 ? LOOK.h[BASE_HAT[l.a]] : LOOK.h[l.h];
-  return [LOOK.a[l.a], hat !== '없음' && hat, l.f && LOOK.f[l.f], l.k && LOOK.k[l.k], l.b && LOOK.b[l.b]].filter(Boolean).join(' · ');
+  return [LOOK.a[l.a], hat !== '없음' && hat, l.e && LOOK.e[l.e], l.n && LOOK.n[l.n], l.m && LOOK.m[l.m], l.r && LOOK.r[l.r], l.k && LOOK.k[l.k], l.b && LOOK.b[l.b]].filter(Boolean).join(' · ');
 }
 // 꾸미기 미리보기: 작은 별도 3D 화면에서 내 캐릭터가 천천히 돈다
 const pv = { r: null, scene: null, cam: null, model: null, raf: 0 };
@@ -1633,7 +1709,7 @@ function updateMe(dt) {
   if (p.sit >= 0 && (il > 0.15 || keys[' '] || p.charging || p.dashT > 0)) standUp();
   if (il > 0.15 || p.charging || p.dashT > 0 || !p.onGround) p.tea = 0;
   const w = screenToWorldDir(ix, iz);
-  const speed = (p.fast > 0 ? 12 : 8.5) * (p.charging ? 0.65 : 1);
+  const speed = (8.5 + 3.5 * p.fast) * (p.charging ? 0.65 : 1) * (p.slowT > 0 ? 0.55 : 1);
   const accel = onIce(p.x, p.z) && p.onGround ? 1.6 : 14;
   p.vx = lerp(p.vx, w.x * speed, Math.min(1, accel * dt)); p.vz = lerp(p.vz, w.z * speed, Math.min(1, accel * dt));
   if (p.dashT > 0) { p.dashT -= dt; p.vx = p.dx * 28; p.vz = p.dz * 28; if (Math.random() < 0.6) burst(p.x, p.y + 0.2, p.z, 1, 0xffffff, 2, 1); }
@@ -1653,7 +1729,7 @@ function updateMe(dt) {
   if (p.charging) p.charge = Math.min(1, p.charge + dt);
   p.cd = Math.max(0, p.cd - dt); p.dashCD = Math.max(0, p.dashCD - dt);
   if (p.reloadT > 0) { p.reloadT -= dt; if (p.reloadT <= 0) p.ammo = p.maxAmmo; }
-  p.inv = Math.max(0, p.inv - dt); for (const k of ['triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite']) p[k] = Math.max(0, p[k] - dt);
+  p.inv = Math.max(0, p.inv - dt); p.shield = Math.max(0, p.shield - dt); p.slowT = Math.max(0, p.slowT - dt);
   p.throwAnim = Math.max(0, p.throwAnim - dt);
   p.inVillage = inVillage(p.x, p.z);
   if (p.tea > 0) { p.tea -= dt; if (!p.inVillage) p.tea = 0; if (p.tea > 0 && Math.random() < dt * 2) burst(p.x, p.y + 2.0, p.z, 1, 0xffffff, 0.4, 2); }
@@ -1711,11 +1787,16 @@ function updateBalls(dt) {
       if (b.owner === 'remote' && b.pv && !b.ghost && !me.dead && !me.inVillage && Math.hypot(b.x - me.x, b.z - me.z) < 0.6 + b.r && y > me.y - 0.1 && y < me.y + 2.4) {
         killBall(b); burst(b.x, y, b.z, 18, 0xffffff, 7);
         send({ t: 'hurt', id: b.id });
-        if (!appliedHits.has(b.id)) { appliedHits.add(b.id); if (me.inv <= 0) hurtMe((b.dmg || 1) * W.PVP_DMG, b.from); }
+        if (!appliedHits.has(b.id)) { appliedHits.add(b.id); if (me.inv <= 0) { hurtMe(W.pvpDmg(b.dmg || 1), b.from); if (b.ice) me.slowT = Math.max(me.slowT, b.ice); } }
         continue;
       }
       for (const e of enemies.values()) {
-        if (Math.hypot(b.x - e.x, b.z - e.z) < e.T.r + b.r && y > e.y - 0.3 && y < e.y + e.T.h) { b.mesh.visible = false; b.ghost = true; if (b.owner === 'me') send({ t: 'hc', id: b.id, e: e.id }); break; }
+        if (b.hitE && b.hitE.has(e.id)) continue;
+        if (Math.hypot(b.x - e.x, b.z - e.z) < e.T.r + b.r && y > e.y - 0.3 && y < e.y + e.T.h) {
+          if (b.owner === 'me') send({ t: 'hc', id: b.id, e: e.id });
+          (b.hitE || (b.hitE = new Set())).add(e.id);
+          if (b.hitE.size > (b.pierce | 0)) { b.mesh.visible = false; b.ghost = true; break; }
+        }
       }
       if (!b.ghost && b.pv) for (const r of remotes.values()) {
         if (r.dead || r.id === b.from || inVillage(r.x, r.z)) continue;
@@ -1887,7 +1968,8 @@ function render(dt) {
     const k = e.squash + (e.moving ? (hop - 0.5) * -0.12 : Math.sin(time * 3 + e.id) * 0.025) + (e.wind > 0 ? 0.08 : 0);
     m.bd.scale.set(1 + k * 0.5, 1 - k, 1 + k * 0.5);
     m.held.visible = e.wind > 0;
-    m.body.emissive.setHex(e.flash > 0 ? 0xff5566 : 0x000000);
+    m.body.emissive.setHex(e.flash > 0 ? 0xff5566 : e.slow ? 0x2a6a9a : 0x000000);
+    if (e.slow && Math.random() < 0.15) burst(e.x, e.y + e.T.h * 0.6, e.z, 1, 0xb3e5fc, 1.5, 1);
     if (e.wind > 0) {
       if (!e.tele) e.tele = telegraph();
       e.tele.visible = true; e.tele.position.set(e.x, e.y + 0.25, e.z); e.tele.rotation.y = e.face;
@@ -2036,6 +2118,7 @@ window.__game = {
   teleport(x, z) { me.x = x; me.z = z; }, showcase(x, z) { [makeSnowman('normal'), makePenguin(), makeRudolph(), makeSanta()].forEach((m, i) => { const px = x - 4.5 + i * 3; m.group.position.set(px, heightAt(px, z), z); if (i === 3) m.group.scale.setScalar(1.25); scene.add(m.group); }); }, cam(d) { camDist = d; }, face(a) { me.face = a; },
   throwAt(x, z) { mouse.has = false; aimTarget = null; aim.set(x, heightAt(x, z), z); me.charging = true; me.charge = 0; me.cd = 0; throwPlayer(); },
   chat(s) { send({ t: 'chat', s }); },
+  buff(k, n = 1) { for (let i = 0; i < n; i++) giveBuff(k); }, avatars(x, z, looks) { looks.forEach((l, i) => { const m = makeAvatar(l); const px = x - (looks.length - 1) * 0.9 + i * 1.8; m.group.position.set(px, heightAt(px, z), z); scene.add(m.group); }); },
   get voice() { return { on: voice.on, hear: voice.hearOn, peers: [...voice.peers.values()].map(p => ({ id: p.id, st: p.pc.connectionState, sig: p.pc.signalingState })), remotes: [...remotes.values()].map(r => ({ id: r.id, vl: r.vl, vt: r.vt, link: needLink(r) })), myId }; },
 };
 }

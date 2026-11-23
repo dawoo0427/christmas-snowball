@@ -155,7 +155,7 @@ const recentBalls = new Map();   // 방금 사라진 플레이어 눈덩이 (늦
 const HIT_SLACK = 4;             // 명중 신고 허용 오차 (통신 지연과 화면 보간 차이)
 const drops = new Map(); let nextDrop = 1;
 const heals = W.layout.heals.map(h => ({ x: h.x, z: h.z, on: true, respawn: 0 }));
-const HEAL_RESPAWN = 25;
+const HEAL_RESPAWN = W.HEAL_RESPAWN;
 
 function broadcast(obj, except) { const s = JSON.stringify(obj), buf = Buffer.from(s); for (const p of players.values()) if (p !== except && p.ready) p.conn.frame(1, buf); }
 function addEnemy(type, x, z, spawn) {
@@ -234,22 +234,22 @@ function handle(p, m) {
       p.dead = dead;
       break;
     }
-    case 'th': {                 // 눈덩이 던지기
+    case 'th': {                 // 눈덩이 던지기: 한 번 던질 때 메시지 하나, 여러 발은 각자 화면이 같은 규칙으로 펼친다
       if (p.dead || p.tokens < 1) return;
       p.tokens -= 1;
       const x = num(m.x, p.x), z = num(m.z, p.z);
       if (Math.hypot(x - p.x, z - p.z) > 8) return;
       let dx = num(m.dx), dz = num(m.dz); const dl = Math.hypot(dx, dz); if (dl < 0.5) return; dx /= dl; dz /= dl;
-      const ch = !!m.ch, gi = !!m.gi, big = (ch ? 1 : 0) + (gi ? 1 : 0), pw = m.pw ? 2 : 1;
+      const ch = m.ch ? 1 : 0, st = W.cleanStacks(m.st), bs = W.ballStats(st, ch);
       const pv = !inVillage(p.x, p.z);          // 안전지대 밖에서 던진 눈덩이만 플레이어를 맞힐 수 있다
-      const angs = m.tri ? [-0.15, 0, 0.15] : [0];
       const h = clamp(num(m.h, W.BALL_H), 0.5, 8), cid = m.cid | 0;
-      angs.forEach((a, k) => {
-        const c = Math.cos(a), s = Math.sin(a), bx = dx * c + dz * s, bz = -dx * s + dz * c;
-        const b = { id: `${p.id}.${cid}.${k}`, owner: p.id, x, z, h, dx: bx, dz: bz, spd: ch ? 40 : 32, r: 0.28 + big * 0.14, dmg: (1 + big) * pw, pv, dist: 0, max: W.PLAYER_RANGE, fall: 0, hit: false };
+      for (const v of W.volley(st)) {
+        const c = Math.cos(v.a), sn = Math.sin(v.a), bx = dx * c + dz * sn, bz = -dx * sn + dz * c;
+        const b = { id: `${p.id}.${cid}.${v.k}`, owner: p.id, x, z, h, dx: bx, dz: bz, spd: bs.spd * v.sm, r: bs.r, dmg: bs.dmg, pv, dist: 0, max: bs.max, fall: 0, hit: false,
+          pierce: bs.pierce, boom: bs.boom, ice: bs.ice, hitE: null };
         balls.set(b.id, b);
-        broadcast({ t: 'b', id: b.id, o: p.id, x: r1(x), z: r1(z), h: r1(h), dx: r2(bx), dz: r2(bz), s: b.spd, r: r2(b.r), dm: b.dmg, pv: pv ? 1 : 0 }, p);
-      });
+      }
+      broadcast({ t: 'b', id: `${p.id}.${cid}`, o: p.id, x: r2(x), z: r2(z), h: r2(h), dx: r2(dx), dz: r2(dz), ch, st, pv: pv ? 1 : 0 }, p);
       break;
     }
     case 'hc': {                 // 내 화면에서 맞은 걸 신고 → 서버가 거리만 확인하고 바로 적용 (공격 씹힘 방지)
@@ -258,14 +258,14 @@ function handle(p, m) {
       if (m.e) {
         const e = enemies.get(m.e | 0);
         if (!e || Math.hypot(b.x - e.x, b.z - e.z) > e.T.r + b.r + HIT_SLACK) break;
-        b.hit = true; balls.delete(id); recentBalls.delete(id); applyHit(e, b);
+        hitEnemy(b, e);
       } else if (m.v) {
         const v = players.get(m.v | 0);
         if (!v || v === p || v.dead || !b.pv || inVillage(v.x, v.z) || Math.hypot(b.x - v.x, b.z - v.z) > 0.6 + b.r + HIT_SLACK) break;
         b.hit = true; balls.delete(id); recentBalls.delete(id);
         broadcast({ t: 'be', id, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z) });
         v.lastHitBy = p.id; v.lastHitAt = Date.now(); p.score += 5;
-        v.conn.send({ t: 'dmg', id, a: b.dmg * W.PVP_DMG, by: p.id });
+        v.conn.send({ t: 'dmg', id, a: W.pvpDmg(b.dmg), by: p.id, ic: b.ice || 0 });
       }
       break;
     }
@@ -341,6 +341,8 @@ function targets() {
 function aiEnemy(e, dt, tg) {
   const T = e.T;
   e.flash = Math.max(0, e.flash - dt);
+  const sl = e.slow > 0 ? 0.4 : 1; if (e.slow > 0) e.slow -= dt;     // 얼음 눈덩이에 맞으면 느려진다
+  dt *= sl;
   e.x += e.kx * dt; e.z += e.kz * dt; const damp = Math.pow(0.004, dt); e.kx *= damp; e.kz *= damp;
   let tgt = null, d = 1e9;
   for (const t of tg) { const dd = Math.hypot(t.x - e.x, t.z - e.z); if (dd < d) { d = dd; tgt = t; } }
@@ -397,7 +399,26 @@ function endBall(b, silent) {
   if (!b.hit && b.owner !== 'e') { const p = players.get(b.owner); if (p) p.combo = 0; }
   if (!silent || b.owner === 'e') broadcast({ t: 'be', id: b.id, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z) });
 }
-function applyHit(e, b) {
+// 플레이어 눈덩이가 몬스터에 맞음: 관통(여러 마리), 폭발(주변 피해), 얼음(느려짐) 처리
+function hitEnemy(b, e) {
+  if (!b.hitE) b.hitE = new Set();
+  if (b.hitE.has(e.id)) return;
+  b.hitE.add(e.id);
+  const goOn = b.hitE.size <= b.pierce;
+  if (!goOn) { b.hit = true; balls.delete(b.id); recentBalls.delete(b.id); }
+  if (b.ice) e.slow = Math.max(e.slow || 0, b.ice);
+  applyHit(e, b, goOn);
+  if (b.boom) {
+    const ex = e.x, ez = e.z, sd = Math.ceil(b.dmg * 0.6);
+    broadcast({ t: 'boom', x: r1(ex), z: r1(ez), r: r1(b.boom), by: b.owner });
+    for (const o of [...enemies.values()]) {
+      if (o === e || Math.hypot(o.x - ex, o.z - ez) > b.boom + o.T.r) continue;
+      if (b.ice) o.slow = Math.max(o.slow || 0, b.ice);
+      applyHit(o, { ...b, id: b.id + 's', dmg: sd, x: o.x, z: o.z }, true);
+    }
+  }
+}
+function applyHit(e, b, goOn) {
   const p = players.get(b.owner);
   e.hp -= b.dmg; e.flash = 0.15; e.aggro = true;
   e.kx = b.dx * 10 / e.T.scale; e.kz = b.dz * 10 / e.T.scale;
@@ -409,8 +430,8 @@ function applyHit(e, b) {
     pts = e.hp <= 0 ? Math.round(e.T.pts * mult) : 10;
     p.score += pts; if (e.hp <= 0) p.kills++;
   }
-  broadcast({ t: 'hit', id: b.id, e: e.id, by: b.owner, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z), k: e.hp <= 0 ? 1 : 0, pts, cb: p ? p.combo : 0 });
-  if (e.hp <= 0) {
+  broadcast({ t: 'hit', id: b.id, e: e.id, by: b.owner, x: r1(b.x), y: r1(heightAt(b.x, b.z) + b.h), z: r1(b.z), k: e.hp <= 0 ? 1 : 0, pts, cb: p ? p.combo : 0, go: goOn ? 1 : 0 });
+  if (e.hp <= 0 && enemies.has(e.id)) {
     enemies.delete(e.id);
     if (e.spawn) { e.spawn.eid = 0; e.spawn.timer = W.MOB_RESPAWN; }
     if (e.type === 'badsanta') for (let i = 0; i < W.SANTA_DROPS; i++) {   // 나쁜 산타는 선물을 떨어뜨린다
@@ -422,7 +443,7 @@ function applyHit(e, b) {
 }
 function step(dt) {
   const active = players.size > 0;
-  for (const p of players.values()) p.tokens = Math.min(12, p.tokens + dt * 14);
+  for (const p of players.values()) p.tokens = Math.min(20, p.tokens + dt * 24);
   if (active) {
     const tg = targets();
     for (const e of enemies.values()) aiEnemy(e, dt, tg);
@@ -442,8 +463,9 @@ function step(dt) {
     if (b.h <= 0.1 || Math.abs(b.x) > W.HALF || Math.abs(b.z) > W.HALF || hitsCollider(b.x, y, b.z, b.r)) { endBall(b, b.owner !== 'e'); continue; }
     if (b.owner !== 'e') {
       for (const e of enemies.values()) {
+        if (b.hitE && b.hitE.has(e.id)) continue;
         if (Math.hypot(b.x - e.x, b.z - e.z) < e.T.r + b.r && y > heightAt(e.x, e.z) - 0.3 && y < heightAt(e.x, e.z) + e.T.h) {
-          b.hit = true; balls.delete(b.id); applyHit(e, b); break;
+          hitEnemy(b, e); if (b.hit) break;
         }
       }
     }
@@ -472,7 +494,7 @@ function snapshot() {
   for (const p of players.values()) {
     if (!p.ready || p.conn.congested) continue;
     const near = es.filter(e => Math.abs(e.x - p.x) < 110 && Math.abs(e.z - p.z) < 110)
-      .map(e => [e.id, e.T.id, r1(e.x), r1(e.z), r2(e.face), e.hp, e.max, e.wind > 0 ? 1 : 0, e.flash > 0 ? 1 : 0, e.moving]);
+      .map(e => [e.id, e.T.id, r1(e.x), r1(e.z), r2(e.face), e.hp, e.max, e.wind > 0 ? 1 : 0, e.flash > 0 ? 1 : 0, e.moving, e.slow > 0 ? 1 : 0]);
     p.conn.send({ t: 's', p: ps, e: near, g: tick % 10 === 0 ? gs : undefined, h: tick % 10 === 0 ? hs : undefined, cb: p.combo });
   }
 }
