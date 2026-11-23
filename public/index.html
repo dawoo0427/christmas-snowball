@@ -412,6 +412,16 @@ const twinkleBulbs = [];
 const stars = [];
 // 집: 벽 4면 + 열리는 문 + 실내 가구. 안에 들어가면 벽·지붕이 반투명해진다
 const houseObjs = [];
+const roofGeos = new Map();
+function roofGeo(half, h, len) {      // 삼각 단면(폭 half*2, 높이 h)을 len 만큼 밀어낸 지붕
+  const k = half + ',' + h + ',' + len;
+  if (!roofGeos.has(k)) {
+    const sh = new THREE.Shape(); sh.moveTo(-half, 0); sh.lineTo(half, 0); sh.lineTo(0, h); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: len, bevelEnabled: false }); g.translate(0, 0, -len / 2); g.computeVertexNormals();
+    roofGeos.set(k, g);
+  }
+  return roofGeos.get(k);
+}
 function buildHouse({ x, z, rot, col }, idx) {
   const g = new THREE.Group(); g.position.set(x, heightAt(x, z) - 0.3, z); g.rotation.y = rot; scene.add(g);
   const shell = [];
@@ -421,9 +431,11 @@ function buildHouse({ x, z, rot, col }, idx) {
   S(Box(7, 4.3, 0.3), wallM, 0, 2.15, -2.85);
   for (const sd of [-1, 1]) { S(Box(0.3, 4.3, 6), wallM, sd * 3.35, 2.15, 0); S(Box(3.5 - H.door, 4.3, 0.3), wallM, sd * (3.5 + H.door) / 2, 2.15, 2.85); }
   S(Box(H.door * 2, 1.3, 0.3), wallM, 0, 3.65, 2.85);
-  const roof = S(Cyl(4.3, 4.3, 8, 3), own(0xf2f6ff), 0, 5.6, 0); roof.rotation.z = Math.PI / 2; roof.scale.set(0.62, 1, 1);
-  const eave = S(Cyl(4.05, 4.05, 7.8, 3), own(0x7a2e22), 0, 5.4, 0); eave.rotation.z = Math.PI / 2; eave.scale.set(0.62, 1, 1);
-  S(Box(0.9, 2.4, 0.9), own(0x8a3b2e), 2, 7.2, -1.2);
+  // 박공지붕: 앞뒤로 경사, 용마루는 가로(x) 방향. 벽 높이 4.3 위에 바로 얹는다
+  S(roofGeo(3.75, 2.5, 8.0), own(0x7a2e22), 0, 4.25, 0).rotation.y = Math.PI / 2;
+  S(roofGeo(3.62, 2.42, 7.8), own(0xf2f6ff), 0, 4.42, 0).rotation.y = Math.PI / 2;
+  S(Box(0.8, 2.0, 0.8), own(0x8a3b2e), 2, 6.4, -1.3);
+  S(Box(1.0, 0.25, 1.0), own(0xf2f6ff), 2, 7.45, -1.3);
   const winMat = own(0xffc766, { em: 0xffb347, emI: 1.4 });
   for (const sx of [-2.3, 2.3]) { S(Box(1.2, 1.1, 0.34), winMat, sx, 2.6, 2.85, false); glow(0xffb347, 2.2, sx, 2.6, 3.3, g); }
   for (const sx of [-3.35, 3.35]) S(Box(0.34, 1.1, 1.3), winMat, sx, 2.6, 0, false);
@@ -911,7 +923,20 @@ function telegraph() {
 //  사운드
 // ============================================================
 let ac = null, musicOn = store.get('snowball-music', '1') === '1', sfxOn = store.get('snowball-sfx', '1') === '1';
-function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); }
+// 아이폰 무음 모드에서는 Web Audio 소리가 막힌다. 마이크를 켜면 통화 모드라 들리던 것.
+// 처음 터치할 때 무음 <audio> 를 반복 재생하고 오디오 세션을 '재생'으로 바꿔서, 마이크 없이도 바로 들리게 한다
+const SILENT = 'data:audio/wav;base64,UklGRvQHAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YdAHAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+let unlockEl = null;
+function setAudioSession() {
+  try { if (navigator.audioSession) navigator.audioSession.type = voice.stream ? 'play-and-record' : 'playback'; } catch (e) {}
+}
+function unlockSound() {
+  setAudioSession();
+  if (!unlockEl) { unlockEl = document.createElement('audio'); unlockEl.src = SILENT; unlockEl.loop = true; unlockEl.playsInline = true; unlockEl.setAttribute('playsinline', ''); unlockEl.hidden = true; document.body.appendChild(unlockEl); }
+  if (unlockEl.paused) unlockEl.play().catch(() => {});
+  for (const peer of voice.peers.values()) if (peer.el && peer.el.paused && peer.el.srcObject) peer.el.play().catch(() => {});
+}
+function audio() { unlockSound(); if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); }
 function tone(f, dur, type = 'sine', vol = 0.15, slide = 0, when = 0, music = false) {
   if (!ac || (!music && !sfxOn)) return;
   const o = ac.createOscillator(), g = ac.createGain(), t = when || ac.currentTime;
@@ -1039,6 +1064,7 @@ addEventListener('pagehide', () => { if (net.open) { net.leaving = true; try { s
 // 1초마다 생존 신호 (다른 탭을 보는 중에도 연결 유지)
 setInterval(() => { if (net.open && state === 'play') send({ t: 'hb' }); }, 1000);
 // 휴대폰에서 앱으로 돌아왔을 때 끊겨 있으면 바로 다시 연결
+document.addEventListener('visibilitychange', () => { if (!document.hidden && unlockEl) { unlockEl.play().catch(() => {}); if (ac && ac.state !== 'running') ac.resume(); } });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state === 'disconnected') { state = 'connecting'; connect(); } });
 function resetWorld() {
   for (const d of drops.values()) scene.remove(d.model.group); drops.clear();
@@ -1256,6 +1282,7 @@ async function setVoice(on) {
     voice.busy = true; syncSettings();
     await loadIce();
     try {
+      try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) {}
       voice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     } catch (e) {
       voice.busy = false; syncSettings();
@@ -1271,7 +1298,7 @@ async function setVoice(on) {
     voice.on = false;
     sendVoiceFlags(); resetPeers();
     if (voice.stream) voice.stream.getTracks().forEach(t => t.stop());
-    voice.stream = null; voice.analyser = null; voice.talking = false;
+    voice.stream = null; voice.analyser = null; voice.talking = false; setAudioSession();
     $('micBtn').hidden = true;
   }
   store.set('snowball-voice', voice.on ? '1' : '0');
