@@ -45,6 +45,16 @@ node server.js
 
 > 무료 플랜은 15분 동안 아무도 접속하지 않으면 서버가 잠듭니다. 다음 사람이 접속할 때 깨어나는 데 30초~1분 정도 걸리고, 그동안 월드 상태(몬스터, 점수)가 초기화됩니다. 항상 켜두려면 유료 플랜(Starter)을 쓰세요.
 
+### 대기 화면과 잠들지 않게 하기
+
+- **대기 화면 (GitHub Pages)**: `docs/index.html` 이 우리 디자인의 대기 화면입니다. 서버 `/health` 를 2초마다 확인하다가 준비되면 게임으로 자동 이동합니다.
+  - 켜는 법: GitHub 저장소 → Settings → Pages → Source: *Deploy from a branch*, Branch: `main` / `/docs` → Save
+  - 주소: `https://dawoo0427.github.io/christmas-snowball/` (친구들에게는 이 주소를 공유)
+- **잠들지 않게 하기**
+  - UptimeRobot(무료)에서 `https://christmas-snowball.onrender.com/health` 를 5분 간격 HTTP 모니터로 등록
+  - 보조로 `.github/workflows/keepalive.yml` 이 10분마다 같은 주소를 호출합니다 (GitHub 사정에 따라 몇 분 늦어질 수 있음)
+  - Render 무료 플랜은 한 달 750시간까지라 서버 1개를 계속 켜 둬도 범위 안입니다
+
 ## 설정 (환경 변수)
 
 | 이름 | 기본값 | 설명 |

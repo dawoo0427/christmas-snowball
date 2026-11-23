@@ -1,0 +1,13 @@
+# Render 무료 서버가 잠들지 않도록 10분마다 /health 를 호출한다 (UptimeRobot 보조용)
+name: keep-alive
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping game server
+        run: curl -fsS --max-time 90 --retry 2 https://christmas-snowball.onrender.com/health

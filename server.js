@@ -41,7 +41,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname === '/health') {
-    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' });   // GitHub Pages 대기 화면에서 확인
     return res.end(JSON.stringify({ ok: true, server: SERVER_NAME, players: players.size, max: MAX_PLAYERS }));
   }
   const rel = STATIC[url.pathname];
