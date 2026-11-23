@@ -254,6 +254,7 @@
     },
     TYPE_BY_ID: ['snowman', 'penguin', 'rudolph', 'badsanta', 'seal'],
     BOSS_RESPAWN: 90, BOSS_FIRST: 20,
+    SLED: { cost: 50000, speed: 3 },      // 눈썰매: 50,000점에 구매, 타면 이동 속도 3배(스피드 아이템과 곱해짐), 타는 동안 공격 불가
     MOB_RESPAWN: 20, GIFT_RESPAWN: 10, HEAL_RESPAWN: 10,
     DROP_TTL: 30, SANTA_DROPS: 2,
     // 캐릭터 꾸미기 선택지 개수 (화면 쪽 이름 목록과 순서를 맞춘다)

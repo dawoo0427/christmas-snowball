@@ -235,7 +235,7 @@ function handle(p, m) {
       p.x = clamp(num(m.x, p.x), -W.LIMIT, W.LIMIT); p.z = clamp(num(m.z, p.z), -W.LIMIT, W.LIMIT);
       p.y = clamp(num(m.y, p.y), -20, 60); p.face = num(m.f, p.face);
       p.vx = clamp(num(m.vx), -40, 40); p.vz = clamp(num(m.vz), -40, 40);
-      p.flags = m.fl | 0; p.hp = clamp(m.hp | 0, 0, W.MAX_HP);
+      p.flags = (m.fl | 0) & (p.sled ? ~0 : ~2048);     // 2048 = 눈썰매 타는 중 (산 사람만) p.hp = clamp(m.hp | 0, 0, W.MAX_HP);
       const dead = !!m.d;
       if (dead && !p.dead) {
         p.score = Math.max(0, p.score - 300); p.combo = 0;
@@ -247,7 +247,7 @@ function handle(p, m) {
       break;
     }
     case 'th': {                 // 눈덩이 던지기: 한 번 던질 때 메시지 하나, 여러 발은 각자 화면이 같은 규칙으로 펼친다
-      if (p.dead || p.tokens < 1) return;
+      if (p.dead || p.tokens < 1 || (p.flags & 2048)) return;      // 썰매 타는 동안은 공격 불가
       p.tokens -= 1;
       const x = num(m.x, p.x), z = num(m.z, p.z);
       if (Math.hypot(x - p.x, z - p.z) > 8) return;
@@ -333,6 +333,14 @@ function handle(p, m) {
       if (why) { p.conn.send({ t: 'igfail', why }); break; }
       p.score -= next.cost; ig.lv++; W.igDims(ig);
       broadcast({ t: 'ig', i: igRow(ig), cost: next.cost, up: 1 });
+      break;
+    }
+    case 'buy': {                // 눈썰매 구매 (50,000점 차감, 접속해 있는 동안 계속 보유)
+      if (m.item !== 'sled') break;
+      if (p.sled) { p.conn.send({ t: 'bought', item: 'sled' }); break; }
+      if (p.score < W.SLED.cost) { p.conn.send({ t: 'buyfail', why: `${W.SLED.cost.toLocaleString()}점이 필요해요` }); break; }
+      p.score -= W.SLED.cost; p.sled = true;
+      p.conn.send({ t: 'bought', item: 'sled', cost: W.SLED.cost });
       break;
     }
     case 'fish': {               // 얼음낚시 시작/그만
@@ -523,7 +531,7 @@ function applyHit(e, b, goOn) {
     for (let i = 0; i < nDrop; i++) {
       const a = rand(0, TAU), rr = e.T.boss ? 2.6 : 1.6, o = { x: e.x + Math.cos(a) * rr, z: e.z + Math.sin(a) * rr }; pushOut(o, 0.8);
       const d = { id: nextDrop++, x: o.x, z: o.z, k: W.GIFT_KINDS[Math.floor(Math.random() * W.GIFT_KINDS.length)], ttl: W.DROP_TTL };
-      drops.set(d.id, d); broadcast({ t: 'drop', id: d.id, x: r1(d.x), z: r1(d.z), k: d.k, by: p ? p.id : 0 });
+      drops.set(d.id, d); broadcast({ t: 'drop', id: d.id, x: r1(d.x), z: r1(d.z), k: d.k, by: p ? p.id : 0, src: e.type, n: i });
     }
   }
 }
