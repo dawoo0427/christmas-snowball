@@ -32,7 +32,8 @@
   #teaBtn:active { transform:translateY(2px); box-shadow:0 1px 0 #3e2723; }
   #teaBtn.on { background:#3ddc84e6; box-shadow:0 3px 0 #1b7a45; }
   body.playing.safe #teaBtn { display:block; }
-  body.touch #teaBtn { bottom:calc(84px + env(safe-area-inset-bottom,0px)); font-size:16px; padding:8px 14px; }
+  body.touch #teaBtn { bottom:calc(88px + env(safe-area-inset-bottom,0px)); font-size:13px; padding:5px 10px; border-width:1.5px; border-radius:16px; box-shadow:0 2px 0 #3e2723; }
+  body.touch #teaBtn small { display:none; }
   #gear { position:fixed; right:calc(202px + env(safe-area-inset-right,0px)); top:calc(12px + env(safe-area-inset-top,0px)); width:42px; height:42px; border-radius:50%; border:2px solid #ffffff60;
     background:#0b1430c8; color:#fff; font-size:20px; cursor:pointer; display:none; z-index:3; }
   body.playing #gear { display:block; }
@@ -167,6 +168,7 @@
     body.touch #feed { bottom:calc(132px + env(safe-area-inset-bottom,0px)); }
     #hpbar { width:min(170px, 40vw); }
   }
+  @media (max-width:380px) { #objective { left:calc(12px + env(safe-area-inset-left,0px)); transform:none; max-width:calc(100vw - 120px); overflow:hidden; text-overflow:ellipsis; } }
   @media (prefers-reduced-motion: reduce) { #toast, #hurt, #feed div { transition:none; } }
 </style>
 </head>
