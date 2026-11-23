@@ -49,7 +49,8 @@ node server.js
 
 - **대기 화면 (GitHub Pages)**: `docs/index.html` 이 우리 디자인의 대기 화면입니다. 서버 `/health` 를 2초마다 확인하다가 준비되면 게임으로 자동 이동합니다.
   - 켜는 법: GitHub 저장소 → Settings → Pages → Source: *Deploy from a branch*, Branch: `main` / `/docs` → Save
-  - 주소: `https://dawoo0427.github.io/christmas-snowball/` (친구들에게는 이 주소를 공유)
+  - 공유 주소: **https://snowball-fight.github.io** (`snowball-fight/snowball-fight.github.io` 저장소, 이 `docs/index.html` 을 복사해 둔 것)
+  - 예전 주소 `https://dawoo0427.github.io/christmas-snowball/` 도 같은 화면으로 계속 동작
 - **잠들지 않게 하기**
   - UptimeRobot(무료)에서 `https://christmas-snowball.onrender.com/health` 를 5분 간격 HTTP 모니터로 등록
   - 보조로 `.github/workflows/keepalive.yml` 이 10분마다 같은 주소를 호출합니다 (GitHub 사정에 따라 몇 분 늦어질 수 있음)
