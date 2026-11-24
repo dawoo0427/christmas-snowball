@@ -82,7 +82,7 @@ node server.js
 | `PORT` | 3000 | 서버 포트 (호스팅 업체가 자동으로 넣어줌) |
 | `SERVER_NAME` | 눈마을 | 서버 이름 앞부분 (뒤에 '1서버', '2서버'… 가 붙음) |
 | `SERVER_COUNT` | 3 | 하나의 프로그램 안에서 돌리는 독립 서버(월드) 수 (최대 9) |
-| `MAX_PLAYERS` | 500 | 서버(월드) 하나당 최대 동시 접속자 수 |
+| `MAX_PER_SERVER` | 500 | 서버(월드) 하나당 최대 동시 접속자 수 (예전 `MAX_PLAYERS` 는 더 이상 쓰지 않음) |
 | `START_SCORE` | 0 | 테스트용 시작 점수 (실제 서버에서는 설정하지 않음) |
 | `TURN_KEY_ID` | (없음) | Cloudflare Realtime TURN 키 ID. 보이스 채팅 중계용 |
 | `TURN_KEY_API_TOKEN` | (없음) | Cloudflare Realtime TURN API 토큰. **절대 코드에 넣지 말고 환경변수로만** |

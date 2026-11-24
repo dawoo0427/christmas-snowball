@@ -10,7 +10,7 @@ const W = require('./shared/world.js');
 const PORT = +process.env.PORT || 3000;
 const SERVER_NAME = (process.env.SERVER_NAME || '눈마을').replace(/\s*\d+\s*서버\s*$/, '') || '눈마을';          // 서버 이름 앞부분 (뒤에 '1서버' '2서버' … 가 붙는다)
 const SERVER_COUNT = Math.max(1, Math.min(9, +process.env.SERVER_COUNT || 3));   // 하나의 프로그램 안에서 돌리는 독립 월드 수
-const MAX_PLAYERS = +process.env.MAX_PLAYERS || 500;               // 서버(월드) 하나당 최대 인원
+const MAX_PLAYERS = +process.env.MAX_PER_SERVER || 500;            // 서버(월드) 하나당 최대 인원 (예전 MAX_PLAYERS 는 '전체 인원' 뜻이라 쓰지 않음)
 const TICK = 30, SNAP_EVERY = 2;                   // 30Hz 시뮬레이션, 15Hz 상태 전송
 // Cloudflare Realtime TURN (보이스 채팅 중계). 키는 환경변수에만 두고 브라우저에는 임시 자격 증명만 준다.
 const TURN_KEY_ID = process.env.TURN_KEY_ID || '';

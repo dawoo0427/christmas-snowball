@@ -11,7 +11,7 @@ services:
         value: 눈마을
       - key: SERVER_COUNT
         value: "3"
-      - key: MAX_PLAYERS
+      - key: MAX_PER_SERVER
         value: "500"
       - key: TURN_KEY_ID
         sync: false
