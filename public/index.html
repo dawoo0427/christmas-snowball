@@ -174,7 +174,8 @@
   #overlay .custom .chips button.t0 { border-color:#4fc3f7; color:#d4f1ff; }
   #overlay .custom .chips button.t1 { border-color:#b388ff; color:#eedcff; }
   #overlay .custom .chips button.t2 { border-color:#ffca28; color:#fff0c2; background:linear-gradient(135deg,#ffca2830,#b388ff30,#4fc3f730); }
-  #overlay .custom .chips button.sel.t0, #overlay .custom .chips button.sel.t1, #overlay .custom .chips button.sel.t2 { background:#2f6fd6; }
+  #overlay .custom .chips button.t3 { border-color:#ff4d6d; color:#ffd6de; background:linear-gradient(135deg,#0d1b3a,#3a0d1f); box-shadow:0 0 8px #ff4d6d66; }
+  #overlay .custom .chips button.sel.t0, #overlay .custom .chips button.sel.t1, #overlay .custom .chips button.sel.t2, #overlay .custom .chips button.sel.t3 { background:#2f6fd6; }
   #overlay .custom .chips button small { font-size:10px; opacity:.85; }
   #overlay .custom .chips button.lock { opacity:.42; }
   #overlay .custom .chips button.cdot { width:36px; height:36px; padding:0; border-radius:50%; border:3px solid #ffffff40; }
@@ -611,6 +612,16 @@ function buildFood(sk) {
     mk(sg, auroraBasic, 0, 0, 0, g, false);
     mk(Sph(0.3, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, 0, 0, g, false);
     auroraSprite(3.4, 0, 0, 0, g);
+  } else if (sk === 6) {  // 얼음대마왕 무기: 어두운 얼음 삼지창 (가운데 날 + 양옆 굽은 날 + 빛나는 핵)
+    const dm = new THREE.MeshStandardMaterial({ color: 0x1b2a4a, emissive: 0x0d47a1, emissiveIntensity: 0.6, roughness: 0.25, metalness: 0.6, flatShading: true });
+    const bl = new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x29b6f6, emissiveIntensity: 1.1, roughness: 0.1, metalness: 0.3, flatShading: true });
+    const tri = new THREE.Group(); tri.rotation.x = Math.PI / 2; g.add(tri);      // 앞(+z)을 향하게
+    mk(Cyl(0.09, 0.09, 1.3, 6), dm, 0, -0.55, 0, tri, false);
+    mk(new THREE.OctahedronGeometry(0.28, 0), dm, 0, 0.12, 0, tri, false).scale.set(1.6, 0.8, 0.8);
+    mk(Cone(0.17, 0.95, 5), bl, 0, 0.75, 0, tri, false);
+    for (const sd of [-1, 1]) { const sb = mk(Cone(0.12, 0.62, 5), bl, sd * 0.36, 0.45, 0, tri, false); sb.rotation.z = -sd * 0.35; }
+    mk(Sph(0.13, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3355 }), 0, 0.12, 0.2, tri, false);
+    glow(0x4dd0ff, 2.6, 0, 0, 0.4, g); glow(0xff3355, 0.9, 0, 0, 0.1, g);
   } else {                // 붕어빵: 물고기 모양 반죽 + 꼬리 + 눈 + 비늘 줄
     const gold = toon(0xd9a04a), dark = toon(0x8a5520);
     mk(Sph(0.7, 14, 10), gold, 0, 0, 0.15, g, false).scale.set(0.55, 0.75, 1.25);
@@ -621,15 +632,15 @@ function buildFood(sk) {
   }
   return g;
 }
-const FOOD_SK = { 0: '눈덩이', 1: '호떡', 2: '붕어빵', 3: '얼음 결정탄', 4: '황금 방울탄', 5: '오로라 별탄' };
-const FOOD_EMOJI = { 0: '❄️', 1: '🥞', 2: '🐟', 3: '💎', 4: '🔔', 5: '🌟' };
+const FOOD_SK = { 0: '눈덩이', 1: '호떡', 2: '붕어빵', 3: '얼음 결정탄', 4: '황금 방울탄', 5: '오로라 별탄', 6: '얼음대마왕 무기' };
+const FOOD_EMOJI = { 0: '❄️', 1: '🥞', 2: '🐟', 3: '💎', 4: '🔔', 5: '🌟', 6: '🔱' };
 // 전설 장비용 무지개빛 재료 (매 프레임 색이 천천히 바뀜, 모든 전설 장비가 함께 씀)
 const auroraBasic = new THREE.MeshBasicMaterial({ color: 0xb388ff });
 const auroraGlow = new THREE.SpriteMaterial({ map: glowTex, color: 0xb388ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 });
 const auroraEm = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, roughness: 0.35, metalness: 0.2, emissive: 0x3a2a88, flatShading: true });
 const auroraSprite = (size, x, y, z, parent) => { const sp = new THREE.Sprite(auroraGlow); sp.scale.set(size, size, 1); sp.position.set(x, y, z); parent.add(sp); return sp; };
-const TIER_CSS = ['#4fc3f7', '#b388ff', '#ffca28'];
-const RARE_EMOJI = { s3: '💎', s4: '🔔', s5: '🌟', h9: '❄️', h10: '👑', h11: '😇', p1: '🧣', p2: '🦸', p3: '🌌' };
+const TIER_CSS = ['#4fc3f7', '#b388ff', '#ffca28', '#ff4d6d'];
+const RARE_EMOJI = { s3: '💎', s4: '🔔', s5: '🌟', h9: '❄️', h10: '👑', h11: '😇', p1: '🧣', p2: '🦸', p3: '🌌', s6: '🔱', h12: '😈', p4: '🦇' };
 function starShape(ro, ri) {
   const sh = new THREE.Shape();
   for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? ri : ro, x = Math.cos(a) * r, y = Math.sin(a) * r; if (i) sh.lineTo(x, y); else sh.moveTo(x, y); }
@@ -904,10 +915,11 @@ function buyFood() {
   if (!mySkins.has(tk.sk) && myScore < W.FOOD_COST) { toast(t('{0} {1}은 {2}점이에요', [tk.emoji, t(tk.food), W.FOOD_COST.toLocaleString()]), t('지금 {0}점', [myScore.toLocaleString()]), 2); return; }
   send({ t: 'food', k: tk.k });
 }
+const WEAPONS = [0, 1, 2, 3, 4, 5, 6];
 const ownWeapon = k => k === 0 || mySkins.has(k) || myRares.has('s' + k);
 function cycleSkin() {
   if (state !== 'play' || !me || !hasWeapons()) return;
-  const opts = [0, 1, 2, 3, 4, 5].filter(ownWeapon), next = opts[(opts.indexOf(mySkin) + 1) % opts.length];
+  const opts = WEAPONS.filter(ownWeapon), next = opts[(opts.indexOf(mySkin) + 1) % opts.length];
   send({ t: 'skin', sk: next });
 }
 const nearGiant = () => me && Math.hypot(me.x - GT.x, me.z - GT.z) < GT.near;
@@ -972,14 +984,14 @@ const ELF_CSS = ['#ff6b6b', '#6fb3ff', '#c48dff', '#ffb74d', '#4dd0b0', '#ff7fb0
 // 순서는 shared/world.js 의 LOOK_SLOTS 개수와 맞춘다
 const LOOK = {
   a: [t("요정"), t("꼬마 산타"), t("눈사람"), t("펭귄"), t("빨간코 순록"), t("진저브레드")],
-  h: [t("기본"), t("요정 모자"), t("산타 모자"), t("루돌프 머리띠"), t("털모자"), t("귀마개"), t("왕관"), t("실크햇"), t("없음"), t("눈꽃 티아라"), t("얼음 여왕 왕관"), t("오로라 후광관")],
+  h: [t("기본"), t("요정 모자"), t("산타 모자"), t("루돌프 머리띠"), t("털모자"), t("귀마개"), t("왕관"), t("실크햇"), t("없음"), t("눈꽃 티아라"), t("얼음 여왕 왕관"), t("오로라 후광관"), t("얼음대마왕 투구")],
   e: [t("기본"), t("동그란 안경"), t("선글라스"), t("하트 안경"), t("별 안경"), t("외눈 안경"), t("윙크")],
   n: [t("기본"), t("루돌프 코"), t("당근 코"), t("황금 코"), t("반창고")],
   m: [t("미소"), t("산타 수염"), t("콧수염"), t("메롱"), t("사탕 물기"), t("깜짝 입")],
   r: [t("기본"), t("요정 귀"), t("곰 귀"), t("토끼 귀"), t("고양이 귀"), t("방울 귀걸이")],
   k: [t("없음"), t("목도리"), t("방울 목걸이"), t("나비넥타이")],
   b: [t("없음"), t("선물 자루"), t("빨간 망토"), t("천사 날개")],
-  p: [t("없음"), t("눈꽃 망토"), t("황금 산타 망토"), t("오로라 망토")],
+  p: [t("없음"), t("눈꽃 망토"), t("황금 산타 망토"), t("오로라 망토"), t("얼음대마왕 망토")],
 };
 const BASE_HAT = [1, 2, 7, 5, 3, 8];        // 아바타별 '기본' 모자
 const lookKey = l => Object.keys(W.LOOK_SLOTS).map(k => l[k] | 0).join('.');
@@ -1103,6 +1115,20 @@ function makeAvatar(look) {
     auroraSprite(1.5, 0, 0.55, -0.05, hg);
     const st = mk(getStarGeo(), auroraBasic, 0, 0.08, 0.31, hg, false); st.scale.setScalar(1.1);
   }
+  if (hat === 12) {     // 얼음대마왕 투구: 어두운 강철 투구 + 크게 휜 얼음 뿔 + 이마 가시 + 붉은 보석
+    hg.position.y = 0.2; hg.rotation.x = -0.08;
+    const steel = new THREE.MeshStandardMaterial({ color: 0x1b2a4a, roughness: 0.3, metalness: 0.7, emissive: 0x081a3a, flatShading: true });
+    const ic = new THREE.MeshStandardMaterial({ color: 0xbff2ff, emissive: 0x29b6f6, emissiveIntensity: 0.9, roughness: 0.1, flatShading: true });
+    mk(new THREE.SphereGeometry(0.68, 18, 10, 0, TAU, 0, Math.PI / 2), steel, 0, 0.02, 0, hg);
+    mk(Torus(0.67, 0.06), ic, 0, 0.04, 0, hg, false).rotation.x = Math.PI / 2;
+    for (let i = 0; i < 5; i++) { const a = (i - 2) * 0.32; const sp = mk(Cone(0.07, 0.3 + (i === 2 ? 0.22 : 0), 5), ic, Math.sin(a) * 0.5, 0.5 - Math.abs(i - 2) * 0.06, Math.cos(a) * 0.38, hg, false); sp.rotation.x = 0.35; }
+    for (const sd of [-1, 1]) {
+      const horn = new THREE.Group(); horn.position.set(sd * 0.55, 0.32, 0); hg.add(horn);
+      for (let k = 0; k < 4; k++) { const seg = mk(Cone(0.13 - k * 0.025, 0.36, 6), k < 2 ? steel : ic, sd * (0.12 + k * 0.16), 0.08 + k * 0.2 - k * k * 0.02, 0, horn, false); seg.rotation.z = -sd * (1.1 - k * 0.35); }
+    }
+    mk(new THREE.OctahedronGeometry(0.1, 0), new THREE.MeshBasicMaterial({ color: 0xff2244 }), 0, 0.22, 0.66, hg, false);
+    glow(0xff3355, 0.9, 0, 0.22, 0.7, hg); glow(0x4dd0ff, 1.6, 0, 0.6, 0, hg);
+  }
   if (hat === 7) { hg.position.y = 0.45; hg.rotation.z = 0.15; mk(Cyl(0.5, 0.5, 0.05, 18), black, 0, 0, 0, hg); mk(Cyl(0.34, 0.34, 0.55, 18), black, 0, 0.28, 0, hg); mk(Cyl(0.35, 0.35, 0.1, 18), cloth, 0, 0.08, 0, hg); }
   // 눈 장식
   if (L.e === 1) { for (const sd of [-1, 1]) mk(new THREE.TorusGeometry(0.13, 0.025, 6, 18), toon(0x6d4c41), sd * 0.22, 0.04, fz + 0.06, head, false); mk(Box(0.16, 0.03, 0.03), toon(0x6d4c41), 0, 0.06, fz + 0.07, head, false); }
@@ -1136,14 +1162,22 @@ function makeAvatar(look) {
       const pos = cg.attributes.position, col = new Float32Array(pos.count * 3), c = new THREE.Color(), a = new THREE.Color(0x7c4dff), b2 = new THREE.Color(0x18ffff), d = new THREE.Color(0x69f0ae);
       for (let i = 0; i < pos.count; i++) { const u = (0.575 - pos.getY(i)) / 1.15; if (u < 0.5) c.copy(a).lerp(b2, u * 2); else c.copy(b2).lerp(d, (u - 0.5) * 2); c.toArray(col, i * 3); }
       cg.setAttribute('color', new THREE.BufferAttribute(col, 3)); cm = auroraEm;
-    } else cm = new THREE.MeshToonMaterial({ color: L.p === 1 ? 0x7fc8f5 : 0xa31515, gradientMap: toonGrad, side: THREE.DoubleSide });
+    } else if (L.p === 4) cm = new THREE.MeshStandardMaterial({ color: 0x14203d, emissive: 0x0a1430, roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide, flatShading: true });
+    else cm = new THREE.MeshToonMaterial({ color: L.p === 1 ? 0x7fc8f5 : 0xa31515, gradientMap: toonGrad, side: THREE.DoubleSide });
     mk(cg, cm, 0, -0.575, 0, cape);
-    const trim = L.p === 1 ? white : L.p === 2 ? gold : auroraBasic;
+    const lordIce = L.p === 4 && new THREE.MeshStandardMaterial({ color: 0xbff2ff, emissive: 0x29b6f6, emissiveIntensity: 0.9, roughness: 0.1, flatShading: true });
+    const trim = L.p === 1 ? white : L.p === 2 ? gold : L.p === 4 ? lordIce : auroraBasic;
     const hem = mk(new THREE.TorusGeometry(0.8, 0.04, 4, 18, Math.PI), trim, 0, -1.15, 0, cape, false); hem.rotation.x = -Math.PI / 2;
     mk(new THREE.TorusGeometry(0.5, L.p === 1 ? 0.1 : 0.06, 6, 18, Math.PI), trim, 0, 0, 0, cape, false).rotation.x = -Math.PI / 2;      // 깃
     for (const sd of [-1, 1]) mk(Sph(0.07, 8, 6), L.p === 1 ? toon(0xaee9ff) : gold, sd * 0.44, -0.02, 0.2, cape, false);       // 어깨 걸쇠
     if (L.p === 1) { const ic = toon(0xffffff); snowflake(cape, 0, -0.45, -0.66, 1.3, ic, Math.PI); for (const sd of [-1, 1]) snowflake(cape, sd * 0.42, -0.8, -0.58, 0.8, ic, Math.PI + sd * 0.6); }
     if (L.p === 2) { const st = mk(getStarGeo(), gold, 0, -0.5, -0.67, cape, false); st.scale.setScalar(2.2); st.rotation.y = Math.PI; }
+    if (L.p === 4) {      // 얼음대마왕 망토: 밑단에 고드름, 높이 솟은 얼음 깃, 등의 붉은 문장
+      for (let i = 0; i < 9; i++) { const a = Math.PI / 2 + (i + 0.5) / 9 * Math.PI; const ic = mk(Cone(0.07, 0.28 + (i % 2) * 0.14, 5), lordIce, Math.sin(a) * 0.8, -1.25 - (i % 2) * 0.07, Math.cos(a) * 0.8, cape, false); ic.rotation.x = Math.PI; }
+      for (let i = 0; i < 5; i++) { const a = Math.PI / 2 + (i + 0.5) / 5 * Math.PI; mk(Cone(0.08, 0.42, 5), lordIce, Math.sin(a) * 0.5, 0.2, Math.cos(a) * 0.5, cape, false); }
+      const em = mk(new THREE.OctahedronGeometry(0.16, 0), new THREE.MeshBasicMaterial({ color: 0xff2244 }), 0, -0.4, -0.7, cape, false); em.scale.set(1, 1.6, 0.4);
+      glow(0xff3355, 0.8, 0, -0.4, -0.75, cape);
+    }
     if (L.p === 3) for (let i = 0; i < 4; i++) auroraSprite(0.5, Math.sin(i * 1.7) * 0.4, -0.3 - i * 0.22, -0.62 - i * 0.04, cape);
   }
   // 다리와 팔
@@ -1162,7 +1196,7 @@ function makeAvatar(look) {
   const heldSkins = [mk(Sph(0.26, 14, 10), toon(0xffffff), 0, 0, 0, held)];
   { const h = makeFood(1); h.scale.setScalar(0.3); h.rotation.x = Math.PI / 2; held.add(h); heldSkins.push(h); }
   { const b = makeFood(2); b.scale.setScalar(0.3); b.rotation.set(0, Math.PI / 2, 0); held.add(b); heldSkins.push(b); }
-  for (const k of [3, 4, 5]) { const w = makeFood(k); w.scale.setScalar(0.28); held.add(w); heldSkins.push(w); }     // 희귀 무기 3종
+  for (const k of [3, 4, 5, 6]) { const w = makeFood(k); w.scale.setScalar(0.28); held.add(w); heldSkins.push(w); }     // 희귀 무기 3종
   // 티타임용 머그컵 (평소에는 숨김)
   const mug = new THREE.Group(); mug.visible = false; bd.add(mug);
   mk(Cyl(0.17, 0.15, 0.36, 14), toon(0xfafafa), 0, 0, 0, mug);
@@ -1264,10 +1298,11 @@ const GIFT_INFO = {
   pierce: { color: 0x90a4ae, label: t("관통 눈덩이!"), c: '#cfd8dc' }, boom: { color: 0xb71c1c, label: t("폭발 눈덩이!"), c: '#ff7043' },
   ice: { color: 0xb3e5fc, label: t("얼음 눈덩이!"), c: '#b3e5fc' }, snipe: { color: 0x3949ab, label: t("저격 눈덩이!"), c: '#9fa8ff' },
   double: { color: 0xf06292, label: t("연발 샷!"), c: '#ff9ec4' },
+  armor: { color: 0x607d8b, label: t("방어력 UP! 받는 피해 감소"), c: '#b0bec5' },
 };
 // 버프 이름 (HUD 표시용), 단계는 ×숫자
 const BUFF_NAME = { triple: [t("트리플 샷"), '#7dd3ff'], giant: [t("왕눈덩이"), '#d0a8ff'], fast: [t("스피드"), '#8dffa8'], power: [t("공격력"), '#ffab6b'], rapid: [t("연사"), '#fff176'],
-  pierce: [t("관통"), '#cfd8dc'], boom: [t("폭발"), '#ff7043'], ice: [t("얼음"), '#b3e5fc'], snipe: [t("저격"), '#9fa8ff'], double: [t("연발"), '#ff9ec4'] };
+  pierce: [t("관통"), '#cfd8dc'], boom: [t("폭발"), '#ff7043'], ice: [t("얼음"), '#b3e5fc'], snipe: [t("저격"), '#9fa8ff'], double: [t("연발"), '#ff9ec4'], armor: [t("방어력"), '#b0bec5'] };
 // 나쁜 산타: 빨간 옷, 흰 수염, 화난 눈썹, 등에 석탄 자루
 function makeSanta() {
   const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
@@ -1391,6 +1426,42 @@ function makeDokkaebi() {
   for (const sd of [-1, 1]) mk(Sph(0.22, 10, 8), skin, sd * 0.28, 0.12, 0.06, g).scale.set(1, 0.6, 1.4);
   const held = mk(Sph(0.3, 10, 8), iceM, 0, -0.75, 0.1, armL); held.visible = false;
   return { group: g, bd, armL, armR, held, body: skin };
+}
+// 얼음대마왕 (최강 보스): 어두운 얼음 갑옷의 거인 왕. 뿔 달린 왕관, 붉게 빛나는 눈, 어깨 가시, 펄럭이는 망토, 큰 얼음 대검
+function makeIceLord() {
+  const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
+  const armor = new THREE.MeshStandardMaterial({ color: 0x1b2a4a, roughness: 0.35, metalness: 0.6, emissive: 0x060f24, flatShading: true });
+  const ice = new THREE.MeshStandardMaterial({ color: 0xbff2ff, emissive: 0x29b6f6, emissiveIntensity: 0.8, roughness: 0.1, flatShading: true });
+  const red = new THREE.MeshBasicMaterial({ color: 0xff2244 }), dark = toon(0x0b1020);
+  const body = mk(new THREE.IcosahedronGeometry(0.85, 1), armor, 0, 1.3, 0, bd); body.scale.set(1.2, 1.1, 0.9);
+  mk(new THREE.OctahedronGeometry(0.22, 0), red, 0, 1.45, 0.75, bd, false).scale.set(1, 1.4, 0.4);       // 가슴의 붉은 핵
+  glow(0xff3355, 1.2, 0, 1.45, 0.85, bd);
+  const head = new THREE.Group(); head.position.set(0, 2.25, 0.2); bd.add(head);
+  mk(new THREE.IcosahedronGeometry(0.48, 1), armor, 0, 0, 0, head).scale.set(1.05, 1, 1);
+  for (const sd of [-1, 1]) {
+    mk(Box(0.2, 0.06, 0.05), red, sd * 0.18, 0.02, 0.44, head, false).rotation.z = sd * 0.3;                 // 붉은 눈
+    const horn = mk(Cone(0.12, 0.9, 6), ice, sd * 0.42, 0.55, -0.05, head); horn.rotation.z = -sd * 0.7;     // 큰 뿔
+  }
+  glow(0xff3355, 1.0, 0, 0.02, 0.5, head);
+  const crown = new THREE.Group(); crown.position.set(0, 0.42, 0); head.add(crown);                         // 얼음 왕관
+  for (let i = 0; i < 7; i++) { const a = i / 7 * TAU; mk(Cone(0.07, 0.35 + (i % 2) * 0.2, 5), ice, Math.sin(a) * 0.3, 0.15, Math.cos(a) * 0.3, crown, false); }
+  for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) { const sp = mk(Cone(0.12, 0.55 - k * 0.1, 5), ice, sd * (0.95 + k * 0.05), 2.05 + k * 0.05, -0.15 + k * 0.18, bd); sp.rotation.z = -sd * 0.6; }   // 어깨 가시
+  const cape = mk(new THREE.CylinderGeometry(0.75, 1.15, 1.9, 14, 1, true, Math.PI / 2, Math.PI), new THREE.MeshStandardMaterial({ color: 0x1a0f3a, side: THREE.DoubleSide, roughness: 0.6, flatShading: true }), 0, 1.15, -0.1, bd);
+  for (let i = 0; i < 7; i++) { const a = Math.PI / 2 + (i + 0.5) / 7 * Math.PI, ic = mk(Cone(0.08, 0.35, 5), ice, Math.sin(a) * 1.15, 0.05, Math.cos(a) * 1.15 - 0.1, bd, false); ic.rotation.x = Math.PI; }
+  const arms = [];
+  for (const sd of [-1, 1]) {
+    const arm = new THREE.Group(); arm.position.set(sd * 1.0, 1.85, 0.05); bd.add(arm);
+    mk(new THREE.IcosahedronGeometry(0.3, 0), armor, 0, -0.3, 0, arm).scale.set(1, 1.7, 1);
+    mk(new THREE.IcosahedronGeometry(0.33, 1), dark, 0, -0.9, 0.05, arm);
+    arms.push(arm);
+  }
+  const sword = new THREE.Group(); sword.position.set(0, -0.95, 0.15); sword.rotation.x = Math.PI / 2; arms[0].add(sword);   // 얼음 대검
+  mk(Cyl(0.06, 0.06, 0.5, 6), dark, 0, -0.1, 0, sword); mk(Box(0.55, 0.08, 0.12), armor, 0, 0.18, 0, sword);
+  mk(Box(0.22, 1.9, 0.07), ice, 0, 1.18, 0, sword); mk(Cone(0.11, 0.35, 4), ice, 0, 2.3, 0, sword).rotation.y = Math.PI / 4;
+  for (const sd of [-1, 1]) mk(new THREE.IcosahedronGeometry(0.36, 0), armor, sd * 0.45, 0.35, 0, g).scale.set(1, 1.2, 1.1);   // 다리
+  glow(0x3d5afe, 3.6, 0, 1.4, 0, bd, 1.0);
+  const held = new THREE.Object3D(); bd.add(held);
+  return { group: g, bd, body: armor, head, arms, held, cape };
 }
 function makeRudolph() {
   const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
@@ -1607,7 +1678,7 @@ let ownSled = false;
 let myRares = new Set(), rareTok = null;     // 보스에게서 얻은 희귀 장비 (서버 서명이 붙은 보관증을 브라우저에 저장)
 try { rareTok = JSON.parse(store.get('snowball-rares', 'null')); if (rareTok && Array.isArray(rareTok.own)) myRares = new Set(rareTok.own); else rareTok = null; } catch (e) { rareTok = null; }
 let prefWeapon = +store.get('snowball-weapon', '0') || 0;
-const hasWeapons = () => [1, 2, 3, 4, 5].some(ownWeapon);
+const hasWeapons = () => WEAPONS.slice(1).some(ownWeapon);
 let mySkin = 0, mySkins = new Set();      // 던질 것: 0 눈덩이, 1 호떡, 2 붕어빵 (산 것)                   // 눈썰매 보유 (쓰러져도 유지, 다시 접속하면 초기화)
 function addIgloo([id, x, z, rot, n, lv]) {
   if (me && me.sit && igloos.has(id) && igloos.get(id).spots.includes(me.sit)) standUp();
@@ -1622,7 +1693,7 @@ function removeIgloo(id) {
 }
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
-    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, slowT: 0, tea: 0, yam: 0, riding: false, rest: 0, restT: 0, sit: null, fish: false, fishJerk: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
+    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, armor: 0, slowT: 0, tea: 0, yam: 0, riding: false, rest: 0, restT: 0, sit: null, fish: false, fishJerk: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
     walk: 0, throwAnim: 0, regenT: 0, inVillage: true, dead: false, respawnT: 0, squash: 0 };
 }
 
@@ -1808,7 +1879,7 @@ function onMsg(m) {
     case 'boss': {
       const T = TYPES[m.type] || TYPES.seal;
       if (m.on) {                // 하프물범 3마리가 한꺼번에 나와도 알림은 한 번만
-        if (time - (bossToastT[m.type] ?? -99) > 6) { toast(t("{0} {1}이 나타났어요!", [m.type === "icebeast" ? "🧊" : "🦭", T.name]), t("처치하면 {0}점 + 선물 {1}개 + 희귀 장비 기회 · 미니맵의 👑", [T.pts.toLocaleString(), T.drops]), 3.2); feed(t("<span class=\"sys\">👑 {0} 등장! 미니맵을 확인하세요</span>", [T.name])); sfx.win(); }
+        if (time - (bossToastT[m.type] ?? -99) > 6) { toast(t("{0} {1}이 나타났어요!", [m.type === "icelord" ? "😈" : m.type === "icebeast" ? "🧊" : "🦭", T.name]), t("처치하면 {0}점 + 선물 {1}개 + 희귀 장비 기회 · 미니맵의 👑", [T.pts.toLocaleString(), T.drops]), 3.2); feed(t("<span class=\"sys\">👑 {0} 등장! 미니맵을 확인하세요</span>", [T.name])); sfx.win(); }
         bossToastT[m.type] = time;
       }
       else { const nm = names.get(m.by); bossDots = bossDots.filter(r => (m.e ? r[0] !== m.e : TYPE_BY_ID[r[5]] !== m.type)); feed(t("<span class=\"sys\">🎉 {0} 님이 {1}을 쓰러뜨렸어요!</span>", [esc(m.by === myId ? nick : nm ? nm.n : t("누군가")), T.name])); if (m.by === myId) toast(t("🎉 {0} 처치!", [T.name]), t("+{0}점", [T.pts.toLocaleString()]), 3); }
@@ -1935,17 +2006,17 @@ function addRemote(id, nm) {
 function removeRemote(r) { scene.remove(r.model.group); disposeModel(r.model.group); r.tag.remove(); r.bar.remove(); }
 function addEnemy(id, type, x, z, face) {
   const T = TYPES[type];
-  const model = type === 'penguin' ? makePenguin() : type === 'rudolph' ? makeRudolph() : type === 'badsanta' ? makeSanta() : type === 'seal' ? makeSeal() : type === 'icebeast' ? makeIceBeast() : type === 'dokkaebi' ? makeDokkaebi() : makeSnowman('normal');
+  const model = type === 'penguin' ? makePenguin() : type === 'rudolph' ? makeRudolph() : type === 'badsanta' ? makeSanta() : type === 'seal' ? makeSeal() : type === 'icebeast' ? makeIceBeast() : type === 'icelord' ? makeIceLord() : type === 'dokkaebi' ? makeDokkaebi() : makeSnowman('normal');
   model.group.scale.setScalar(T.scale); scene.add(model.group);
   const e = { id, type, T, model, x, z, tx: x, tz: z, y: heightAt(x, z), face, tface: face, hp: T.hp, max: T.hp, wind: 0, flash: 0, moving: 0, walk: 0, squash: 0, bar: null, tele: null };
-  if (T.boss) { e.tag = document.createElement('div'); e.tag.className = 'tag'; e.tag.style.color = '#9fe3ff'; e.tag.textContent = `👑 ${T.name}`; $('labels').appendChild(e.tag); }
+  if (T.boss) { e.tag = document.createElement('div'); e.tag.className = 'tag'; e.tag.style.color = type === 'icelord' ? '#ff8fa3' : '#9fe3ff'; e.tag.textContent = `${type === 'icelord' ? '😈' : '👑'} ${t(T.name)}`; $('labels').appendChild(e.tag); }
   enemies.set(id, e); return e;
 }
 function removeEnemy(e) { scene.remove(e.model.group); disposeModel(e.model.group); if (e.bar) e.bar.remove(); if (e.tele) scene.remove(e.tele); if (e.tag) e.tag.remove(); }
 function killEnemy(e) {
   const elite = e.type === 'badsanta' || e.type === 'dokkaebi';
   burst(e.x, e.y + e.T.h * 0.5, e.z, e.T.boss ? 120 : elite ? 60 : 36, 0xffffff, e.T.boss ? 16 : elite ? 11 : 9, 4);
-  burst(e.x, e.y + e.T.h * 0.7, e.z, 10, { penguin: 0x22304a, rudolph: 0x8d5a34, badsanta: 0xd32f2f, seal: 0x9fe3ff, icebeast: 0x7ff6ff, dokkaebi: 0x4f8fd6 }[e.type] || 0xff8a1f, 6);
+  burst(e.x, e.y + e.T.h * 0.7, e.z, 10, { penguin: 0x22304a, rudolph: 0x8d5a34, badsanta: 0xd32f2f, seal: 0x9fe3ff, icebeast: 0x7ff6ff, dokkaebi: 0x4f8fd6, icelord: 0x3d5afe }[e.type] || 0xff8a1f, 6);
   if (Math.hypot(e.x - me.x, e.z - me.z) < 45) sfx.pop();
   if (elite && Math.hypot(e.x - me.x, e.z - me.z) < 30) shake = 0.6;
   removeEnemy(e); enemies.delete(e.id);
@@ -2498,7 +2569,7 @@ function throwPlayer() {
   if (p.ammo === 0) startReload();
 }
 const ballGeo = Sph(1, 14, 10);
-const SKIN_FX = { 0: 0xeef4ff, 1: 0xd9933f, 2: 0xd9a04a, 3: 0x9fe3ff, 4: 0xffd34d, 5: 0xd8a8ff };
+const SKIN_FX = { 0: 0xeef4ff, 1: 0xd9933f, 2: 0xd9a04a, 3: 0x9fe3ff, 4: 0xffd34d, 5: 0xd8a8ff, 6: 0x4dd0ff };
 const ballMatFx = { boom: toon(0xff7043), ice: toon(0x9fe3ff), pierce: toon(0xb0bec5) };
 const ballMatP = toon(0xffffff), ballMatE = toon(0xbcd4ff), ballMatK = [ballMatE, toon(0x37373f), toon(0xff6b6b), mat(0xaee9ff, { em: 0x2f7fc4, emI: 0.7, rough: 0.2 })];   // 3: 얼음도깨비 얼음덩이
 function spawnBall(o) {
@@ -2603,7 +2674,7 @@ function drawMinimap() {
   mctx.fillStyle = '#5dff9a'; for (const h of heals) if (h.on) { const [x, z] = toMini(h.x, h.z); mctx.fillRect(x - 2.5, z - 0.8, 5, 1.6); mctx.fillRect(x - 0.8, z - 2.5, 1.6, 5); }
   mctx.fillStyle = '#ff5252';
   for (const e of enemies.values()) { if (Math.hypot(e.x - me.x, e.z - me.z) > 45) continue; const [x, z] = toMini(e.x, e.z); mctx.fillRect(x - 1.5, z - 1.5, 3, 3); }
-  for (const [, bx, bz, , , tid] of bossDots) { const big = TYPE_BY_ID[tid] === 'icebeast', [x, z] = toMini(clamp(bx, -WR, WR), clamp(bz, -WR, WR)); const pulse = (big ? 6.5 : 4.5) + Math.sin(time * 5) * 1.2; mctx.fillStyle = big ? '#4fc3f7' : '#9fe3ff'; mctx.beginPath(); mctx.arc(x, z, pulse, 0, TAU); mctx.fill(); mctx.fillStyle = '#0b1430'; mctx.font = 'bold 9px sans-serif'; mctx.fillText(big ? '🧊' : '👑', x, z - (big ? 8 : 6)); }
+  for (const [, bx, bz, , , tid] of bossDots) { const lord = TYPE_BY_ID[tid] === 'icelord', big = lord || TYPE_BY_ID[tid] === 'icebeast', [x, z] = toMini(clamp(bx, -WR, WR), clamp(bz, -WR, WR)); const pulse = (big ? 6.5 : 4.5) + Math.sin(time * 5) * 1.2; mctx.fillStyle = lord ? '#ff4d6d' : big ? '#4fc3f7' : '#9fe3ff'; mctx.beginPath(); mctx.arc(x, z, pulse + (lord ? 1.5 : 0), 0, TAU); mctx.fill(); mctx.fillStyle = '#0b1430'; mctx.font = 'bold 9px sans-serif'; mctx.fillText(lord ? '😈' : big ? '🧊' : '👑', x, z - (big ? 8 : 6)); }
   for (const ig of igloos.values()) { const [x, z] = toMini(ig.x, ig.z); mctx.fillStyle = '#e3f2ff'; mctx.beginPath(); mctx.arc(x, z, 3.4, Math.PI, 0); mctx.fill(); mctx.fillRect(x - 3.4, z, 6.8, 1.4); }
   for (const r of remotes.values()) { const [x, z] = toMini(r.x, r.z); mctx.fillStyle = ELF_CSS[r.c % 6]; mctx.beginPath(); mctx.arc(x, z, 3.5, 0, TAU); mctx.fill(); if (myAllies.has(r.id)) { mctx.strokeStyle = '#7dffb0'; mctx.lineWidth = 1.6; mctx.stroke(); } }
   const [px, pz] = toMini(me.x, me.z);
@@ -2716,10 +2787,10 @@ function overlay(kind, err = '') {
       const own = key === 'w' ? ownWeapon(i) : !rr || myRares.has(rk);
       return `<button data-k="${key}" data-v="${i}" class="${sel ? 'sel' : ''}${rr ? ' t' + rr.tier : ''}${own ? '' : ' lock'}"${rr ? ` title="${t(W.TIER_NAMES[rr.tier])}"` : ''}>${own ? '' : '🔒 '}${rr ? `<small>${t(W.TIER_NAMES[rr.tier])}</small> ` : ''}${key === 'w' ? FOOD_EMOJI[i] + ' ' : ''}${name}</button>`;
     };
-    const weaponRow = `<div class="slot"><b>${t("무기 (던지는 것)")}</b><div class="chips">${[0, 1, 2, 3, 4, 5].map(i => chip('w', i, t(FOOD_SK[i]), i === (state === 'play' ? mySkin : prefWeapon))).join('')}</div></div>`;
+    const weaponRow = `<div class="slot"><b>${t("무기 (던지는 것)")}</b><div class="chips">${WEAPONS.map(i => chip('w', i, t(FOOD_SK[i]), i === (state === 'play' ? mySkin : prefWeapon))).join('')}</div></div>`;
     el.innerHTML = t("<div><h1>👕 캐릭터 꾸미기</h1>\n      <div class=\"custom\"><canvas id=\"pv\" width=\"440\" height=\"520\" aria-label=\"캐릭터 미리보기\"></canvas><div>\n        {0}\n        <div class=\"slot\"><b>옷 색</b><div class=\"chips\">{1}</div></div>\n      </div></div>\n      <div class=\"btns\"><button id=\"done\">완료</button></div></div>", [slots.map(([key, label]) => `<div class="slot"><b>${label}</b><div class="chips">${LOOK[key].map((n, i) => chip(key, i, n, myLook[key] === i)).join('')}</div></div>`).join('') + weaponRow, ELF_CSS.map((c, i) => t("<button data-col=\"{0}\" class=\"cdot {1}\" style=\"background:{2}\" aria-label=\"옷 색 {3}\" aria-pressed=\"{4}\"></button>", [i, myLook.c === i ? 'sel' : '', c, i + 1, myLook.c === i])).join('')]);
     el.querySelectorAll('.chips button[data-k]').forEach(b => b.onclick = () => {
-      if (b.classList.contains('lock')) { sfx.pop(); toast(t("🔒 아직 없는 장비예요"), b.dataset.k === 'w' && +b.dataset.v < 3 ? t("마을의 간식 트럭에서 살 수 있어요") : t("거대 하프물범·고대 얼음 괴수를 쓰러뜨리면 얻을 수 있어요"), 2.2); return; }
+      if (b.classList.contains('lock')) { sfx.pop(); toast(t("🔒 아직 없는 장비예요"), b.dataset.k === 'w' && +b.dataset.v < 3 ? t("마을의 간식 트럭에서 살 수 있어요") : (b.classList.contains('t3') ? t("얼음대마왕을 쓰러뜨리면 얻을 수 있어요") : t("거대 하프물범·고대 얼음 괴수를 쓰러뜨리면 얻을 수 있어요")), 2.2); return; }
       if (b.dataset.k === 'w') {
         prefWeapon = +b.dataset.v; store.set('snowball-weapon', prefWeapon);
         if (state === 'play') send({ t: 'skin', sk: prefWeapon });
@@ -2861,6 +2932,7 @@ function updateMe(dt) {
 function hurtMe(dmg, by) {
   const p = me;
   if (p.shield > 0) dmg = Math.ceil(dmg / 2);
+  if (p.armor > 0) dmg = Math.max(1, Math.round(dmg * (1 - W.ARMOR_CUT * p.armor)));     // 방어력 아이템 (중첩, 시간 제한 없음)
   if (by) { const nm = names.get(by); p.lastAttacker = nm ? nm.n : ''; } else p.lastAttacker = '';
   p.hp -= dmg; p.inv = 0.9; shake = 0.6; sfx.hurt(); p.squash = 0.5;
   popup(p.x, p.y + 3, p.z, `-${dmg}`, '#ff6b6b');
@@ -3138,7 +3210,7 @@ function render(dt) {
     g.position.set(e.x, e.y, e.z); g.rotation.y = e.face;
     const hop = e.moving ? Math.abs(Math.sin(e.walk * 1.4)) : 0;
     if (e.type === 'penguin') { m.bd.rotation.z = Math.sin(e.walk * 2) * 0.2; m.bd.rotation.x = e.wind > 0 ? -0.3 : 0; g.position.y += hop * 0.08; }
-    else if (e.type === 'icebeast') {
+    else if (e.type === 'icebeast' || e.type === 'icelord') {
       // 쿵쿵 걷다가, 공격 예고 때는 두 팔을 머리 위로 들어 올린다
       const sw = e.moving ? Math.sin(e.walk * 0.8) : 0, up = e.wind > 0 ? 1 : 0;
       m.arms.forEach((a, i) => { a.rotation.x = lerp(a.rotation.x, up ? -2.8 : sw * (i ? -0.5 : 0.5), Math.min(1, dt * 6)); a.rotation.z = (i ? -1 : 1) * (up ? 0.3 : 0.1); });
@@ -3364,7 +3436,7 @@ window.__game = {
   occ() { return [occ.hidT.length, occ.hidR.length, camera.position.x, camera.position.z, camera.position.y]; }, rares() { return [[...myRares].join(','), mySkin, lakeTag && lakeTag.style.display]; },
   get mem() { return { geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures, balls: balls.size, pops: popups.length }; },
   setSkin(k) { mySkin = k; },
-  model(type, x, z) { const T = TYPES[type], m = type === 'icebeast' ? makeIceBeast() : type === 'dokkaebi' ? makeDokkaebi() : makeSeal(); m.group.scale.setScalar(T.scale); m.group.position.set(x, heightAt(x, z), z); scene.add(m.group); return true; },
+  model(type, x, z) { const T = TYPES[type], m = type === 'icebeast' ? makeIceBeast() : type === 'icelord' ? makeIceLord() : type === 'dokkaebi' ? makeDokkaebi() : makeSeal(); m.group.scale.setScalar(T.scale); m.group.position.set(x, heightAt(x, z), z); scene.add(m.group); return true; },
   buff(k, n = 1) { for (let i = 0; i < n; i++) giveBuff(k); }, avatars(x, z, looks) { looks.forEach((l, i) => { const m = makeAvatar(l); const px = x - (looks.length - 1) * 0.9 + i * 1.8; m.group.position.set(px, heightAt(px, z), z); scene.add(m.group); }); },
   get voice() { return { on: voice.on, hear: voice.hearOn, peers: [...voice.peers.values()].map(p => ({ id: p.id, st: p.pc.connectionState, sig: p.pc.signalingState })), remotes: [...remotes.values()].map(r => ({ id: r.id, vl: r.vl, vt: r.vt, link: needLink(r) })), myId }; },
 };

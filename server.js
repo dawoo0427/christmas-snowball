@@ -593,7 +593,7 @@ function createWorld(idx) {
   }
   function applyHit(e, b, goOn) {
     const p = players.get(b.owner);
-    e.hp -= b.dmg; e.flash = 0.15; e.aggro = true;
+    e.hp -= b.dmg / (e.T.def || 1); e.flash = 0.15; e.aggro = true;      // def: 방어력 (보스는 받는 피해가 나뉨)
     e.kx = b.dx * 10 / e.T.scale; e.kz = b.dz * 10 / e.T.scale;
     for (const o of enemies.values()) if (o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 10) o.aggro = true;   // 근처 동료도 화가 난다
     let pts = 0;
@@ -623,6 +623,16 @@ function createWorld(idx) {
   }
   // 보스 처치 보상: 희귀 장비 (등급 확률대로, 아직 없는 것 중에서). 그 등급을 다 가졌으면 대신 보너스 점수
   function rareLoot(p, T) {
+    if (T.lordDrop) {            // 얼음대마왕: 투구·망토·무기 중 아직 없는 것 하나를 랜덤으로
+      const cand = W.RARES.filter(r => r.tier === 3 && !p.rares.has(r.key));
+      if (!cand.length) { const b = W.TIER_BONUS[3]; p.score += b; p.conn.send({ t: 'rarebonus', tier: 3, pts: b }); return; }
+      const it = cand[Math.floor(Math.random() * cand.length)];
+      p.rares.add(it.key);
+      p.conn.send({ t: 'rares', own: [...p.rares], sig: rareSig(p.rares), got: it.key });
+      broadcast({ t: 'rarenews', by: p.id, key: it.key }, p);
+      log(`[${NAME}] 얼음대마왕 장비 ${it.name} → ${p.n}`);
+      return;
+    }
     if (!T.rare || Math.random() >= T.rare) return;
     let roll = Math.random(), tier = 0;
     for (let i = 0; i < T.tierP.length; i++) { if (roll < T.tierP[i]) { tier = i; break; } roll -= T.tierP[i]; tier = i; }
@@ -718,11 +728,11 @@ function createWorld(idx) {
     const ps = [...players.values()].map(p => [p.id, r1(p.x), r1(p.z), r1(p.y), r2(p.face), r1(p.vx), r1(p.vz), p.flags, p.hp, p.dead ? 1 : 0, p.score, (p.vl ? 1 : 0) | (p.vt ? 2 : 0)]);
     const gs = gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]);
     const hs = heals.map(h => (h.on ? 1 : 0));
-    const es = [...enemies.values()], bossRows = es.filter(e => e.T.boss).map(e => [e.id, r1(e.x), r1(e.z), e.hp, e.max, e.T.id]);
+    const es = [...enemies.values()], bossRows = es.filter(e => e.T.boss).map(e => [e.id, r1(e.x), r1(e.z), Math.ceil(e.hp), e.max, e.T.id]);
     for (const p of players.values()) {
       if (!p.ready || p.conn.congested) continue;
       const near = es.filter(e => Math.abs(e.x - p.x) < 110 && Math.abs(e.z - p.z) < 110)
-        .map(e => [e.id, e.T.id, r1(e.x), r1(e.z), r2(e.face), e.hp, e.max, e.wind > 0 ? 1 : 0, e.flash > 0 ? 1 : 0, e.moving, e.slow > 0 ? 1 : 0]);
+        .map(e => [e.id, e.T.id, r1(e.x), r1(e.z), r2(e.face), Math.ceil(e.hp), e.max, e.wind > 0 ? 1 : 0, e.flash > 0 ? 1 : 0, e.moving, e.slow > 0 ? 1 : 0]);
       p.conn.send({ t: 's', p: ps, e: near, g: tick % 10 === 0 ? gs : undefined, h: tick % 10 === 0 ? hs : undefined, cb: p.combo, bs: tick % 10 === 0 ? bossRows : undefined });
     }
   }
