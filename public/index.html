@@ -2068,6 +2068,15 @@ const raycaster = new THREE.Raycaster();
 const aim = new THREE.Vector3();
 let aimTarget = null;
 const screenToWorldDir = (sx, sz) => { const cs = Math.cos(camYaw), sn = Math.sin(camYaw); return { x: sx * cs + sz * sn, z: -sx * sn + sz * cs }; };
+// 반자동 조준 대상: 몬스터 + PvP 가능한 플레이어 (둘 다 안전지대 밖, 동맹 아님, 쓰러지지 않음)
+const PLAYER_T = { r: 0.7 };
+const canPvp = r => !!me && !me.inVillage && !r.dead && !inVillage(r.x, r.z) && !myAllies.has(r.id) && r.model.group.visible;
+function aimTargets() {
+  const out = [];
+  for (const e of enemies.values()) if (e.model.group.visible) out.push(e);
+  for (const r of remotes.values()) if (canPvp(r)) { r.T = PLAYER_T; out.push(r); }
+  return out;
+}
 function updateAim() {
   const p = me;
   if (isTouch) {
@@ -2077,8 +2086,7 @@ function updateAim() {
     else dir = { x: Math.sin(p.face), z: Math.cos(p.face) };
     aim.set(p.x + dir.x * 18, 0, p.z + dir.z * 18); aim.y = heightAt(aim.x, aim.z);
     aimTarget = null; let bestA = 0.3;
-    for (const e of enemies.values()) {
-      if (!e.model.group.visible) continue;
+    for (const e of aimTargets()) {
       const dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx, dz); if (d > PLAYER_RANGE) continue;
       const a = Math.abs(angDiff(Math.atan2(dir.x, dir.z), Math.atan2(dx, dz))); if (a < bestA) { bestA = a; aimTarget = e; }
     }
@@ -2100,11 +2108,11 @@ function updateAim() {
     if (hit !== null) aim.set(o.x + d.x * hit, o.y + d.y * hit, o.z + d.z * hit);
   }
   aimTarget = null; let bestD = 1e9;
-  for (const e of enemies.values()) { const d = Math.hypot(e.x - aim.x, e.z - aim.z); if (d < e.T.r + 1.3 && d < bestD && e.model.group.visible) { bestD = d; aimTarget = e; } }
+  for (const e of aimTargets()) { const d = Math.hypot(e.x - aim.x, e.z - aim.z); if (d < e.T.r + 1.3 && d < bestD) { bestD = d; aimTarget = e; } }
 }
 function autoAim() {
   let bestE = null, bd = PLAYER_RANGE;
-  for (const e of enemies.values()) { const d = Math.hypot(e.x - me.x, e.z - me.z); if (d < bd) { bd = d; bestE = e; } }
+  for (const e of aimTargets()) { const d = Math.hypot(e.x - me.x, e.z - me.z); if (d < bd) { bd = d; bestE = e; } }
   if (bestE) { aimTarget = bestE; me.face = Math.atan2(bestE.x - me.x, bestE.z - me.z); }
 }
 function aimDir() {
@@ -2842,7 +2850,7 @@ function render(dt) {
     const rx = aimTarget ? aimTarget.x : ex, rz = aimTarget ? aimTarget.z : ez;
     aimRing.position.set(rx, heightAt(rx, rz) + 0.12, rz);
     aimRing.scale.setScalar(aimTarget ? aimTarget.T.r + 0.5 : 1);
-    aimRing.material.color.setHex(aimTarget ? 0xff3b3b : 0x2f7bff);
+    aimRing.material.color.setHex(aimTarget ? (aimTarget.T === PLAYER_T ? 0xff9800 : 0xff3b3b) : 0x2f7bff);
     aimFill.position.copy(aimRing.position); aimFill.position.y += 0.01;
     const ch = p.charging ? Math.min(1, p.charge / 0.5) : 0;
     aimFill.scale.setScalar(Math.max(0.01, ch * aimRing.scale.x)); aimFill.material.color.setHex(ch >= 1 ? 0xffb300 : 0x5aa0ff); aimFill.material.opacity = 0.55;
