@@ -24,6 +24,13 @@
     tiers: [0, 1, 2, 3, 4, 5].map(i => ({ b: 1.8 + i * 1.5, r: 6.2 * (1 - i / 6.3), h: 3.1 })), ornCost: 1000, maxOrn: 400, near: 20, view: 22 };
   // 트리 표면 반지름 (높이 y 에서 가장 바깥쪽 가지)
   GIANT_TREE.surfR = y => { let r = 0; for (const t of GIANT_TREE.tiers) if (y >= t.b && y <= t.b + t.h) r = Math.max(r, t.r * (1 - (y - t.b) / t.h)); return r; };
+  // 안전지대 간식 트럭: 2,000점에 사면 던지는 눈덩이가 호떡·붕어빵으로 바뀐다 (판매창은 마을 중심을 향함)
+  const TRUCKS = [
+    { k: 'hotteok', sk: 1, x: -12.3, z: -24.1, name: '호떡 트럭', food: '호떡', emoji: '🥞' },
+    { k: 'bungeo', sk: 2, x: 12.3, z: -24.1, name: '붕어빵 트럭', food: '붕어빵', emoji: '🐟' },
+  ];
+  TRUCKS.forEach(t => { t.rot = Math.atan2(-t.x, -t.z); });
+  const FOOD_COST = 2000;
   const ORNAMENTS = [
     { k: 'red', name: '빨간 공', emoji: '🔴' }, { k: 'gold', name: '금빛 공', emoji: '🟡' }, { k: 'blue', name: '파란 공', emoji: '🔵' },
     { k: 'star', name: '별', emoji: '⭐' }, { k: 'cane', name: '지팡이 사탕', emoji: '🍭' }, { k: 'bell', name: '종', emoji: '🔔' },
@@ -191,6 +198,7 @@
     const wallCols = [0x9b5a3c, 0x6d7fa6, 0x7c9a6a, 0xb07a4a, 0x8d5b8f];
     const pathAngles = PATHS.map(([, , bx, bz]) => Math.atan2(bz, bx));
     addCollider({ t: 'c', x: GIANT_TREE.x, z: GIANT_TREE.z, r: GIANT_TREE.r, h: GIANT_TREE.h + 2 });
+    for (const tk of TRUCKS) addCollider({ t: 'b', x: tk.x, z: tk.z, hw: 3.1, hd: 1.35, rot: tk.rot, h: 3.4 });   // 트럭 몸통 (길이 6.2, 폭 2.7)
     const treeAng = Math.atan2(GIANT_TREE.z, GIANT_TREE.x);
     for (let i = 0; i < 16; i++) {
       const a = i / 16 * TAU + 0.2, Rr = 44;
@@ -251,7 +259,7 @@
   const layout = build();
 
   const World = {
-    TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ZONES, GIANT_TREE, ORNAMENTS, ROAD_ENDS, LAKE, FLATS, PATHS,
+    TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ZONES, GIANT_TREE, ORNAMENTS, TRUCKS, FOOD_COST, ROAD_ENDS, LAKE, FLATS, PATHS,
     HOUSE, houseAt, IGLOO, igDims, iglooDoor, iglooPush, iglooPushFull, iglooBlocks, iglooAt, iglooSpot, MAX_ALLIES: 10,
     heightAt, pathDist, onIce, inVillage, pushOut, hitsCollider, colliders, layout,
     BALL_H: 1.35, PLAYER_RANGE: 34, MAX_HP: 100, HEAL_AMOUNT: 35, RELOAD_TIME: 2.0,

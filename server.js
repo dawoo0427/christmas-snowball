@@ -213,7 +213,7 @@ function createWorld(idx) {
         const id = nextId++;
         const look = W.cleanLook(m.look || { c: m.c });
         p = { id, conn, look, n: cleanName(m.n) || '꼬마요정' + id, c: look.c, x: rand(-3, 3), z: 12 + rand(-2, 2), y: 0, face: Math.PI, vx: 0, vz: 0,
-          flags: 0, hp: W.MAX_HP, dead: false, score: +process.env.START_SCORE || 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, vl: false, vt: false, lastHitBy: 0, lastHitAt: 0, joined: Date.now(), allies: new Set(), reqTo: new Set() };
+          flags: 0, hp: W.MAX_HP, dead: false, score: +process.env.START_SCORE || 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, vl: false, vt: false, lastHitBy: 0, lastHitAt: 0, joined: Date.now(), allies: new Set(), reqTo: new Set(), skins: new Set(), skin: 0 };
         p.y = heightAt(p.x, p.z);
         players.set(id, p);
         conn.send({ t: 'welcome', id, server: NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c, q.look]), drops: [...drops.values()].map(d => [d.id, r1(d.x), r1(d.z), d.k]),
@@ -248,7 +248,7 @@ function createWorld(idx) {
         p.x = clamp(num(m.x, p.x), -W.LIMIT, W.LIMIT); p.z = clamp(num(m.z, p.z), -W.LIMIT, W.LIMIT);
         p.y = clamp(num(m.y, p.y), -20, 60); p.face = num(m.f, p.face);
         p.vx = clamp(num(m.vx), -40, 40); p.vz = clamp(num(m.vz), -40, 40);
-        p.flags = (m.fl | 0) & (p.sled ? ~0 : ~2048);     // 2048 = 눈썰매 타는 중 (산 사람만) p.hp = clamp(m.hp | 0, 0, W.MAX_HP);
+        p.flags = ((m.fl | 0) & (p.sled ? ~0 : ~2048) & ~(4096 | 8192)) | (p.skin === 1 ? 4096 : p.skin === 2 ? 8192 : 0);     // 2048 썰매(산 사람만), 4096 호떡·8192 붕어빵(서버가 정함) p.hp = clamp(m.hp | 0, 0, W.MAX_HP);
         const dead = !!m.d;
         if (dead && !p.dead) {
           p.score = Math.max(0, p.score - 300); p.combo = 0;
@@ -274,7 +274,7 @@ function createWorld(idx) {
             pierce: bs.pierce, boom: bs.boom, ice: bs.ice, hitE: null };
           balls.set(b.id, b);
         }
-        broadcast({ t: 'b', id: `${p.id}.${cid}`, o: p.id, x: r2(x), z: r2(z), h: r2(h), dx: r2(dx), dz: r2(dz), ch, st, pv: pv ? 1 : 0 }, p);
+        broadcast({ t: 'b', id: `${p.id}.${cid}`, o: p.id, x: r2(x), z: r2(z), h: r2(h), dx: r2(dx), dz: r2(dz), ch, st, pv: pv ? 1 : 0, sk: p.skin }, p);
         break;
       }
       case 'hc': {                 // 내 화면에서 맞은 걸 신고 → 서버가 거리만 확인하고 바로 적용 (공격 씹힘 방지)
@@ -380,6 +380,25 @@ function createWorld(idx) {
         const [o] = ornaments.splice(i, 1);
         p.score += W.GIANT_TREE.ornCost;
         broadcast({ t: 'ornx', id: o.id, by: p.id });
+        break;
+      }
+      case 'food': {               // 간식 트럭에서 호떡·붕어빵 사기 (2,000점). 이미 산 건 무료로 다시 꺼내기
+        const tk = W.TRUCKS.find(q => q.k === m.k);
+        if (!tk) break;
+        if (Math.hypot(p.x - tk.x, p.z - tk.z) > 9) { p.conn.send({ t: 'buyfail', why: '트럭 가까이에서 살 수 있어요' }); break; }
+        let bought = 0;
+        if (!p.skins.has(tk.sk)) {
+          if (p.score < W.FOOD_COST) { p.conn.send({ t: 'buyfail', why: '{n}점이 필요해요', wv: { n: W.FOOD_COST } }); break; }
+          p.score -= W.FOOD_COST; p.skins.add(tk.sk); bought = 1;
+        }
+        p.skin = tk.sk;
+        p.conn.send({ t: 'skin', sk: p.skin, own: [...p.skins], k: tk.k, bought });
+        break;
+      }
+      case 'skin': {               // 던질 것 바꾸기: 0 눈덩이, 1 호떡, 2 붕어빵 (산 것만)
+        const sk = m.sk | 0;
+        if (sk === 0 || p.skins.has(sk)) p.skin = sk;
+        p.conn.send({ t: 'skin', sk: p.skin, own: [...p.skins] });
         break;
       }
       case 'fish': {               // 얼음낚시 시작/그만
