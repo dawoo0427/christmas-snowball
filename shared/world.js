@@ -283,10 +283,10 @@
       for (const key in L) { const v = o[key] | 0; out[key] = v >= 0 && v < L[key] ? v : 0; }
       return out;
     },
-    // 선물: 체력, 트리플, 왕눈덩이, 스피드, 공격력, 연사, 보호막, 무한 눈덩이 + 공격형(관통, 폭발, 얼음, 저격, 연발)
-    GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'infinite', 'pierce', 'boom', 'ice', 'snipe', 'double'],
+    // 선물: 체력, 트리플, 왕눈덩이, 스피드, 공격력, 연사, 보호막 + 공격형(관통, 폭발, 얼음, 저격, 연발)
+    GIFT_KINDS: ['heal', 'triple', 'giant', 'fast', 'power', 'rapid', 'shield', 'pierce', 'boom', 'ice', 'snipe', 'double'],
     // 보호막 말고는 시간 제한 없이 쓰러질 때까지 유지, 먹을수록 중첩 (최대 단계)
-    STACK_MAX: { triple: 3, giant: 4, fast: 3, power: 4, rapid: 3, infinite: 1, pierce: 4, boom: 4, ice: 4, snipe: 3, double: 2 },
+    STACK_MAX: { triple: 3, giant: 4, fast: 3, power: 4, rapid: 3, pierce: 4, boom: 4, ice: 4, snipe: 3, double: 2 },
     STACK_KEYS: ['triple', 'giant', 'power', 'snipe', 'pierce', 'boom', 'ice', 'double'],   // 눈덩이에 실리는 효과
     cleanStacks(o) {
       const out = {}; o = o && typeof o === 'object' ? o : {};

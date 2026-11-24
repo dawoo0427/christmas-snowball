@@ -1015,13 +1015,13 @@ const GIFT_INFO = {
   heal: { color: 0xe53935, label: '체력 +40', c: '#ff8fa3' }, triple: { color: 0x1e88e5, label: '트리플 샷!', c: '#7dd3ff' },
   giant: { color: 0x8e24aa, label: '왕눈덩이!', c: '#d0a8ff' }, fast: { color: 0x43a047, label: '스피드 업!', c: '#8dffa8' },
   power: { color: 0xff6d00, label: '공격력 UP!', c: '#ffab6b' }, rapid: { color: 0xfdd835, label: '연사 UP! 눈덩이 수 증가', c: '#fff176' },
-  shield: { color: 0x00bcd4, label: '보호막! 피해 절반', c: '#80deea' }, infinite: { color: 0xeceff1, label: '무한 눈덩이!', c: '#ffffff' },
+  shield: { color: 0x00bcd4, label: '보호막! 피해 절반', c: '#80deea' },
   pierce: { color: 0x90a4ae, label: '관통 눈덩이!', c: '#cfd8dc' }, boom: { color: 0xb71c1c, label: '폭발 눈덩이!', c: '#ff7043' },
   ice: { color: 0xb3e5fc, label: '얼음 눈덩이!', c: '#b3e5fc' }, snipe: { color: 0x3949ab, label: '저격 눈덩이!', c: '#9fa8ff' },
   double: { color: 0xf06292, label: '연발 샷!', c: '#ff9ec4' },
 };
 // 버프 이름 (HUD 표시용), 단계는 ×숫자
-const BUFF_NAME = { triple: ['트리플 샷', '#7dd3ff'], giant: ['왕눈덩이', '#d0a8ff'], fast: ['스피드', '#8dffa8'], power: ['공격력', '#ffab6b'], rapid: ['연사', '#fff176'], infinite: ['무한 눈덩이', '#ffffff'],
+const BUFF_NAME = { triple: ['트리플 샷', '#7dd3ff'], giant: ['왕눈덩이', '#d0a8ff'], fast: ['스피드', '#8dffa8'], power: ['공격력', '#ffab6b'], rapid: ['연사', '#fff176'],
   pierce: ['관통', '#cfd8dc'], boom: ['폭발', '#ff7043'], ice: ['얼음', '#b3e5fc'], snipe: ['저격', '#9fa8ff'], double: ['연발', '#ff9ec4'] };
 // 나쁜 산타: 빨간 옷, 흰 수염, 화난 눈썹, 등에 석탄 자루
 function makeSanta() {
@@ -1308,7 +1308,7 @@ function removeIgloo(id) {
 }
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
-    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, infinite: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, slowT: 0, tea: 0, yam: 0, riding: false, rest: 0, restT: 0, sit: null, fish: false, fishJerk: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
+    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, slowT: 0, tea: 0, yam: 0, riding: false, rest: 0, restT: 0, sit: null, fish: false, fishJerk: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
     walk: 0, throwAnim: 0, regenT: 0, inVillage: true, dead: false, respawnT: 0, squash: 0 };
 }
 
@@ -2123,7 +2123,7 @@ function throwPlayer() {
   const myCid = cid++;
   spawnVolley({ id: `${myId}.${myCid}`, owner: 'me', from: myId, x: ox, z: oz, h: oh, dx: dir.x, dz: dir.z, ch, st, pv: !p.inVillage });
   send({ t: 'th', cid: myCid, x: r2(ox), z: r2(oz), h: r2(oh), dx: r2(dir.x), dz: r2(dir.z), ch, st });
-  if (p.infinite <= 0) p.ammo--;
+  p.ammo--;
   p.cd = Math.max(0.05, 0.15 / (1 + p.rapid)); p.throwAnim = 0.25; sfx.throw();
   if (p.ammo === 0) startReload();
 }
@@ -2184,7 +2184,7 @@ let hudCache = '';
 function updateHUD() {
   const p = me;
   const h = `${Math.max(0, Math.round(p.hp))} / ${p.maxHp}`;
-  const ammo = (p.infinite ? '<span style="color:#fff;margin:0">❄ 무한</span>' : p.maxAmmo > 20 ? `<span style="color:#fff;margin:0">❄ ${p.ammo} / ${p.maxAmmo}</span>` : Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('')) + (p.reloadT > 0 ? `<span>눈 뭉치는 중… ${p.reloadT.toFixed(1)}초</span>` : '');
+  const ammo = (p.maxAmmo > 20 ? `<span style="color:#fff;margin:0">❄ ${p.ammo} / ${p.maxAmmo}</span>` : Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('')) + (p.reloadT > 0 ? `<span>눈 뭉치는 중… ${p.reloadT.toFixed(1)}초</span>` : '');
   const stk = Object.keys(BUFF_NAME).filter(k => p[k] > 0).map(k => `<b style="color:${BUFF_NAME[k][1]};font-weight:400">${BUFF_NAME[k][0]}${W.STACK_MAX[k] > 1 ? ' ×' + p[k] : ''}</b>`).join(' · ');
   const buffs = [p.riding && `<span style="color:#ffcc80">🛷 눈썰매 · 이동 ×${W.SLED.speed}${p.fast ? ` (스피드 ×${p.fast}과 중첩)` : ''} · 공격 불가</span>`, stk && `<span style="max-width:240px">${stk}</span>`, p.shield > 0 && `<span style="color:#80deea">보호막 ${p.shield.toFixed(0)}s</span>`, p.slowT > 0 && '<span style="color:#b3e5fc">🧊 얼어서 느려짐</span>',
     voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, p.tea > 0 && '<span style="color:#ffcc80">☕ 티타임 중… 따뜻해요</span>', p.rest && !p.dead && `<span style="color:#ffb74d">${p.sit && p.sit.kind === 'lie' ? '🛏️ 침대에서' : p.sit && !p.sit.fire ? '🪑 앉아서' : `🔥 모닥불${p.sit ? ' 앞에 앉아' : '에서'}`} 쉬는 중${p.hp < p.maxHp ? ' · 체력 회복' : ''}</span>`,
