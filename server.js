@@ -28,7 +28,7 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const ROOT = __dirname;
 const STATIC = {
   '/': 'public/index.html', '/index.html': 'public/index.html',
-  '/world.js': 'shared/world.js', '/lib/three.min.js': 'public/lib/three.min.js',
+  '/world.js': 'shared/world.js', '/lib/three.min.js': 'public/lib/three.min.js', '/i18n.js': 'public/i18n.js',
 };
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
@@ -315,12 +315,12 @@ function handle(p, m) {
     case 'igloo': {              // 이글루 짓기 (5000점 차감). 이미 있으면 같은 레벨 그대로 옮기기(무료)
       const x = num(m.x), z = num(m.z), rot = num(m.rot), old = igloos.get(p.id), lv = old ? old.lv : 0;
       const cost = old ? 0 : W.IGLOO.LV[0].cost;
-      let why = '';
+      let why = '', wv;     // 안내 문구는 한국어 키 + 값(wv)으로 보내고, 화면이 선택한 언어로 번역한다
       if (p.dead) why = '쓰러진 상태에서는 지을 수 없어요';
-      else if (p.score < cost) why = `이글루는 ${cost.toLocaleString()}점이 필요해요`;
+      else if (p.score < cost) { why = '이글루는 {n}점이 필요해요'; wv = { n: cost }; }
       else if (Math.hypot(x - p.x, z - p.z) > 16) why = '너무 멀어요';
       else why = W.iglooSpot(x, z, igList(), p.id, W.IGLOO.LV[lv].r);
-      if (why) { p.conn.send({ t: 'igfail', why }); break; }
+      if (why) { p.conn.send({ t: 'igfail', why, wv }); break; }
       p.score -= cost;
       const ig = W.igDims({ id: p.id, x, z, rot, n: p.n, lv });
       igloos.set(p.id, ig);
@@ -332,9 +332,10 @@ function handle(p, m) {
       if (!ig) { p.conn.send({ t: 'igfail', why: '먼저 이글루를 지어 주세요' }); break; }
       if (ig.lv >= W.IGLOO.LV.length - 1) { p.conn.send({ t: 'igfail', why: '이미 최종 얼음성이에요' }); break; }
       const next = W.IGLOO.LV[ig.lv + 1];
-      let why = p.score < next.cost ? `${next.name}은 ${next.cost.toLocaleString()}점이 필요해요` : W.iglooSpot(ig.x, ig.z, igList(), p.id, next.r);
+      let why = p.score < next.cost ? '{name}은 {n}점이 필요해요' : W.iglooSpot(ig.x, ig.z, igList(), p.id, next.r);
+      const wv = { n: next.cost, lv: ig.lv + 1 };
       if (why && why.includes('가까워요')) why = '주변이 좁아서 넓힐 수 없어요 (나무·바위·다른 이글루). 넓은 곳으로 옮긴 뒤 다시 해 보세요';
-      if (why) { p.conn.send({ t: 'igfail', why }); break; }
+      if (why) { p.conn.send({ t: 'igfail', why, wv }); break; }
       p.score -= next.cost; ig.lv++; W.igDims(ig);
       broadcast({ t: 'ig', i: igRow(ig), cost: next.cost, up: 1 });
       break;
@@ -342,7 +343,7 @@ function handle(p, m) {
     case 'buy': {                // 눈썰매 구매 (50,000점 차감, 접속해 있는 동안 계속 보유)
       if (m.item !== 'sled') break;
       if (p.sled) { p.conn.send({ t: 'bought', item: 'sled' }); break; }
-      if (p.score < W.SLED.cost) { p.conn.send({ t: 'buyfail', why: `${W.SLED.cost.toLocaleString()}점이 필요해요` }); break; }
+      if (p.score < W.SLED.cost) { p.conn.send({ t: 'buyfail', why: '{n}점이 필요해요', wv: { n: W.SLED.cost } }); break; }
       p.score -= W.SLED.cost; p.sled = true;
       p.conn.send({ t: 'bought', item: 'sled', cost: W.SLED.cost });
       break;
@@ -352,10 +353,10 @@ function handle(p, m) {
       let why = '';
       if (!W.ORNAMENTS.some(o => o.k === k)) why = '알 수 없는 장식이에요';
       else if (Math.hypot(p.x - T.x, p.z - T.z) > T.near + 6) why = '트리 가까이에서 꾸밀 수 있어요';
-      else if (p.score < T.ornCost) why = `오너먼트 하나에 ${T.ornCost.toLocaleString()}점이 필요해요`;
+      else if (p.score < T.ornCost) why = '오너먼트 하나에 {n}점이 필요해요';
       else if (ornaments.length >= T.maxOrn) why = '트리가 장식으로 가득 찼어요!';
       else if (!(y >= T.trunk + 0.3 && y <= T.h - 0.5)) why = '트리 위에 달아 주세요';
-      if (why) { p.conn.send({ t: 'ornfail', why }); break; }
+      if (why) { p.conn.send({ t: 'ornfail', why, wv: { n: T.ornCost } }); break; }
       p.score -= T.ornCost;
       const o = { id: nextOrn++, k, a, y, n: p.n, pid: p.id };
       ornaments.push(o);
