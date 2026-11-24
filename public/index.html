@@ -147,6 +147,16 @@
   #overlay input { font-family:var(--display); font-size:20px; padding:9px 14px; border-radius:14px; border:2px solid #ffffff40; background:#0b1430; color:#fff; text-align:center; width:220px; max-width:100%; }
   #overlay .row { display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; margin:8px 0; }
   #overlay .note { color:var(--muted); font-size:13px; line-height:1.6; }
+  .servers { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  #overlay .servers button { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:118px; padding:8px 14px 8px 24px; border-radius:16px; background:#ffffff14; border:2px solid #ffffff30; box-shadow:none; font-family:var(--body); position:relative; }
+  #overlay .servers button b { font-family:var(--display); font-weight:400; font-size:17px; }
+  #overlay .servers button small { font-size:12px; color:var(--muted); }
+  #overlay .servers button.sel { background:#2f6fd6; border-color:#9cc3ff; }
+  #overlay .servers button.sel small { color:#e3edff; }
+  #overlay .servers button.full { opacity:0.5; cursor:not-allowed; }
+  #overlay .servers button i { position:absolute; top:calc(50% - 4px); left:9px; width:8px; height:8px; border-radius:50%; background:#3ddc84; }
+  #overlay .servers button i.amber { background:#ffb300; } #overlay .servers button i.red { background:#ff5252; }
+  body.touch #overlay .servers button { min-width:96px; padding:5px 10px; } body.touch #overlay .servers button b { font-size:14px; }
   #overlay .srv { display:inline-flex; gap:8px; align-items:center; font-family:var(--display); font-size:17px; padding:6px 14px; border-radius:16px; background:#ffffff14; }
   #overlay .srv i { width:10px; height:10px; border-radius:50%; background:#888; display:inline-block; }
   #overlay .srv i.on { background:#4dff88; box-shadow:0 0 8px #4dff88; }
@@ -1330,7 +1340,9 @@ function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
 // ============================================================
 const appliedHits = new Set();   // 이미 반영한 PvP 피해 (중복 방지)
 const net = { ws: null, open: false, lastMsg: 0, sendT: 0, retryT: 0, wantPlay: false, leaving: false };
-const wsUrl = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+// 고른 서버(월드) 번호. 입장 화면에서 고르고 브라우저에 저장
+let myServer = Math.max(1, +store.get('snowball-server', '1') || 1);
+const wsUrl = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?s=' + myServer;
 function send(obj) { if (net.ws && net.open && net.ws.readyState === 1) net.ws.send(JSON.stringify(obj)); }
 function connect() {
   if (location.protocol === 'file:') { overlay('file'); return; }
@@ -2289,9 +2301,22 @@ function overlay(kind, err = '') {
     const go = () => { audio(); save(); $('go').disabled = true; $('go').textContent = t("접속 중…"); state = 'connecting'; connect(); };
     $('go').onclick = go;
     $('nick').addEventListener('submit-enter', go);
+    // 서버 고르기: 서버마다 접속 인원을 보여주고, 누르면 선택 (가득 찬 서버는 못 고름)
+    const row = $('srv') && $('srv').parentElement;
+    if (row) { row.innerHTML = `<div class="servers" id="servers" role="radiogroup" aria-label="${esc(t('서버 선택'))}"><span class="srv"><i></i> ${esc(t('서버 확인 중…'))}</span></div>`; }
+    let srvList = [];
+    const drawServers = () => {
+      const box = $('servers'); if (!box || !srvList.length) return;
+      if (!srvList.some(v => v.id === myServer)) myServer = srvList[0].id;
+      box.innerHTML = srvList.map(v => {
+        const full = v.players >= v.max, busy = v.players >= v.max * 0.8, sel = v.id === myServer;
+        return `<button data-s="${v.id}" role="radio" aria-checked="${sel}" class="${sel ? 'sel' : ''} ${full ? 'full' : ''}" ${full ? 'disabled' : ''}><i class="${full ? 'red' : busy ? 'amber' : 'on'}"></i><b>${esc(t(v.name))}</b><small>${full ? esc(t('가득 참')) : esc(t('{0}/{1}명', [v.players, v.max]))}</small></button>`;
+      }).join('');
+      box.querySelectorAll('button[data-s]').forEach(b => b.onclick = () => { myServer = +b.dataset.s; store.set('snowball-server', String(myServer)); drawServers(); });
+    };
     const check = () => fetch('health', { cache: 'no-store' }).then(r => r.json()).then(h => {
-      const s = $('srv'); if (s) s.innerHTML = t("<i class=\"on\"></i> {0} · {1}명 접속 중", [esc(t(h.server)), h.players]);
-    }).catch(() => { const s = $('srv'); if (s) s.innerHTML = t("<i></i> 서버에 연결할 수 없어요"); });
+      srvList = h.servers || [{ id: 1, name: h.server, players: h.players, max: h.max }]; drawServers();
+    }).catch(() => { const box = $('servers'); if (box) box.innerHTML = t("<i></i> 서버에 연결할 수 없어요"); });
     check(); healthTimer = setInterval(check, 5000);
   }
   if (kind === 'tree') {
