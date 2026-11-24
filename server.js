@@ -478,7 +478,7 @@ function createWorld(idx) {
     for (const t of tg) { const dd = Math.hypot(t.x - e.x, t.z - e.z); if (dd < d) { d = dd; tgt = t; } }
     let nearest = 1e9; for (const p of players.values()) nearest = Math.min(nearest, Math.hypot(p.x - e.x, p.z - e.z));
     e.far = nearest > 95;
-    const aggroR = T.boss ? 20 : e.type === 'badsanta' ? 17 : 14;      // 플레이어를 알아차리는 거리
+    const aggroR = T.aggro ? T.aggro : T.boss ? 20 : e.type === 'badsanta' ? 17 : 14;      // 플레이어를 알아차리는 거리
     if (tgt && d < aggroR) e.aggro = true;
     if (!tgt || d > aggroR + 12) e.aggro = false;                       // 이만큼 멀어지면 포기
     if (Math.hypot(e.x - e.home.x, e.z - e.home.z) > (T.boss ? 75 : 40)) e.aggro = false;
@@ -584,33 +584,35 @@ function createWorld(idx) {
     if (e.hp <= 0 && enemies.has(e.id)) {
       enemies.delete(e.id);
       if (e.spawn) { e.spawn.eid = 0; e.spawn.timer = W.MOB_RESPAWN; }
-      const nDrop = e.T.drops || (Math.random() < (e.T.drop || 0) ? 1 : 0);    // 산타 2개, 보스 4개, 나머지는 확률로 1개
-      if (e.T.boss) { bossTimer = W.BOSS_RESPAWN; broadcast({ t: 'boss', on: 0, by: p ? p.id : 0, type: e.type }); log(`보스 처치 by ${p ? p.n : '?'}`); }
+      const nDrop = e.T.drops || (Math.random() < (e.T.drop || 0) ? 1 : 0);
+      const dropKinds = [...W.GIFT_KINDS].sort(() => Math.random() - 0.5);     // 얼음 괴수: 서로 다른 종류로    // 산타 2개, 보스 4개, 나머지는 확률로 1개
+      if (e.T.boss) { bossTimers[e.type] = e.T.every; broadcast({ t: 'boss', on: 0, by: p ? p.id : 0, type: e.type }); log(`[${NAME}] 보스(${e.type}) 처치 by ${p ? p.n : '?'}`); }
       for (let i = 0; i < nDrop; i++) {
-        const a = rand(0, TAU), rr = e.T.boss ? 2.6 : 1.6, o = { x: e.x + Math.cos(a) * rr, z: e.z + Math.sin(a) * rr }; pushOut(o, 0.8);
-        const d = { id: nextDrop++, x: o.x, z: o.z, k: W.GIFT_KINDS[Math.floor(Math.random() * W.GIFT_KINDS.length)], ttl: W.DROP_TTL };
+        const a = rand(0, TAU), rr = e.T.boss ? e.T.r + 1 : 1.6, o = { x: e.x + Math.cos(a) * rr, z: e.z + Math.sin(a) * rr }; pushOut(o, 0.8);
+        const d = { id: nextDrop++, x: o.x, z: o.z, k: e.T.uniqueDrops ? dropKinds[i % dropKinds.length] : W.GIFT_KINDS[Math.floor(Math.random() * W.GIFT_KINDS.length)], ttl: W.DROP_TTL };
         drops.set(d.id, d); broadcast({ t: 'drop', id: d.id, x: r1(d.x), z: r1(d.z), k: d.k, by: p ? p.id : 0, src: e.type, n: i });
       }
     }
   }
-  // 보스: 맵의 랜덤한 곳에 한 마리. 쓰러지면 90초 뒤 다른 곳에 다시
-  let bossTimer = W.BOSS_FIRST;
-  function spawnBoss() {
+  // 보스: 종류마다 맵의 랜덤한 곳에 한 마리. 하프물범은 쓰러지면 90초 뒤, 고대 얼음 괴수는 5분마다 다른 곳에 다시
+  const BOSSES = Object.keys(TYPES).filter(k => TYPES[k].boss);
+  const bossTimers = Object.fromEntries(BOSSES.map(k => [k, +process.env.BOSS_FIRST_TEST || TYPES[k].first]));   // BOSS_FIRST_TEST: 테스트용 (실서버 미사용)
+  function spawnBoss(type) {
     let s = null;
     for (let k = 0; k < 50 && !s; k++) { const c = openSpot(40); if (Math.hypot(c.x, c.z) > W.VILLAGE_SAFE * 2.5 && !W.onIce(c.x, c.z)) s = c; }
-    if (!s) { bossTimer = 10; return; }
-    const e = addEnemy('seal', s.x, s.z, null); e.boss = true;
-    broadcast({ t: 'boss', on: 1, x: r1(s.x), z: r1(s.z), type: 'seal' });
-    log(`보스 등장 (${s.x.toFixed(0)}, ${s.z.toFixed(0)})`);
+    if (!s) { bossTimers[type] = 10; return; }
+    const e = addEnemy(type, s.x, s.z, null); e.boss = true;
+    broadcast({ t: 'boss', on: 1, x: r1(s.x), z: r1(s.z), type });
+    log(`[${NAME}] 보스(${type}) 등장 (${s.x.toFixed(0)}, ${s.z.toFixed(0)})`);
   }
   function step(dt) {
     const active = players.size > 0;
-    if (active && ![...enemies.values()].some(e => e.T.boss)) { bossTimer -= dt; if (bossTimer <= 0) spawnBoss(); }
+    if (active) for (const k of BOSSES) if (![...enemies.values()].some(e => e.type === k)) { bossTimers[k] -= dt; if (bossTimers[k] <= 0) spawnBoss(k); }
     for (const p of players.values()) p.tokens = Math.min(20, p.tokens + dt * 24);
     if (active) {
       const tg = targets();
       for (const e of enemies.values()) aiEnemy(e, dt, tg);
-      const list = [...enemies.values()];
+      const list = [...enemies.values()].filter(e => !e.far);     // 근처에 사람이 없는 몬스터끼리는 밀어내기 계산 생략
       for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
         const a = list[i], b = list[j], dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), m = a.T.r + b.T.r;
         if (d < m && d > 1e-4) { const k = (m - d) / 2 / d; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; }
@@ -666,7 +668,7 @@ function createWorld(idx) {
     const ps = [...players.values()].map(p => [p.id, r1(p.x), r1(p.z), r1(p.y), r2(p.face), r1(p.vx), r1(p.vz), p.flags, p.hp, p.dead ? 1 : 0, p.score, (p.vl ? 1 : 0) | (p.vt ? 2 : 0)]);
     const gs = gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]);
     const hs = heals.map(h => (h.on ? 1 : 0));
-    const es = [...enemies.values()], bossRows = es.filter(e => e.T.boss).map(e => [e.id, r1(e.x), r1(e.z), e.hp, e.max]);
+    const es = [...enemies.values()], bossRows = es.filter(e => e.T.boss).map(e => [e.id, r1(e.x), r1(e.z), e.hp, e.max, e.T.id]);
     for (const p of players.values()) {
       if (!p.ready || p.conn.congested) continue;
       const near = es.filter(e => Math.abs(e.x - p.x) < 110 && Math.abs(e.z - p.z) < 110)

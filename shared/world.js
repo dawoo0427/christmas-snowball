@@ -16,7 +16,7 @@
 
   // 맵 크기: 플레이 가능 범위 ±448 (예전의 2배). 가장자리 바깥은 산으로 막힌다.
   const LIMIT = 448, EDGE = 432, HALF = 580;
-  const VILLAGE_SAFE = 56;            // 마을 안전지대 반지름 (예전의 2배). 이 밖에서는 플레이어끼리 PvP 가능
+  const VILLAGE_SAFE = 112;           // 마을 안전지대 반지름 (56 → 112, 2배). 이 밖에서는 플레이어끼리 PvP 가능
   const ZONES = [220, 340];           // 마을에서 이 거리 밖부터 나쁜 루돌프, 나쁜 산타가 나온다
   // 안전지대의 초대형 크리스마스트리: 플레이어가 오너먼트로 꾸민다 (하나에 1,000점)
   // 탑뷰 카메라(높이 약 24, 49도로 내려다봄)에서 꼭대기 전광판까지 잘리지 않고 보이도록 높이 약 12 + 전광판
@@ -48,14 +48,14 @@
   const SEATS = BENCHES.flatMap(b => b.seats);
   // 마을에서 뻗어 나가는 길 5개의 끝 지점 (캠프는 없어졌고 길과 가로등은 이정표로 남김)
   const ROAD_ENDS = [{ x: 220, z: -160 }, { x: -248, z: -168 }, { x: -264, z: 208 }, { x: 248, z: 232 }, { x: 0, z: -368 }];
-  const LAKE = { x: -96, z: 300, r: 32 };
+  const LAKE = { x: -96, z: 300, r: 64 };          // 얼음낚시 호수 (반지름 2배 = 넓이 4배)
 
   function baseH(x, z) {
     return 2.2 * Math.sin(x * 0.045) * Math.cos(z * 0.04) + 0.9 * Math.sin(x * 0.12 + z * 0.08)
          + 1.1 * Math.cos(z * 0.1 - x * 0.035) + 0.45 * Math.sin(x * 0.3) * Math.sin(z * 0.27);
   }
   const FLATS = [
-    { x: 0, z: 0, inner: 62, outer: 78 },
+    { x: 0, z: 0, inner: 118, outer: 140 },          // 안전지대 평지
     { x: LAKE.x, z: LAKE.z, inner: LAKE.r + 1, outer: LAKE.r + 10, lower: -1.4 },
   ];
   FLATS.forEach(f => { f.h = baseH(f.x, f.z) + (f.lower || 0); });
@@ -248,7 +248,7 @@
       if (d < ZONES[1]) return t < 0.35 ? 'snowman' : t < 0.6 ? 'penguin' : 'rudolph';
       return t < 0.2 ? 'snowman' : t < 0.35 ? 'penguin' : t < 0.68 ? 'rudolph' : 'badsanta';
     };
-    for (let i = 0; i < 30000 && data.spawns.length < 225; i++) {      // 필드 몬스터 225마리 (예전의 3배)
+    for (let i = 0; i < 80000 && data.spawns.length < 450; i++) {      // 필드 몬스터 450마리 (225 → 450, 2배)
       const x = R.range(-LIMIT + 12, LIMIT - 12), z = R.range(-LIMIT + 12, LIMIT - 12), d = Math.hypot(x, z);
       if (d < VILLAGE_SAFE + 20 || onIce(x, z) || data.spawns.some(sp => Math.hypot(sp.x - x, sp.z - z) < 17)) continue;
       const o = freeSpot(x, z); if (Math.hypot(o.x - x, o.z - z) > 0.01) continue;
@@ -272,9 +272,13 @@
       badsanta: { id: 3, hp: 10, r: 1.1, h: 3.6, speed: 3.6, cool: [1.7, 2.5], wind: 0.8, range: 14, maxRange: 26, spd: 18, err: 0.05, pts: 1000, scale: 1.25, dmg: 18, ball: 1, spread: 3, drops: 2 },
       // 거대 하프물범 (보스): 맵 랜덤한 곳에 한 마리. 다가와서 배치기로 주변을 내려친다. 처치 시 10,000점 + 선물 4개
       seal: { id: 4, hp: 300, r: 1.8, h: 2.6, speed: 7.2, cool: [1.2, 1.9], wind: 0.75, range: 2.4, maxRange: 4.4, spd: 0, err: 0, pts: 10000, scale: 1.6, dmg: 30,
-        melee: true, reach: 4.4, boss: true, drops: 4, name: '거대 하프물범' },
+        melee: true, reach: 4.4, boss: true, drops: 4, name: '거대 하프물범', every: 90, first: 20, aggro: 20 },
+      // 고대 얼음 괴수 (최종 보스): 5분마다 등장. 하프물범의 4배 (체력·공격력·크기·공격 범위·이동 속도), 처치 시 20,000점 + 서로 다른 선물 10종
+      // 공격 예고는 1.4초 (17.6칸 범위를 피할 틈), 알아차리는 거리는 2배(40칸)로 둔다
+      icebeast: { id: 5, hp: 1200, r: 7.2, h: 2.6, speed: 28.8, cool: [1.6, 2.4], wind: 1.4, range: 9.6, maxRange: 17.6, spd: 0, err: 0, pts: 20000, scale: 6.4, dmg: 120,
+        melee: true, reach: 17.6, boss: true, drops: 10, uniqueDrops: true, name: '고대 얼음 괴수', every: 300, first: 300, aggro: 40 },
     },
-    TYPE_BY_ID: ['snowman', 'penguin', 'rudolph', 'badsanta', 'seal'],
+    TYPE_BY_ID: ['snowman', 'penguin', 'rudolph', 'badsanta', 'seal', 'icebeast'],
     BOSS_RESPAWN: 90, BOSS_FIRST: 20,
     SLED: { cost: 50000, speed: 3 },      // 눈썰매: 50,000점에 구매, 타면 이동 속도 3배(스피드 아이템과 곱해짐), 타는 동안 공격 불가
     MOB_RESPAWN: 20, GIFT_RESPAWN: 10, HEAL_RESPAWN: 10,
