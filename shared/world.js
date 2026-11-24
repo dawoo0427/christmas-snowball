@@ -48,7 +48,9 @@
   const SEATS = BENCHES.flatMap(b => b.seats);
   // 마을에서 뻗어 나가는 길 5개의 끝 지점 (캠프는 없어졌고 길과 가로등은 이정표로 남김)
   const ROAD_ENDS = [{ x: 220, z: -160 }, { x: -248, z: -168 }, { x: -264, z: 208 }, { x: 248, z: 232 }, { x: 0, z: -368 }];
-  const LAKE = { x: -96, z: 300, r: 64 };          // 얼음낚시 호수 (반지름 2배 = 넓이 4배)
+  // 얼음낚시 호수 2곳: 맵 아래쪽(남)과 위쪽(북). 크기는 같다
+  const LAKES = [{ x: -96, z: 300, r: 64 }, { x: 96, z: -300, r: 64 }];
+  const LAKE = LAKES[0];
 
   function baseH(x, z) {
     return 2.2 * Math.sin(x * 0.045) * Math.cos(z * 0.04) + 0.9 * Math.sin(x * 0.12 + z * 0.08)
@@ -56,7 +58,7 @@
   }
   const FLATS = [
     { x: 0, z: 0, inner: 118, outer: 140 },          // 안전지대 평지
-    { x: LAKE.x, z: LAKE.z, inner: LAKE.r + 1, outer: LAKE.r + 10, lower: -1.4 },
+    ...LAKES.map(k => ({ x: k.x, z: k.z, inner: k.r + 1, outer: k.r + 10, lower: -1.4, lake: true })),
   ];
   FLATS.forEach(f => { f.h = baseH(f.x, f.z) + (f.lower || 0); });
   function heightAt(x, z) {
@@ -78,7 +80,8 @@
     }
     return best;
   }
-  const onIce = (x, z) => Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r;
+  const lakeAt = (x, z, m = 0) => LAKES.find(k => Math.hypot(x - k.x, z - k.z) < k.r + m) || null;
+  const onIce = (x, z) => !!lakeAt(x, z);
   const inVillage = (x, z) => Math.hypot(x, z) < VILLAGE_SAFE;
   // 집: 가로 7, 세로 6. 문은 앞쪽(+z) 가운데 폭 2.2
   const HOUSE = { hw: 3.5, hd: 3.0, door: 1.1, wall: 0.18 };
@@ -139,7 +142,7 @@
   function iglooSpot(x, z, igs, ignoreId, R = IGLOO.r) {
     if (Math.hypot(x, z) < VILLAGE_SAFE + R + 2) return '마을 안에는 지을 수 없어요';
     if (Math.abs(x) > LIMIT - 6 || Math.abs(z) > LIMIT - 6) return '맵 끝에는 지을 수 없어요';
-    if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + R) return '얼음 호수 위에는 지을 수 없어요';
+    if (lakeAt(x, z, R)) return '얼음 호수 위에는 지을 수 없어요';
     for (const ig of igs) if (ig.id !== ignoreId && Math.hypot(x - ig.x, z - ig.z) < ig.r + R + 3) return '다른 이글루와 너무 가까워요';
     const y = heightAt(x, z) + 1;
     if (hitsCollider(x, y, z, 0.5)) return '나무나 바위가 있는 자리예요';
@@ -246,7 +249,8 @@
       const t = R();
       if (d < ZONES[0]) return t < 0.6 ? 'snowman' : 'penguin';
       if (d < ZONES[1]) return t < 0.35 ? 'snowman' : t < 0.6 ? 'penguin' : 'rudolph';
-      return t < 0.2 ? 'snowman' : t < 0.35 ? 'penguin' : t < 0.68 ? 'rudolph' : 'badsanta';
+      if (d < 400) return t < 0.15 ? 'snowman' : t < 0.28 ? 'penguin' : t < 0.56 ? 'rudolph' : t < 0.9 ? 'badsanta' : 'dokkaebi';
+      return t < 0.3 ? 'rudolph' : t < 0.68 ? 'badsanta' : 'dokkaebi';     // 맵 가장 바깥: 얼음도깨비가 많다
     };
     for (let i = 0; i < 80000 && data.spawns.length < 450; i++) {      // 필드 몬스터 450마리 (225 → 450, 2배)
       const x = R.range(-LIMIT + 12, LIMIT - 12), z = R.range(-LIMIT + 12, LIMIT - 12), d = Math.hypot(x, z);
@@ -259,7 +263,7 @@
   const layout = build();
 
   const World = {
-    TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ZONES, GIANT_TREE, ORNAMENTS, TRUCKS, FOOD_COST, ROAD_ENDS, LAKE, FLATS, PATHS,
+    TAU, clamp, smooth, angDiff, rng, LIMIT, VILLAGE_SAFE, ZONES, GIANT_TREE, ORNAMENTS, TRUCKS, FOOD_COST, ROAD_ENDS, LAKE, LAKES, lakeAt, FLATS, PATHS,
     HOUSE, houseAt, IGLOO, igDims, iglooDoor, iglooPush, iglooPushFull, iglooBlocks, iglooAt, iglooSpot, MAX_ALLIES: 10,
     heightAt, pathDist, onIce, inVillage, pushOut, hitsCollider, colliders, layout,
     BALL_H: 1.35, PLAYER_RANGE: 34, MAX_HP: 100, HEAL_AMOUNT: 35, RELOAD_TIME: 2.0,
@@ -270,29 +274,41 @@
       rudolph:  { id: 2, hp: 4, r: 0.95, h: 2.4, speed: 9.5, cool: [1.0, 1.7], wind: 0.4, range: 11, maxRange: 20, spd: 24, err: 0.08, pts: 220, scale: 1, dmg: 14, ball: 2, drop: 0.15 },
       // 나쁜 산타: 덩치 큰 정예. 석탄 눈덩이를 3발씩 부채꼴로 던진다
       badsanta: { id: 3, hp: 10, r: 1.1, h: 3.6, speed: 3.6, cool: [1.7, 2.5], wind: 0.8, range: 14, maxRange: 26, spd: 18, err: 0.05, pts: 1000, scale: 1.25, dmg: 18, ball: 1, spread: 3, drops: 2 },
-      // 거대 하프물범 (보스): 맵 랜덤한 곳에 한 마리. 다가와서 배치기로 주변을 내려친다. 처치 시 10,000점 + 선물 4개
+      // 얼음도깨비: 나쁜 산타보다 한 단계 위 정예. 얼음 방망이를 휘둘러 얼음덩이 5발을 부채꼴로 던지고, 맞으면 잠깐 느려진다
+      dokkaebi: { id: 6, hp: 24, r: 1.15, h: 3.9, speed: 4.4, cool: [1.6, 2.3], wind: 0.7, range: 15, maxRange: 28, spd: 21, err: 0.04, pts: 2000, scale: 1.35, dmg: 22, ball: 3, spread: 5, drops: 3, slow: 2.5 },
+      // 거대 하프물범 (보스): 맵 랜덤한 곳 3군데에 동시에 한 마리씩. 다가와서 배치기로 주변을 내려친다. 처치 시 10,000점 + 선물 4개
       seal: { id: 4, hp: 300, r: 1.8, h: 2.6, speed: 7.2, cool: [1.2, 1.9], wind: 0.75, range: 2.4, maxRange: 4.4, spd: 0, err: 0, pts: 10000, scale: 1.6, dmg: 30,
-        melee: true, reach: 4.4, boss: true, drops: 4, name: '거대 하프물범', every: 90, first: 20, aggro: 20 },
+        melee: true, reach: 4.4, boss: true, drops: 4, name: '거대 하프물범', every: 90, first: 20, aggro: 20, count: 3, rare: 0.35, tierP: [0.75, 0.22, 0.03] },
       // 고대 얼음 괴수 (최종 보스): 5분마다 등장. 하프물범의 4배 (체력·공격력·크기·공격 범위·이동 속도), 처치 시 20,000점 + 서로 다른 선물 10종
       // 공격 예고는 1.4초 (17.6칸 범위를 피할 틈), 알아차리는 거리는 2배(40칸)로 둔다
       icebeast: { id: 5, hp: 1200, r: 7.2, h: 2.6, speed: 28.8, cool: [1.6, 2.4], wind: 1.4, range: 9.6, maxRange: 17.6, spd: 0, err: 0, pts: 20000, scale: 6.4, dmg: 120,
-        melee: true, reach: 17.6, boss: true, drops: 10, uniqueDrops: true, name: '고대 얼음 괴수', every: 300, first: 300, aggro: 40 },
+        melee: true, reach: 17.6, boss: true, drops: 10, uniqueDrops: true, name: '고대 얼음 괴수', every: 300, first: 300, aggro: 40, rare: 1, tierP: [0.35, 0.45, 0.2] },
     },
-    TYPE_BY_ID: ['snowman', 'penguin', 'rudolph', 'badsanta', 'seal', 'icebeast'],
+    TYPE_BY_ID: ['snowman', 'penguin', 'rudolph', 'badsanta', 'seal', 'icebeast', 'dokkaebi'],
+    // 보스 희귀 장비: 무기(던지는 것 s), 머리 장식(h), 망토(p). 등급 0 레어, 1 에픽, 2 전설
+    RARES: [
+      { key: 's3', slot: 's', v: 3, tier: 0, name: '얼음 결정탄' }, { key: 's4', slot: 's', v: 4, tier: 1, name: '황금 방울탄' }, { key: 's5', slot: 's', v: 5, tier: 2, name: '오로라 별탄' },
+      { key: 'h9', slot: 'h', v: 9, tier: 0, name: '눈꽃 티아라' }, { key: 'h10', slot: 'h', v: 10, tier: 1, name: '얼음 여왕 왕관' }, { key: 'h11', slot: 'h', v: 11, tier: 2, name: '오로라 후광관' },
+      { key: 'p1', slot: 'p', v: 1, tier: 0, name: '눈꽃 망토' }, { key: 'p2', slot: 'p', v: 2, tier: 1, name: '황금 산타 망토' }, { key: 'p3', slot: 'p', v: 3, tier: 2, name: '오로라 망토' },
+    ],
+    TIER_NAMES: ['레어', '에픽', '전설'], TIER_BONUS: [3000, 6000, 12000],     // 그 등급을 다 가지고 있으면 대신 점수
+    rareKey(slot, v) { const r = World.RARES.find(q => q.slot === slot && q.v === v); return r ? r.key : ''; },
     BOSS_RESPAWN: 90, BOSS_FIRST: 20,
     SLED: { cost: 50000, speed: 3 },      // 눈썰매: 50,000점에 구매, 타면 이동 속도 3배(스피드 아이템과 곱해짐), 타는 동안 공격 불가
     MOB_RESPAWN: 20, GIFT_RESPAWN: 10, HEAL_RESPAWN: 10,
     DROP_TTL: 30, SANTA_DROPS: 2,
     // 캐릭터 꾸미기 선택지 개수 (화면 쪽 이름 목록과 순서를 맞춘다)
     // a 캐릭터, h 머리, e 눈, n 코, m 입, r 귀, k 목, b 등, c 옷 색
-    LOOK_SLOTS: { a: 6, h: 9, e: 7, n: 5, m: 6, r: 6, k: 4, b: 4, c: 6 },
-    cleanLook(o) {
+    LOOK_SLOTS: { a: 6, h: 12, e: 7, n: 5, m: 6, r: 6, k: 4, b: 4, c: 6, p: 4 },
+    // own: 가진 희귀 장비 key 목록 (서버만 넘김. 화면 쪽은 서버가 이미 걸러 준 값을 그대로 씀)
+    cleanLook(o, own) {
       const L = World.LOOK_SLOTS, out = {};
       o = o && typeof o === 'object' ? Object.assign({}, o) : {};
       if (o.f && o.e == null && o.n == null && o.m == null) {      // 예전 '얼굴' 한 칸 → 눈·코·입으로 옮김
         if (o.f === 1) o.n = 1; if (o.f === 2) o.m = 1; if (o.f === 3) o.e = 1; if (o.f === 4) o.e = 2;
       }
       for (const key in L) { const v = o[key] | 0; out[key] = v >= 0 && v < L[key] ? v : 0; }
+      if (own) for (const key of ['h', 'p']) { const rk = World.rareKey(key, out[key]); if (rk && !own.has(rk)) out[key] = 0; }
       return out;
     },
     // 선물: 체력, 트리플, 왕눈덩이, 스피드, 공격력, 연사, 보호막 + 공격형(관통, 폭발, 얼음, 저격, 연발)

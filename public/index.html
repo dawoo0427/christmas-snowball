@@ -171,6 +171,12 @@
   .custom .chips { display:flex; flex-wrap:wrap; gap:6px; }
   #overlay .custom .chips button { font-family:var(--body); font-size:13px; padding:6px 11px; border-radius:14px; background:#ffffff14; box-shadow:none; border:1.5px solid #ffffff30; }
   #overlay .custom .chips button.sel { background:#2f6fd6; border-color:#9cc3ff; }
+  #overlay .custom .chips button.t0 { border-color:#4fc3f7; color:#d4f1ff; }
+  #overlay .custom .chips button.t1 { border-color:#b388ff; color:#eedcff; }
+  #overlay .custom .chips button.t2 { border-color:#ffca28; color:#fff0c2; background:linear-gradient(135deg,#ffca2830,#b388ff30,#4fc3f730); }
+  #overlay .custom .chips button.sel.t0, #overlay .custom .chips button.sel.t1, #overlay .custom .chips button.sel.t2 { background:#2f6fd6; }
+  #overlay .custom .chips button small { font-size:10px; opacity:.85; }
+  #overlay .custom .chips button.lock { opacity:.42; }
   #overlay .custom .chips button.cdot { width:36px; height:36px; padding:0; border-radius:50%; border:3px solid #ffffff40; }
   #overlay .custom .chips button.cdot.sel { border-color:#fff; box-shadow:0 0 0 3px #2f6fd6; }
   .custom.treeedit { grid-template-columns:300px 1fr; }
@@ -405,12 +411,67 @@ function buildTerrain() {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
   m.receiveShadow = true; scene.add(m);
-  const ice = new THREE.Mesh(new THREE.CircleGeometry(LAKE.r + 0.8, 40), new THREE.MeshStandardMaterial({ color: 0x8fc8ee, roughness: 0.12, metalness: 0.35 }));
-  ice.rotation.x = -Math.PI / 2; ice.position.set(LAKE.x, FLATS[FLATS.length - 1].h + 0.06, LAKE.z); ice.receiveShadow = true; scene.add(ice);
-  for (let i = 0; i < 10; i++) {
-    const crack = mk(Box(sr(3, 7), 0.02, 0.08), mat(0xdff3ff, { basic: true }), LAKE.x + sr(-9, 9), ice.position.y + 0.02, LAKE.z + sr(-9, 9), scene, false);
-    crack.rotation.y = sr(0, TAU);
+  const iceMat = new THREE.MeshStandardMaterial({ color: 0x8fc8ee, roughness: 0.12, metalness: 0.35 });
+  for (const lk of W.LAKES) {          // 얼음낚시 호수 2곳 (아래쪽·위쪽)
+    const fl = FLATS.find(f => f.lake && f.x === lk.x && f.z === lk.z);
+    const ice = new THREE.Mesh(new THREE.CircleGeometry(lk.r + 0.8, 40), iceMat);
+    ice.rotation.x = -Math.PI / 2; ice.position.set(lk.x, fl.h + 0.06, lk.z); ice.receiveShadow = true; scene.add(ice);
+    for (let i = 0; i < 10; i++) {
+      const crack = mk(Box(sr(3, 7), 0.02, 0.08), mat(0xdff3ff, { basic: true }), lk.x + sr(-9, 9), ice.position.y + 0.02, lk.z + sr(-9, 9), scene, false);
+      crack.rotation.y = sr(0, TAU);
+    }
   }
+}
+// ---- 가림 처리: 나무·바위·집·이글루가 카메라와 내 캐릭터 사이를 가리면 반투명하게 ----
+const OCC_MAX = 32, occ = { trees: null, rocks: null, hidT: [], hidR: [], t: 0 };
+const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
+// 카메라→캐릭터(몸 가운데) 3D 선분이 물체의 몸통 구(높이 h, 반지름 r 목록)를 지나가는지
+function occHit(x, y0, z, rings) {
+  const c = camera.position, tx = me.x - c.x, ty = me.y + 1.1 - c.y, tz = me.z - c.z, L2 = tx * tx + ty * ty + tz * tz || 1;
+  for (const [h, r] of rings) {
+    const px = x - c.x, py = y0 + h - c.y, pz = z - c.z, u = (px * tx + py * ty + pz * tz) / L2;
+    if (u < 0.03 || u > 0.985) continue;
+    if (Math.hypot(px - tx * u, py - ty * u, pz - tz * u) < r) return true;
+  }
+  return false;
+}
+const TREE_RINGS = [[1.7, 1.9], [3.1, 1.45], [4.3, 0.85]];
+function updateOcclusion(dt) {
+  if (!occ.trees || !me) return;
+  occ.t -= dt; if (occ.t > 0) return; occ.t = 0.1;
+  const on = state === 'play' && !me.dead, ax = camera.position.x, az = camera.position.z;
+  const x0 = Math.min(ax, me.x) - 5, x1 = Math.max(ax, me.x) + 5, z0 = Math.min(az, me.z) - 5, z1 = Math.max(az, me.z) + 5;
+  const pickT = [], pickR = [];
+  if (on) {
+    L.trees.forEach((s, i) => {
+      if (pickT.length >= OCC_MAX || s.x < x0 || s.x > x1 || s.z < z0 || s.z > z1) return;
+      if (occHit(s.x, heightAt(s.x, s.z) - 0.25, s.z, TREE_RINGS.map(([h, r]) => [h * s.s, r * s.s]))) pickT.push(i);
+    });
+    L.rocks.forEach((r, i) => {
+      if (pickR.length >= OCC_MAX || r.x < x0 || r.x > x1 || r.z < z0 || r.z > z1) return;
+      if (occHit(r.x, heightAt(r.x, r.z), r.z, [[0.4 * r.s, 1.15 * r.s]])) pickR.push(i);
+    });
+  }
+  const swap = (grp, prev, next, matsOf) => {
+    if (prev.join() === next.join()) return;
+    for (const i of prev) if (!next.includes(i)) grp.meshes.forEach((im, k) => im.setMatrixAt(i, matsOf(i, k)));
+    for (const i of next) grp.meshes.forEach(im => im.setMatrixAt(i, ZERO_M));
+    grp.meshes.forEach(im => { im.instanceMatrix.needsUpdate = true; });
+    grp.ghost.forEach((g, k) => {
+      next.forEach((i, j) => {
+        g.setMatrixAt(j, matsOf(i, k));
+        if (grp.tint && grp.tint[k]) { const c = new THREE.Color(); grp.meshes[k].getColorAt(i, c); g.setColorAt(j, c); }
+      });
+      g.count = next.length; g.instanceMatrix.needsUpdate = true; if (g.instanceColor) g.instanceColor.needsUpdate = true;
+    });
+  };
+  swap(occ.trees, occ.hidT, pickT, i => occ.trees.mats[i]); occ.hidT = pickT;
+  swap(occ.rocks, occ.hidR, pickR, (i, k) => occ.rocks.mats[i][k]); occ.hidR = pickR;
+}
+// 집·이글루: 시선을 가리면 반투명 목표값 (안에 들어가 있을 때와 같은 방식)
+function occBuilding(x, z, r, top) {
+  if (!me || state !== 'play') return false;
+  return occHit(x, heightAt(x, z), z, [[top * 0.3, r], [top * 0.7, r * 0.8]]);
 }
 function buildForest() {
   const spots = L.trees;
@@ -424,6 +485,9 @@ function buildForest() {
     { g: tier(0.58, 0.83, 4.38), m: mat(0xf4f8ff) },
   ];
   const meshes = parts.map(p => { const im = new THREE.InstancedMesh(p.g, p.m, spots.length); im.castShadow = true; im.receiveShadow = true; scene.add(im); return im; });
+  // 가림 처리용 반투명 복사본: 카메라와 캐릭터 사이를 가리는 나무는 원래 자리에서 숨기고 이 복사본으로 그린다
+  const ghost = parts.map(p => { const gm = p.m.clone(); gm.transparent = true; gm.opacity = 0.26; gm.depthWrite = false; const im = new THREE.InstancedMesh(p.g, gm, OCC_MAX); im.count = 0; im.renderOrder = 3; im.frustumCulled = false; if (p.tint) im.setColorAt(0, new THREE.Color(1, 1, 1)); scene.add(im); return im; });
+  occ.trees = { meshes, ghost, mats: spots.map(() => null), tint: parts.map(p => !!p.tint) };
   const M = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
   spots.forEach((s, i) => {
     q.setFromAxisAngle(up, s.r);
@@ -435,16 +499,21 @@ function buildForest() {
         im.setColorAt(i, col);
       }
     });
+    occ.trees.mats[i] = M.clone();
   });
   const rocks = L.rocks;
   const rim = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), mat(0x8890a8), rocks.length);
   const cap = new THREE.InstancedMesh(new THREE.SphereGeometry(0.85, 7, 4, 0, TAU, 0, Math.PI / 2.4), mat(0xf4f8ff), rocks.length);
   rim.castShadow = cap.castShadow = true; rim.receiveShadow = cap.receiveShadow = true;
+  const rockGhost = [rim, cap].map(im => { const gm = im.material.clone(); gm.transparent = true; gm.opacity = 0.3; gm.depthWrite = false; const g = new THREE.InstancedMesh(im.geometry, gm, OCC_MAX); g.count = 0; g.renderOrder = 3; g.frustumCulled = false; scene.add(g); return g; });
+  occ.rocks = { meshes: [rim, cap], ghost: rockGhost, mats: rocks.map(() => null) };
   rocks.forEach((r, i) => {
     const y = heightAt(r.x, r.z);
     q.setFromEuler(new THREE.Euler(sr(0, 1), sr(0, TAU), 0));
     M.compose(new THREE.Vector3(r.x, y + 0.2 * r.s, r.z), q, new THREE.Vector3(r.s * 1.2, r.s * 0.8, r.s)); rim.setMatrixAt(i, M);
+    const m0 = M.clone();
     M.compose(new THREE.Vector3(r.x, y + 0.55 * r.s, r.z), new THREE.Quaternion(), new THREE.Vector3(r.s * 1.15, r.s * 0.8, r.s)); cap.setMatrixAt(i, M);
+    occ.rocks.mats[i] = [m0, M.clone()];
   });
   scene.add(rim, cap);
 }
@@ -523,6 +592,25 @@ function buildFood(sk) {
     mk(Cyl(0.98, 0.98, 0.06, 18), toon(0xb86b26), 0, 0.17, 0, g, false);
     mk(Cyl(0.55, 0.55, 0.07, 14), toon(0x7a3b12), 0, 0.2, 0, g, false);
     for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; mk(Sph(0.08, 6, 4), mat(0xffd27a, { basic: true }), Math.cos(a) * 0.3, 0.23, Math.sin(a) * 0.3, g, false); }
+  } else if (sk === 3) {  // 희귀(레어) 얼음 결정탄: 빛나는 팔면체 얼음 결정 + 작은 결정 둘
+    const cm = new THREE.MeshStandardMaterial({ color: 0xaee9ff, emissive: 0x2f7fc4, emissiveIntensity: 0.9, roughness: 0.12, metalness: 0.4, flatShading: true });
+    mk(new THREE.OctahedronGeometry(0.85, 0), cm, 0, 0, 0, g, false).scale.set(0.7, 1.25, 0.7);
+    for (const sd of [-1, 1]) { const c = mk(new THREE.OctahedronGeometry(0.4, 0), cm, sd * 0.55, -0.2, 0, g, false); c.rotation.z = sd * 0.5; c.scale.set(0.7, 1.2, 0.7); }
+    glow(0x9fe3ff, 2.6, 0, 0, 0, g);
+  } else if (sk === 4) {  // 에픽 황금 방울탄: 금방울 + 가운데 홈 + 고리 + 빨간 리본
+    const gm = mat(0xffc83d, { metal: 0.75, rough: 0.28, em: 0x5a3a00 }), dk = toon(0x5a3a00);
+    mk(Sph(0.8, 18, 14), gm, 0, 0, 0, g, false);
+    mk(Torus(0.8, 0.06), dk, 0, 0, 0, g, false).rotation.x = Math.PI / 2;
+    mk(Box(0.9, 0.1, 0.12), dk, 0, -0.35, 0.68, g, false);
+    mk(Sph(0.14, 8, 6), dk, 0, -0.5, 0.62, g, false);
+    mk(Torus(0.2, 0.06), gm, 0, 0.9, 0, g, false);
+    for (const sd of [-1, 1]) { const bw = mk(Cone(0.24, 0.45, 4), toon(0xe53935), sd * 0.24, 0.78, 0, g, false); bw.rotation.z = sd * Math.PI / 2; }
+    glow(0xffe082, 2.4, 0, 0, 0, g);
+  } else if (sk === 5) {  // 전설 오로라 별탄: 두툼한 별 + 무지개빛 + 반짝임
+    const sg = new THREE.ExtrudeGeometry(starShape(1, 0.45), { depth: 0.3, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 1 }); sg.center();
+    mk(sg, auroraBasic, 0, 0, 0, g, false);
+    mk(Sph(0.3, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, 0, 0, g, false);
+    auroraSprite(3.4, 0, 0, 0, g);
   } else {                // 붕어빵: 물고기 모양 반죽 + 꼬리 + 눈 + 비늘 줄
     const gold = toon(0xd9a04a), dark = toon(0x8a5520);
     mk(Sph(0.7, 14, 10), gold, 0, 0, 0.15, g, false).scale.set(0.55, 0.75, 1.25);
@@ -533,8 +621,27 @@ function buildFood(sk) {
   }
   return g;
 }
-const FOOD_SK = { 0: '눈덩이', 1: '호떡', 2: '붕어빵' };
-const FOOD_EMOJI = { 0: '❄️', 1: '🥞', 2: '🐟' };
+const FOOD_SK = { 0: '눈덩이', 1: '호떡', 2: '붕어빵', 3: '얼음 결정탄', 4: '황금 방울탄', 5: '오로라 별탄' };
+const FOOD_EMOJI = { 0: '❄️', 1: '🥞', 2: '🐟', 3: '💎', 4: '🔔', 5: '🌟' };
+// 전설 장비용 무지개빛 재료 (매 프레임 색이 천천히 바뀜, 모든 전설 장비가 함께 씀)
+const auroraBasic = new THREE.MeshBasicMaterial({ color: 0xb388ff });
+const auroraGlow = new THREE.SpriteMaterial({ map: glowTex, color: 0xb388ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 });
+const auroraEm = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, roughness: 0.35, metalness: 0.2, emissive: 0x3a2a88, flatShading: true });
+const auroraSprite = (size, x, y, z, parent) => { const sp = new THREE.Sprite(auroraGlow); sp.scale.set(size, size, 1); sp.position.set(x, y, z); parent.add(sp); return sp; };
+const TIER_CSS = ['#4fc3f7', '#b388ff', '#ffca28'];
+const RARE_EMOJI = { s3: '💎', s4: '🔔', s5: '🌟', h9: '❄️', h10: '👑', h11: '😇', p1: '🧣', p2: '🦸', p3: '🌌' };
+function starShape(ro, ri) {
+  const sh = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? ri : ro, x = Math.cos(a) * r, y = Math.sin(a) * r; if (i) sh.lineTo(x, y); else sh.moveTo(x, y); }
+  return sh;
+}
+// 눈꽃 모양 (가는 막대 3개를 60도씩 겹침 + 끝 구슬)
+function snowflake(parent, x, y, z, s, m, ry = 0) {
+  const f = new THREE.Group(); f.position.set(x, y, z); f.rotation.y = ry; parent.add(f);
+  for (let k = 0; k < 3; k++) { mk(Box(0.36 * s, 0.045 * s, 0.03), m, 0, 0, 0, f, false).rotation.z = k * Math.PI / 3; }
+  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; mk(Sph(0.035 * s, 6, 4), m, Math.cos(a) * 0.18 * s, Math.sin(a) * 0.18 * s, 0, f, false); }
+  return f;
+}
 // ---------- 가구 자리 (앉기·눕기) ----------
 // 로컬 좌표(lx, lz), 앉는 면/누울 면 높이(top), 바라보는 방향(a, 로컬 각도), 종류. 눕기는 발끝 자리이고 머리는 -a 쪽
 const HOUSE_SPOTS = [
@@ -797,9 +904,10 @@ function buyFood() {
   if (!mySkins.has(tk.sk) && myScore < W.FOOD_COST) { toast(t('{0} {1}은 {2}점이에요', [tk.emoji, t(tk.food), W.FOOD_COST.toLocaleString()]), t('지금 {0}점', [myScore.toLocaleString()]), 2); return; }
   send({ t: 'food', k: tk.k });
 }
+const ownWeapon = k => k === 0 || mySkins.has(k) || myRares.has('s' + k);
 function cycleSkin() {
-  if (state !== 'play' || !me || !mySkins.size) return;
-  const opts = [0, ...[1, 2].filter(k => mySkins.has(k))], next = opts[(opts.indexOf(mySkin) + 1) % opts.length];
+  if (state !== 'play' || !me || !hasWeapons()) return;
+  const opts = [0, 1, 2, 3, 4, 5].filter(ownWeapon), next = opts[(opts.indexOf(mySkin) + 1) % opts.length];
   send({ t: 'skin', sk: next });
 }
 const nearGiant = () => me && Math.hypot(me.x - GT.x, me.z - GT.z) < GT.near;
@@ -863,14 +971,15 @@ const ELF_CSS = ['#ff6b6b', '#6fb3ff', '#c48dff', '#ffb74d', '#4dd0b0', '#ff7fb0
 // ---------- 플레이어 아바타 & 꾸미기 ----------
 // 순서는 shared/world.js 의 LOOK_SLOTS 개수와 맞춘다
 const LOOK = {
-  a: [t("요정"), t("꼬마 산타"), t("눈사람"), t("펭귄"), t("루돌프"), t("진저브레드")],
-  h: [t("기본"), t("요정 모자"), t("산타 모자"), t("루돌프 머리띠"), t("털모자"), t("귀마개"), t("왕관"), t("실크햇"), t("없음")],
+  a: [t("요정"), t("꼬마 산타"), t("눈사람"), t("펭귄"), t("빨간코 순록"), t("진저브레드")],
+  h: [t("기본"), t("요정 모자"), t("산타 모자"), t("루돌프 머리띠"), t("털모자"), t("귀마개"), t("왕관"), t("실크햇"), t("없음"), t("눈꽃 티아라"), t("얼음 여왕 왕관"), t("오로라 후광관")],
   e: [t("기본"), t("동그란 안경"), t("선글라스"), t("하트 안경"), t("별 안경"), t("외눈 안경"), t("윙크")],
   n: [t("기본"), t("루돌프 코"), t("당근 코"), t("황금 코"), t("반창고")],
   m: [t("미소"), t("산타 수염"), t("콧수염"), t("메롱"), t("사탕 물기"), t("깜짝 입")],
   r: [t("기본"), t("요정 귀"), t("곰 귀"), t("토끼 귀"), t("고양이 귀"), t("방울 귀걸이")],
   k: [t("없음"), t("목도리"), t("방울 목걸이"), t("나비넥타이")],
   b: [t("없음"), t("선물 자루"), t("빨간 망토"), t("천사 날개")],
+  p: [t("없음"), t("눈꽃 망토"), t("황금 산타 망토"), t("오로라 망토")],
 };
 const BASE_HAT = [1, 2, 7, 5, 3, 8];        // 아바타별 '기본' 모자
 const lookKey = l => Object.keys(W.LOOK_SLOTS).map(k => l[k] | 0).join('.');
@@ -973,6 +1082,27 @@ function makeAvatar(look) {
   if (hat === 4) { mk(new THREE.SphereGeometry(0.64, 18, 10, 0, TAU, 0, Math.PI / 2), cloth, 0, -0.18, 0, hg); mk(Torus(0.62, 0.11), white, 0, -0.16, 0, hg).rotation.x = Math.PI / 2; pom = mk(Sph(0.2, 12, 10), white, 0, 0.5, 0, hg); }
   if (hat === 5) { mk(new THREE.TorusGeometry(0.62, 0.05, 6, 24, Math.PI), cloth, 0, -0.2, 0, hg).rotation.z = 0; for (const sd of [-1, 1]) mk(Sph(0.22, 12, 10), toon(0xffc0d0), sd * 0.62, -0.38, 0, hg); }
   if (hat === 6) { hg.position.y = 0.5; mk(new THREE.CylinderGeometry(0.32, 0.32, 0.26, 14, 1, true), gold, 0, 0, 0, hg); for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; mk(Cone(0.08, 0.22, 6), gold, Math.cos(a) * 0.32, 0.2, Math.sin(a) * 0.32, hg); mk(Sph(0.05, 6, 4), toon(0xff1744), Math.cos(a) * 0.32, 0.33, Math.sin(a) * 0.32, hg, false); } }
+  if (hat === 9) {      // 레어 눈꽃 티아라: 은빛 머리띠 + 앞쪽 눈꽃 셋
+    hg.position.y = 0.3; const sil = toon(0xe3f2fd), ic = new THREE.MeshBasicMaterial({ color: 0xaee9ff });
+    mk(Torus(0.5, 0.035), sil, 0, 0, 0, hg, false).rotation.x = Math.PI / 2 + 0.25;
+    snowflake(hg, 0, 0.2, 0.5, 1.2, ic); for (const sd of [-1, 1]) snowflake(hg, sd * 0.3, 0.12, 0.4, 0.75, ic, sd * 0.6);
+    glow(0xaee9ff, 0.9, 0, 0.2, 0.55, hg);
+  }
+  if (hat === 10) {     // 에픽 얼음 여왕 왕관: 반투명 얼음 테 + 높이가 다른 얼음 가시 + 푸른 보석
+    hg.position.y = 0.48; const im = new THREE.MeshStandardMaterial({ color: 0x9fe3ff, transparent: true, opacity: 0.88, roughness: 0.1, metalness: 0.3, emissive: 0x1f5f9a, flatShading: true });
+    mk(new THREE.CylinderGeometry(0.36, 0.33, 0.14, 14, 1, true), im, 0, 0, 0, hg, false);
+    for (let i = 0; i < 9; i++) { const a = i / 9 * TAU, hh = 0.22 + 0.3 * Math.pow(Math.max(0, Math.cos(a)), 2); mk(Cone(0.06, hh, 5), im, Math.sin(a) * 0.34, 0.07 + hh / 2, Math.cos(a) * 0.34, hg, false); }
+    for (let i = 0; i < 5; i++) { const a = (i - 2) * 0.45; mk(Sph(0.045, 6, 4), new THREE.MeshBasicMaterial({ color: 0x2979ff }), Math.sin(a) * 0.37, 0, Math.cos(a) * 0.37, hg, false); }
+    glow(0x9fe3ff, 1.4, 0, 0.4, 0.3, hg);
+  }
+  if (hat === 11) {     // 전설 오로라 후광관: 작은 금관 + 머리 위에 떠 있는 무지개빛 후광 + 앞의 별
+    hg.position.y = 0.45;
+    mk(new THREE.CylinderGeometry(0.3, 0.3, 0.16, 14, 1, true), gold, 0, 0, 0, hg);
+    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; mk(Cone(0.06, 0.16, 5), gold, Math.cos(a) * 0.3, 0.14, Math.sin(a) * 0.3, hg, false); }
+    const halo = mk(Torus(0.42, 0.045), auroraBasic, 0, 0.55, -0.05, hg, false); halo.rotation.x = Math.PI / 2 - 0.15;
+    auroraSprite(1.5, 0, 0.55, -0.05, hg);
+    const st = mk(getStarGeo(), auroraBasic, 0, 0.08, 0.31, hg, false); st.scale.setScalar(1.1);
+  }
   if (hat === 7) { hg.position.y = 0.45; hg.rotation.z = 0.15; mk(Cyl(0.5, 0.5, 0.05, 18), black, 0, 0, 0, hg); mk(Cyl(0.34, 0.34, 0.55, 18), black, 0, 0.28, 0, hg); mk(Cyl(0.35, 0.35, 0.1, 18), cloth, 0, 0.08, 0, hg); }
   // 눈 장식
   if (L.e === 1) { for (const sd of [-1, 1]) mk(new THREE.TorusGeometry(0.13, 0.025, 6, 18), toon(0x6d4c41), sd * 0.22, 0.04, fz + 0.06, head, false); mk(Box(0.16, 0.03, 0.03), toon(0x6d4c41), 0, 0.06, fz + 0.07, head, false); }
@@ -996,6 +1126,26 @@ function makeAvatar(look) {
   if (L.b === 1) { const sk = mk(Sph(0.42, 14, 12), toon(0x8d6e63), 0, 1.0, -0.5, bd); sk.scale.set(1, 1.15, 0.8); mk(Torus(0.12, 0.04), toon(0xffd34d), 0, 1.45, -0.52, bd).rotation.x = Math.PI / 2; }
   if (L.b === 2) { const cp = mk(Box(1.0, 1.1, 0.05), toon(0xc62828), 0, 0.75, -0.48, bd); cp.rotation.x = 0.15; }
   if (L.b === 3) for (const sd of [-1, 1]) { const w = mk(Sph(0.38, 12, 10), white, sd * 0.42, 1.0, -0.42, bd); w.scale.set(1, 0.6, 0.18); w.rotation.z = -sd * 0.5; }
+  // 희귀 망토 (보스 보상): 어깨에서 늘어지는 반원통 천. 걸으면 뒤로 펄럭인다
+  let cape = null;
+  if (L.p) {
+    cape = new THREE.Group(); cape.position.set(0, 1.3, -0.06); bd.add(cape);
+    const cg = new THREE.CylinderGeometry(0.5, 0.8, 1.15, 18, 4, true, Math.PI / 2, Math.PI);
+    let cm;
+    if (L.p === 3) {
+      const pos = cg.attributes.position, col = new Float32Array(pos.count * 3), c = new THREE.Color(), a = new THREE.Color(0x7c4dff), b2 = new THREE.Color(0x18ffff), d = new THREE.Color(0x69f0ae);
+      for (let i = 0; i < pos.count; i++) { const u = (0.575 - pos.getY(i)) / 1.15; if (u < 0.5) c.copy(a).lerp(b2, u * 2); else c.copy(b2).lerp(d, (u - 0.5) * 2); c.toArray(col, i * 3); }
+      cg.setAttribute('color', new THREE.BufferAttribute(col, 3)); cm = auroraEm;
+    } else cm = new THREE.MeshToonMaterial({ color: L.p === 1 ? 0x7fc8f5 : 0xa31515, gradientMap: toonGrad, side: THREE.DoubleSide });
+    mk(cg, cm, 0, -0.575, 0, cape);
+    const trim = L.p === 1 ? white : L.p === 2 ? gold : auroraBasic;
+    const hem = mk(new THREE.TorusGeometry(0.8, 0.04, 4, 18, Math.PI), trim, 0, -1.15, 0, cape, false); hem.rotation.x = -Math.PI / 2;
+    mk(new THREE.TorusGeometry(0.5, L.p === 1 ? 0.1 : 0.06, 6, 18, Math.PI), trim, 0, 0, 0, cape, false).rotation.x = -Math.PI / 2;      // 깃
+    for (const sd of [-1, 1]) mk(Sph(0.07, 8, 6), L.p === 1 ? toon(0xaee9ff) : gold, sd * 0.44, -0.02, 0.2, cape, false);       // 어깨 걸쇠
+    if (L.p === 1) { const ic = toon(0xffffff); snowflake(cape, 0, -0.45, -0.66, 1.3, ic, Math.PI); for (const sd of [-1, 1]) snowflake(cape, sd * 0.42, -0.8, -0.58, 0.8, ic, Math.PI + sd * 0.6); }
+    if (L.p === 2) { const st = mk(getStarGeo(), gold, 0, -0.5, -0.67, cape, false); st.scale.setScalar(2.2); st.rotation.y = Math.PI; }
+    if (L.p === 3) for (let i = 0; i < 4; i++) auroraSprite(0.5, Math.sin(i * 1.7) * 0.4, -0.3 - i * 0.22, -0.62 - i * 0.04, cape);
+  }
   // 다리와 팔
   const legs = [], arms = [];
   for (const sd of [-1, 1]) {
@@ -1012,6 +1162,7 @@ function makeAvatar(look) {
   const heldSkins = [mk(Sph(0.26, 14, 10), toon(0xffffff), 0, 0, 0, held)];
   { const h = makeFood(1); h.scale.setScalar(0.3); h.rotation.x = Math.PI / 2; held.add(h); heldSkins.push(h); }
   { const b = makeFood(2); b.scale.setScalar(0.3); b.rotation.set(0, Math.PI / 2, 0); held.add(b); heldSkins.push(b); }
+  for (const k of [3, 4, 5]) { const w = makeFood(k); w.scale.setScalar(0.28); held.add(w); heldSkins.push(w); }     // 희귀 무기 3종
   // 티타임용 머그컵 (평소에는 숨김)
   const mug = new THREE.Group(); mug.visible = false; bd.add(mug);
   mk(Cyl(0.17, 0.15, 0.36, 14), toon(0xfafafa), 0, 0, 0, mug);
@@ -1045,7 +1196,7 @@ function makeAvatar(look) {
   mk(new THREE.TorusGeometry(0.44, 0.06, 4, 18), toon(0xe3f2fd), 0, 0.42, 1.7, hole, false).rotation.x = Math.PI / 2;
   mk(Cyl(0.006, 0.006, 0.8, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0.13, 0.77, 1.71, hole, false);
   mk(Sph(0.05, 8, 6), toon(0xff5252), 0.13, 0.4, 1.71, hole, false);
-  return { group: g, bd, legL: legs[1], legR: legs[0], armL: arms[1], armR: arms[0], held, heldSkins, pom, mug, steam, rod, hole, yam, yamSteam, sled };
+  return { group: g, bd, legL: legs[1], legR: legs[0], armL: arms[1], armR: arms[0], held, heldSkins, pom, mug, steam, rod, hole, yam, yamSteam, sled, cape };
 }
 const makeElf = (ci = 0) => makeAvatar({ c: ci });
 function makeSnowman(kind = 'normal') {
@@ -1203,6 +1354,43 @@ function makeIceBeast() {
   glow(0x6fd8ff, 3.2, 0, 1.3, 0, bd, 1.0);      // 몸 주위 푸른 냉기
   const held = new THREE.Object3D(); bd.add(held);
   return { group: g, bd, body: ice, head, arms, held };
+}
+// 얼음도깨비: 푸른 피부, 머리에 빛나는 얼음 뿔, 덥수룩한 흰 머리, 호랑이 무늬 허리옷, 송곳니, 오른손에 얼음 방망이
+function makeDokkaebi() {
+  const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
+  const skin = toon(0x4f8fd6, true), dark = toon(0x1d3a5a), white = toon(0xf4f8ff), tiger = toon(0xffb300), stripe = toon(0x2a2030), iceM = mat(0xbfeeff, { em: 0x2f7fc4, emI: 0.6, rough: 0.2 });
+  mk(Sph(0.62, 20, 16), skin, 0, 0.92, 0, bd).scale.set(1.05, 1.05, 0.9);
+  mk(Cyl(0.6, 0.66, 0.42, 18), tiger, 0, 0.5, 0, bd);                                         // 호랑이 무늬 허리옷
+  for (let i = 0; i < 7; i++) { const a = i / 7 * TAU, st = mk(Box(0.08, 0.36, 0.04), stripe, Math.sin(a) * 0.64, 0.5, Math.cos(a) * 0.64, bd, false); st.rotation.set(0, a, 0.3); }
+  mk(Torus(0.6, 0.06), dark, 0, 0.72, 0, bd).rotation.x = Math.PI / 2;
+  const head = new THREE.Group(); head.position.set(0, 1.74, 0.05); bd.add(head);
+  mk(Sph(0.55, 20, 16), skin, 0, 0, 0, head);
+  for (let i = 0; i < 9; i++) { const a = -1.4 + i * 0.35; mk(Sph(0.2, 10, 8), white, Math.sin(a) * 0.46, 0.28 + Math.cos(a) * 0.12, -0.18 - Math.cos(a) * 0.12, head, false); }   // 덥수룩한 흰 머리
+  mk(Cone(0.13, 0.6, 7), iceM, 0, 0.72, 0.05, head);                                          // 얼음 뿔
+  glow(0x9fe3ff, 1.0, 0, 0.8, 0.05, head);
+  const eyeM = new THREE.MeshBasicMaterial({ color: 0xfff176 }), black = toon(0x1a1420);
+  for (const sd of [-1, 1]) {
+    mk(Sph(0.12, 10, 8), eyeM, sd * 0.2, 0.08, 0.45, head, false); mk(Sph(0.05, 8, 6), black, sd * 0.2, 0.08, 0.56, head, false);
+    const br = mk(Box(0.26, 0.07, 0.05), dark, sd * 0.2, 0.25, 0.48, head, false); br.rotation.z = sd * 0.5;
+    const ear = mk(Cone(0.12, 0.32, 6), skin, sd * 0.56, 0.05, 0, head); ear.rotation.z = -sd * 1.2;
+    mk(Cone(0.045, 0.15, 6), white, sd * 0.13, -0.15, 0.5, head, false);                       // 송곳니
+  }
+  mk(Sph(0.12, 10, 8), toon(0x3f75b8), 0, -0.04, 0.55, head, false);                          // 주먹코
+  mk(Box(0.44, 0.1, 0.06), dark, 0, -0.24, 0.47, head, false);                                // 입
+  const arm = sd => {
+    const p = new THREE.Group(); p.position.set(sd * 0.66, 1.22, 0); p.rotation.z = sd * 0.3; bd.add(p);
+    mk(Cyl(0.14, 0.13, 0.55, 10), skin, 0, -0.27, 0, p); mk(Sph(0.18, 10, 8), skin, 0, -0.6, 0, p);
+    mk(Torus(0.15, 0.04), iceM, 0, -0.42, 0, p).rotation.x = Math.PI / 2;                     // 얼음 팔찌
+    return p;
+  };
+  const armL = arm(1), armR = arm(-1);
+  const club = new THREE.Group(); club.position.set(0, -0.62, 0.08); club.rotation.x = 1.35; armR.add(club);   // 얼음 방망이
+  mk(Cyl(0.06, 0.07, 0.5, 8), toon(0x6d4c41), 0, 0.2, 0, club);
+  mk(Cyl(0.24, 0.14, 0.8, 8), iceM, 0, 0.8, 0, club);
+  for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, y = 0.65 + (i % 2) * 0.3; const sp = mk(Cone(0.06, 0.2, 5), white, Math.sin(a) * 0.21, y, Math.cos(a) * 0.21, club, false); sp.rotation.set(Math.cos(a) * 1.57, 0, -Math.sin(a) * 1.57); }
+  for (const sd of [-1, 1]) mk(Sph(0.22, 10, 8), skin, sd * 0.28, 0.12, 0.06, g).scale.set(1, 0.6, 1.4);
+  const held = mk(Sph(0.3, 10, 8), iceM, 0, -0.75, 0.1, armL); held.visible = false;
+  return { group: g, bd, armL, armR, held, body: skin };
 }
 function makeRudolph() {
   const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
@@ -1416,6 +1604,10 @@ const igloos = new Map();              // 주인 id -> { id, x, z, rot, n, model
 let igArr = [];                        // 충돌 계산용 배열
 const myAllies = new Set(), allySent = new Set(), allyInbox = [];
 let ownSled = false;
+let myRares = new Set(), rareTok = null;     // 보스에게서 얻은 희귀 장비 (서버 서명이 붙은 보관증을 브라우저에 저장)
+try { rareTok = JSON.parse(store.get('snowball-rares', 'null')); if (rareTok && Array.isArray(rareTok.own)) myRares = new Set(rareTok.own); else rareTok = null; } catch (e) { rareTok = null; }
+let prefWeapon = +store.get('snowball-weapon', '0') || 0;
+const hasWeapons = () => [1, 2, 3, 4, 5].some(ownWeapon);
 let mySkin = 0, mySkins = new Set();      // 던질 것: 0 눈덩이, 1 호떡, 2 붕어빵 (산 것)                   // 눈썰매 보유 (쓰러져도 유지, 다시 접속하면 초기화)
 function addIgloo([id, x, z, rot, n, lv]) {
   if (me && me.sit && igloos.has(id) && igloos.get(id).spots.includes(me.sit)) standUp();
@@ -1449,13 +1641,13 @@ const reportHit = (id, e, v) => { if (hitQueue.length < 80) hitQueue.push([id, e
 function flushHits() { if (!hitQueue.length) return; send({ t: 'hcs', l: hitQueue }); hitQueue = []; }
 // 효과 한도: "명중!" 글자와 효과음이 초당 너무 많아지지 않게
 const fxBudget = { pop: 0, snd: 0, t: 0 };
-function fxAllow(kind, perSec) { const now = performance.now(); if (now - fxBudget.t > 1000) { fxBudget.t = now; fxBudget.pop = 0; fxBudget.snd = 0; } if (fxBudget[kind] >= perSec) return false; fxBudget[kind]++; return true; }
+function fxAllow(kind, perSec) { const now = performance.now(); if (now - fxBudget.t > 1000) { fxBudget.t = now; fxBudget.pop = 0; fxBudget.snd = 0; fxBudget.trail = 0; } if (fxBudget[kind] >= perSec) return false; fxBudget[kind]++; return true; }
 function connect() {
   if (location.protocol === 'file:') { overlay('file'); return; }
   if (net.ws) { try { net.ws.close(); } catch (e) {} }
   net.leaving = false;
   const ws = new WebSocket(wsUrl()); net.ws = ws; net.open = false;
-  ws.onopen = () => { net.open = true; net.lastMsg = performance.now(); send({ t: 'hello', n: nick, c: colorIdx, look: myLook }); };
+  ws.onopen = () => { net.open = true; net.lastMsg = performance.now(); send({ t: 'hello', n: nick, c: colorIdx, look: myLook, rt: rareTok || undefined }); };
   ws.onmessage = ev => { net.lastMsg = performance.now(); let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
   ws.onclose = () => {
     if (net.ws !== ws) return;
@@ -1582,6 +1774,30 @@ function onMsg(m) {
       break;
     }
     case 'buyfail': toast(t("🛷 구매할 수 없어요"), esc(tWhy(m.why, m.wv)), 2); break;
+    case 'rares': {              // 내 희귀 장비 목록 (+ 서명). got 이 있으면 방금 얻은 것
+      myRares = new Set(m.own || []); rareTok = { own: m.own || [], sig: m.sig }; store.set('snowball-rares', JSON.stringify(rareTok));
+      let fix = false;
+      for (const key of ['h', 'p']) { const rk = W.rareKey(key, myLook[key]); if (rk && !myRares.has(rk)) { myLook[key] = 0; fix = true; } }
+      if (fix) { saveLook(); applyMyColor(); send({ t: 'look', look: myLook }); }
+      if (prefWeapon >= 3 && ownWeapon(prefWeapon) && mySkin !== prefWeapon) send({ t: 'skin', sk: prefWeapon });
+      if (m.got) {
+        const it = W.RARES.find(q => q.key === m.got);
+        if (it) {
+          sfx.win(); shake = Math.max(shake, 0.3);
+          toast(t("✨ {0} 장비 획득!", [t(W.TIER_NAMES[it.tier])]), t("{0} {1} · 꾸미기(👕)에서 장착하세요", [RARE_EMOJI[it.key], t(it.name)]), 4.5);
+          feed(t("<span class=\"sys\" style=\"color:{0}\">✨ [{1}] {2} {3} 획득!</span>", [TIER_CSS[it.tier], t(W.TIER_NAMES[it.tier]), RARE_EMOJI[it.key], t(it.name)]));
+          for (let i = 0; i < 3; i++) burst(me.x, me.y + 1.5 + i, me.z, 30, parseInt(TIER_CSS[it.tier].slice(1), 16), 7, 5);
+          if (it.slot === 's' && state === 'play') { prefWeapon = it.v; store.set('snowball-weapon', prefWeapon); send({ t: 'skin', sk: it.v }); }
+        }
+      }
+      break;
+    }
+    case 'rarebonus': toast(t("✨ {0} 장비를 이미 모두 가지고 있어요", [t(W.TIER_NAMES[m.tier] || '')]), t("대신 +{0}점", [(+m.pts).toLocaleString()]), 3); sfx.win(); break;
+    case 'rarenews': {
+      const nm = names.get(m.by), it = W.RARES.find(q => q.key === m.key);
+      if (nm && it) feed(t("<span class=\"sys\" style=\"color:{0}\">✨ {1} 님이 [{2}] {3} {4}을(를) 얻었어요!</span>", [TIER_CSS[it.tier], esc(nm.n), t(W.TIER_NAMES[it.tier]), RARE_EMOJI[it.key], t(it.name)]));
+      break;
+    }
     case 'slam': {               // 하프물범 배치기
       const y = heightAt(m.x, m.z);
       burst(m.x, y + 0.4, m.z, 50, 0xffffff, m.r * 2.2, 3); burst(m.x, y + 0.3, m.z, 20, 0x9fe3ff, m.r * 1.6, 2);
@@ -1591,8 +1807,11 @@ function onMsg(m) {
     }
     case 'boss': {
       const T = TYPES[m.type] || TYPES.seal;
-      if (m.on) { toast(t("{0} {1}이 나타났어요!", [m.type === "icebeast" ? "🧊" : "🦭", T.name]), t("처치하면 {0}점 + 선물 {1}개 · 미니맵의 👑", [T.pts.toLocaleString(), T.drops]), 3.2); feed(t("<span class=\"sys\">👑 {0} 등장! 미니맵을 확인하세요</span>", [T.name])); sfx.win(); }
-      else { const nm = names.get(m.by); bossDots = bossDots.filter(r => TYPE_BY_ID[r[5]] !== m.type); feed(t("<span class=\"sys\">🎉 {0} 님이 {1}을 쓰러뜨렸어요!</span>", [esc(m.by === myId ? nick : nm ? nm.n : t("누군가")), T.name])); if (m.by === myId) toast(t("🎉 {0} 처치!", [T.name]), t("+{0}점", [T.pts.toLocaleString()]), 3); }
+      if (m.on) {                // 하프물범 3마리가 한꺼번에 나와도 알림은 한 번만
+        if (time - (bossToastT[m.type] ?? -99) > 6) { toast(t("{0} {1}이 나타났어요!", [m.type === "icebeast" ? "🧊" : "🦭", T.name]), t("처치하면 {0}점 + 선물 {1}개 + 희귀 장비 기회 · 미니맵의 👑", [T.pts.toLocaleString(), T.drops]), 3.2); feed(t("<span class=\"sys\">👑 {0} 등장! 미니맵을 확인하세요</span>", [T.name])); sfx.win(); }
+        bossToastT[m.type] = time;
+      }
+      else { const nm = names.get(m.by); bossDots = bossDots.filter(r => (m.e ? r[0] !== m.e : TYPE_BY_ID[r[5]] !== m.type)); feed(t("<span class=\"sys\">🎉 {0} 님이 {1}을 쓰러뜨렸어요!</span>", [esc(m.by === myId ? nick : nm ? nm.n : t("누군가")), T.name])); if (m.by === myId) toast(t("🎉 {0} 처치!", [T.name]), t("+{0}점", [T.pts.toLocaleString()]), 3); }
       break;
     }
     case 'catch': {              // 얼음낚시 결과
@@ -1629,7 +1848,7 @@ function onMsg(m) {
     case 'drop': {
       addDrop(m.id, m.x, m.z, m.k);
       // 안내 문구는 나쁜 산타·하프물범일 때만 (한 번 처치에 한 번). 일반 몬스터는 선물만 조용히 떨어진다
-      const who = m.src === 'badsanta' ? t("나쁜 산타") : m.src === 'seal' ? t("거대 하프물범") : '';
+      const who = m.src === 'badsanta' ? t("나쁜 산타") : m.src === 'seal' ? t("거대 하프물범") : m.src === 'dokkaebi' ? t("얼음도깨비") : '';
       if (who && !m.n) {
         if (m.by === myId) toast(t("🎁 {0}가 선물을 떨어뜨렸어요!", [who]), t("반짝이는 선물을 주워 보세요"), 2.2);
         else if (Math.hypot(m.x - me.x, m.z - me.z) < 60) feed(t("<span class=\"sys\">🎁 근처에서 {0}가 선물을 떨어뜨렸어요</span>", [who]));
@@ -1677,7 +1896,7 @@ function applyGifts(list) {
     g.x = +x; g.z = +z; g.on = !!on; g.model.group.visible = g.on && g.pending <= 0;
   });
 }
-let bossDots = [];
+let bossDots = []; const bossToastT = {};
 function applySnapshot(m) {
   if (m.bs) bossDots = m.bs;
   const seen = new Set();
@@ -1716,7 +1935,7 @@ function addRemote(id, nm) {
 function removeRemote(r) { scene.remove(r.model.group); disposeModel(r.model.group); r.tag.remove(); r.bar.remove(); }
 function addEnemy(id, type, x, z, face) {
   const T = TYPES[type];
-  const model = type === 'penguin' ? makePenguin() : type === 'rudolph' ? makeRudolph() : type === 'badsanta' ? makeSanta() : type === 'seal' ? makeSeal() : type === 'icebeast' ? makeIceBeast() : makeSnowman('normal');
+  const model = type === 'penguin' ? makePenguin() : type === 'rudolph' ? makeRudolph() : type === 'badsanta' ? makeSanta() : type === 'seal' ? makeSeal() : type === 'icebeast' ? makeIceBeast() : type === 'dokkaebi' ? makeDokkaebi() : makeSnowman('normal');
   model.group.scale.setScalar(T.scale); scene.add(model.group);
   const e = { id, type, T, model, x, z, tx: x, tz: z, y: heightAt(x, z), face, tface: face, hp: T.hp, max: T.hp, wind: 0, flash: 0, moving: 0, walk: 0, squash: 0, bar: null, tele: null };
   if (T.boss) { e.tag = document.createElement('div'); e.tag.className = 'tag'; e.tag.style.color = '#9fe3ff'; e.tag.textContent = `👑 ${T.name}`; $('labels').appendChild(e.tag); }
@@ -1724,10 +1943,11 @@ function addEnemy(id, type, x, z, face) {
 }
 function removeEnemy(e) { scene.remove(e.model.group); disposeModel(e.model.group); if (e.bar) e.bar.remove(); if (e.tele) scene.remove(e.tele); if (e.tag) e.tag.remove(); }
 function killEnemy(e) {
-  burst(e.x, e.y + e.T.h * 0.5, e.z, e.T.boss ? 120 : e.type === 'badsanta' ? 60 : 36, 0xffffff, e.T.boss ? 16 : e.type === 'badsanta' ? 11 : 9, 4);
-  burst(e.x, e.y + e.T.h * 0.7, e.z, 10, { penguin: 0x22304a, rudolph: 0x8d5a34, badsanta: 0xd32f2f, seal: 0x9fe3ff, icebeast: 0x7ff6ff }[e.type] || 0xff8a1f, 6);
+  const elite = e.type === 'badsanta' || e.type === 'dokkaebi';
+  burst(e.x, e.y + e.T.h * 0.5, e.z, e.T.boss ? 120 : elite ? 60 : 36, 0xffffff, e.T.boss ? 16 : elite ? 11 : 9, 4);
+  burst(e.x, e.y + e.T.h * 0.7, e.z, 10, { penguin: 0x22304a, rudolph: 0x8d5a34, badsanta: 0xd32f2f, seal: 0x9fe3ff, icebeast: 0x7ff6ff, dokkaebi: 0x4f8fd6 }[e.type] || 0xff8a1f, 6);
   if (Math.hypot(e.x - me.x, e.z - me.z) < 45) sfx.pop();
-  if (e.type === 'badsanta') shake = 0.6;
+  if (elite && Math.hypot(e.x - me.x, e.z - me.z) < 30) shake = 0.6;
   removeEnemy(e); enemies.delete(e.id);
 }
 
@@ -2278,11 +2498,12 @@ function throwPlayer() {
   if (p.ammo === 0) startReload();
 }
 const ballGeo = Sph(1, 14, 10);
+const SKIN_FX = { 0: 0xeef4ff, 1: 0xd9933f, 2: 0xd9a04a, 3: 0x9fe3ff, 4: 0xffd34d, 5: 0xd8a8ff };
 const ballMatFx = { boom: toon(0xff7043), ice: toon(0x9fe3ff), pierce: toon(0xb0bec5) };
-const ballMatP = toon(0xffffff), ballMatE = toon(0xbcd4ff), ballMatK = [ballMatE, toon(0x37373f), toon(0xff6b6b)];
+const ballMatP = toon(0xffffff), ballMatE = toon(0xbcd4ff), ballMatK = [ballMatE, toon(0x37373f), toon(0xff6b6b), mat(0xaee9ff, { em: 0x2f7fc4, emI: 0.7, rough: 0.2 })];   // 3: 얼음도깨비 얼음덩이
 function spawnBall(o) {
   let mesh;
-  if (o.sk && o.owner !== 'enemy') { mesh = makeFood(o.sk); mesh.scale.setScalar(o.r * (o.sk === 1 ? 1.5 : 1.25)); mesh.rotation.y = Math.atan2(o.dx, o.dz); }   // 호떡·붕어빵
+  if (o.sk && o.owner !== 'enemy') { mesh = makeFood(o.sk); mesh.scale.setScalar(o.r * (o.sk === 1 ? 1.5 : o.sk >= 3 ? 1.1 : 1.25)); mesh.rotation.y = Math.atan2(o.dx, o.dz); }   // 호떡·붕어빵·희귀 무기
   else { mesh = new THREE.Mesh(ballGeo, o.owner === 'enemy' ? (ballMatK[o.kind | 0] || ballMatE) : (ballMatFx[o.fx] || ballMatP)); mesh.scale.setScalar(o.r); mesh.castShadow = true; }
   scene.add(mesh);
   const b = { ...o, mesh, dist: 0, max: o.owner === 'enemy' ? 34 : PLAYER_RANGE, fall: 0 };
@@ -2347,7 +2568,7 @@ function updateHUD() {
     voice.on ? t("<span style=\"color:{0}\">{1} · 근처 {2}명 (V)</span>", [voice.micOn ? '#7dffb0' : '#cfe0ff', voice.micOn ? (voice.talking ? t("🔊 말하는 중") : t("🎙️ 마이크 켜짐")) : t("🔇 마이크 꺼짐"), voice.connected]) : voice.hearOn && voice.connected > 0 && t("<span style=\"color:#cfe0ff\">🎧 근처 {0}명 목소리 듣는 중</span>", [voice.connected]), p.tea > 0 && t("<span style=\"color:#ffcc80\">☕ 티타임 중… 따뜻해요</span>"), p.rest && !p.dead && t("<span style=\"color:#ffb74d\">{0} 쉬는 중{1}</span>", [p.sit && p.sit.kind === 'lie' ? t("🛏️ 침대에서") : p.sit && !p.sit.fire ? t("🪑 앉아서") : t("🔥 모닥불{0}", [p.sit ? t(" 앞에 앉아") : t("에서")]), p.hp < p.maxHp ? t(" · 체력 회복") : '']),
     !p.dead && (p.inVillage ? t("<span style=\"color:#3ddc84\">🏠 안전지대{0}</span>", [p.hp < p.maxHp ? t(" · 회복 중") : '']) : t("<span style=\"color:#ff8a8a\">⚔️ PvP 구역 · 다른 플레이어도 공격할 수 있어요</span>"))].filter(Boolean).join('');
   let nearN = 0, danger = ''; for (const e of enemies.values()) { const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < 40) { nearN++; if (e.T.boss) danger = t(" · 🦭 {0} 근처!", [e.T.name]); else if (e.type === 'badsanta' && !danger.includes('🦭')) danger = t(" · 🎅 나쁜 산타 주의!"); } }
-  const zone = Math.hypot(p.x, p.z), area = zone < W.VILLAGE_SAFE ? t("마을") : zone < W.ZONES[0] ? t("눈밭 (눈사람·펭귄)") : zone < W.ZONES[1] ? t("숲 (나쁜 루돌프 출몰)") : t("먼 설원 (나쁜 산타 출몰)");
+  const zone = Math.hypot(p.x, p.z), area = zone < W.VILLAGE_SAFE ? t("마을") : zone < W.ZONES[0] ? t("눈밭 (눈사람·펭귄)") : zone < W.ZONES[1] ? t("숲 (나쁜 루돌프 출몰)") : zone < 400 ? t("먼 설원 (나쁜 산타 출몰)") : t("설원 끝 (얼음도깨비 출몰)");
   const obj = t("⚔️ 처치 <b>{0}</b>", [myKills]) + t("<small>{0} · 근처 몬스터 {1}{2}</small>", [area, nearN, danger]);
   const sc = t("{0}점", [myScore.toLocaleString()]), cb = myCombo >= 3 ? t("{0} 콤보 x{1}", [myCombo, Math.min(4, 1 + Math.floor(myCombo / 3) * 0.5).toFixed(1)]) : '';
   const all = [{ id: myId, n: nick, score: myScore, c: colorIdx }, ...[...remotes.values()].map(r => ({ id: r.id, n: r.n, score: r.score, c: r.c }))].sort((a, b) => b.score - a.score);
@@ -2488,9 +2709,23 @@ function overlay(kind, err = '') {
     return;
   }
   if (kind === 'custom') {
-    const slots = [['a', t("캐릭터")], ['h', t("머리")], ['e', t("눈")], ['n', t("코")], ['m', t("입")], ['r', t("귀")], ['k', t("목")], ['b', t("등")]];
-    el.innerHTML = t("<div><h1>👕 캐릭터 꾸미기</h1>\n      <div class=\"custom\"><canvas id=\"pv\" width=\"440\" height=\"520\" aria-label=\"캐릭터 미리보기\"></canvas><div>\n        {0}\n        <div class=\"slot\"><b>옷 색</b><div class=\"chips\">{1}</div></div>\n      </div></div>\n      <div class=\"btns\"><button id=\"done\">완료</button></div></div>", [slots.map(([key, label]) => `<div class="slot"><b>${label}</b><div class="chips">${LOOK[key].map((n, i) => `<button data-k="${key}" data-v="${i}" class="${myLook[key] === i ? 'sel' : ''}">${n}</button>`).join('')}</div></div>`).join(''), ELF_CSS.map((c, i) => t("<button data-col=\"{0}\" class=\"cdot {1}\" style=\"background:{2}\" aria-label=\"옷 색 {3}\" aria-pressed=\"{4}\"></button>", [i, myLook.c === i ? 'sel' : '', c, i + 1, myLook.c === i])).join('')]);
-    el.querySelectorAll('.chips button').forEach(b => b.onclick = () => {
+    const slots = [['a', t("캐릭터")], ['h', t("머리")], ['e', t("눈")], ['n', t("코")], ['m', t("입")], ['r', t("귀")], ['k', t("목")], ['b', t("등")], ['p', t("망토")]];
+    // 희귀 장비 칸은 등급 색 테두리, 아직 없는 건 자물쇠
+    const chip = (key, i, name, sel) => {
+      const rk = key === 'w' ? (i >= 3 ? 's' + i : '') : W.rareKey(key, i), rr = rk && W.RARES.find(q => q.key === rk);
+      const own = key === 'w' ? ownWeapon(i) : !rr || myRares.has(rk);
+      return `<button data-k="${key}" data-v="${i}" class="${sel ? 'sel' : ''}${rr ? ' t' + rr.tier : ''}${own ? '' : ' lock'}"${rr ? ` title="${t(W.TIER_NAMES[rr.tier])}"` : ''}>${own ? '' : '🔒 '}${rr ? `<small>${t(W.TIER_NAMES[rr.tier])}</small> ` : ''}${key === 'w' ? FOOD_EMOJI[i] + ' ' : ''}${name}</button>`;
+    };
+    const weaponRow = `<div class="slot"><b>${t("무기 (던지는 것)")}</b><div class="chips">${[0, 1, 2, 3, 4, 5].map(i => chip('w', i, t(FOOD_SK[i]), i === (state === 'play' ? mySkin : prefWeapon))).join('')}</div></div>`;
+    el.innerHTML = t("<div><h1>👕 캐릭터 꾸미기</h1>\n      <div class=\"custom\"><canvas id=\"pv\" width=\"440\" height=\"520\" aria-label=\"캐릭터 미리보기\"></canvas><div>\n        {0}\n        <div class=\"slot\"><b>옷 색</b><div class=\"chips\">{1}</div></div>\n      </div></div>\n      <div class=\"btns\"><button id=\"done\">완료</button></div></div>", [slots.map(([key, label]) => `<div class="slot"><b>${label}</b><div class="chips">${LOOK[key].map((n, i) => chip(key, i, n, myLook[key] === i)).join('')}</div></div>`).join('') + weaponRow, ELF_CSS.map((c, i) => t("<button data-col=\"{0}\" class=\"cdot {1}\" style=\"background:{2}\" aria-label=\"옷 색 {3}\" aria-pressed=\"{4}\"></button>", [i, myLook.c === i ? 'sel' : '', c, i + 1, myLook.c === i])).join('')]);
+    el.querySelectorAll('.chips button[data-k]').forEach(b => b.onclick = () => {
+      if (b.classList.contains('lock')) { sfx.pop(); toast(t("🔒 아직 없는 장비예요"), b.dataset.k === 'w' && +b.dataset.v < 3 ? t("마을의 간식 트럭에서 살 수 있어요") : t("거대 하프물범·고대 얼음 괴수를 쓰러뜨리면 얻을 수 있어요"), 2.2); return; }
+      if (b.dataset.k === 'w') {
+        prefWeapon = +b.dataset.v; store.set('snowball-weapon', prefWeapon);
+        if (state === 'play') send({ t: 'skin', sk: prefWeapon });
+        el.querySelectorAll('.chips button[data-k="w"]').forEach(x => x.classList.toggle('sel', x === b));
+        return;
+      }
       myLook[b.dataset.k] = +b.dataset.v; saveLook();
       el.querySelectorAll(`.chips button[data-k="${b.dataset.k}"]`).forEach(x => x.classList.toggle('sel', x === b));
       previewSet();
@@ -2518,7 +2753,7 @@ function overlay(kind, err = '') {
 }
 function lookSummary(l) {
   const hat = l.h === 0 ? LOOK.h[BASE_HAT[l.a]] : LOOK.h[l.h];
-  return [LOOK.a[l.a], hat !== t("없음") && hat, l.e && LOOK.e[l.e], l.n && LOOK.n[l.n], l.m && LOOK.m[l.m], l.r && LOOK.r[l.r], l.k && LOOK.k[l.k], l.b && LOOK.b[l.b]].filter(Boolean).join(' · ');
+  return [LOOK.a[l.a], hat !== t("없음") && hat, l.e && LOOK.e[l.e], l.n && LOOK.n[l.n], l.m && LOOK.m[l.m], l.r && LOOK.r[l.r], l.k && LOOK.k[l.k], l.b && LOOK.b[l.b], l.p && LOOK.p[l.p]].filter(Boolean).join(' · ');
 }
 // 꾸미기 미리보기: 작은 별도 3D 화면에서 내 캐릭터가 천천히 돈다
 const pv = { r: null, scene: null, cam: null, model: null, raf: 0 };
@@ -2643,8 +2878,9 @@ function updateBalls(dt) {
     const y = heightAt(b.x, b.z) + b.h;
     b.mesh.position.set(b.x, y, b.z);
     if (b.sk === 1) b.mesh.rotation.y += dt * 16; else if (b.sk === 2) b.mesh.rotation.z = Math.sin(time * 18 + b.dist) * 0.35;
+    else if (b.sk >= 3) { b.mesh.rotation.z += dt * (b.sk === 5 ? 9 : 5); b.mesh.rotation.x += dt * 3; if (fxAllow('trail', 40)) burst(b.x, y, b.z, 1, SKIN_FX[b.sk], 1.2, 0.6); }
     if (b.h <= 0.1 || hitsCollider(b.x, y, b.z, b.r) || Math.abs(b.x) > W.HALF || Math.abs(b.z) > W.HALF) {
-      killBall(b); burst(b.x, y, b.z, b.r > 0.4 ? 16 : 8, b.sk === 1 ? 0xd9933f : b.sk === 2 ? 0xd9a04a : 0xeef4ff, 5, 2);
+      killBall(b); burst(b.x, y, b.z, b.r > 0.4 ? 16 : 8, SKIN_FX[b.sk | 0] || 0xeef4ff, 5, 2);
       if (Math.hypot(b.x - me.x, b.z - me.z) < 30) sfx.splat();
       continue;
     }
@@ -2673,7 +2909,7 @@ function updateBalls(dt) {
       if (!me.dead && Math.hypot(b.x - me.x, b.z - me.z) < 0.6 + b.r && y > me.y - 0.1 && y < me.y + 2.4) {
         killBall(b); burst(b.x, y, b.z, 18, 0xffffff, 7);
         send({ t: 'hurt', id: b.id });
-        if (me.inv <= 0) hurtMe(b.dmg || 15);
+        if (me.inv <= 0) { hurtMe(b.dmg || 15); if (b.kind === 3) me.slowT = Math.max(me.slowT, TYPES.dokkaebi.slow); }     // 얼음도깨비 얼음덩이: 잠깐 느려짐
         continue;
       }
       for (const r of remotes.values()) {
@@ -2725,7 +2961,7 @@ function step(dt) {
     net.sendT -= dt;
     if (net.sendT <= 0) {
       net.sendT = 1 / 15;
-      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0) | (p.riding ? 2048 : 0) | (mySkin === 1 ? 4096 : mySkin === 2 ? 8192 : 0);
+      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0) | (p.riding ? 2048 : 0) | (mySkin << 12);
       send({ t: 'p', x: r2(p.x), z: r2(p.z), y: r2(p.y), f: r2(p.face), vx: r1(p.vx), vz: r1(p.vz), fl, hp: p.hp, d: p.dead ? 1 : 0 });
     }
     $('net').style.display = net.open && performance.now() - net.lastMsg > 2500 ? 'block' : 'none';
@@ -2752,7 +2988,8 @@ function animElf(m, x, y, z, face, moving, flags, walk, dt, squash = 0) {
   m.bd.position.y = bob; m.bd.scale.set(1 + k * 0.5, 1 - k, 1 + k * 0.5);
   m.pom.position.x = Math.sin(time * 4 + walk) * 0.06;
   m.held.visible = !throwing && !reloading;
-  if (m.heldSkins) { const sk = flags & 4096 ? 1 : flags & 8192 ? 2 : 0; m.heldSkins.forEach((c, i) => { c.visible = i === sk; }); }   // 4096 호떡, 8192 붕어빵
+  if (m.heldSkins) { const sk = (flags >> 12) & 7; m.heldSkins.forEach((c, i) => { c.visible = i === sk; }); }   // 4096·8192·16384 칸 = 던지는 것 번호
+  if (m.cape) m.cape.rotation.x = lerp(m.cape.rotation.x, moving ? 0.42 + Math.sin(walk * 2) * 0.1 : 0.07 + Math.sin(time * 1.6) * 0.03, Math.min(1, dt * 6));
   // 앉기: 통나무 의자에 걸터앉아 다리를 앞으로, 손은 무릎 위에
   const sitting = flags & 64;
   if (sitting) {
@@ -2834,18 +3071,18 @@ function updateBuildings(dt) {
     if (show && (o.steamT -= dt) <= 0) { o.steamT = 0.35; burst(o.wx, heightAt(o.wx, o.wz) + 2.2, o.wz, 1, 0xffffff, 0.6, 2); }
   }
   if (!lakeTag) { lakeTag = document.createElement('div'); lakeTag.className = 'tag igtag'; lakeTag.textContent = t("🎣 얼음낚시터"); $('labels').appendChild(lakeTag); }
-  { const show = me && state === 'play' && Math.hypot(LAKE.x - me.x, LAKE.z - me.z) < 80, sp = show && toScreen(new THREE.Vector3(LAKE.x, heightAt(LAKE.x, LAKE.z) + 3, LAKE.z));
+  { const lk = me && W.lakeAt(me.x, me.z, 16), show = lk && state === 'play', sp = show && toScreen(new THREE.Vector3(lk.x, heightAt(lk.x, lk.z) + 3, lk.z));
     lakeTag.style.display = sp && sp.ok ? '' : 'none'; if (sp) { lakeTag.style.left = sp.x + 'px'; lakeTag.style.top = sp.y + 'px'; } }
   const k = Math.min(1, dt * 6), who = [me, ...remotes.values()].filter(q => q && !q.dead);
   houseObjs.forEach((h, i) => {
-    const target = me && me.house === i && state === 'play' ? 0.2 : 1;
+    const target = me && me.house === i && state === 'play' ? 0.2 : occBuilding(h.g.position.x, h.g.position.z, 4.6, 7) ? 0.3 : 1;
     if (Math.abs(h.fade - target) > 0.004) { h.fade += (target - h.fade) * k; setFade(h.mats, h.fade > 0.98 ? 1 : h.fade); }
     const near = who.some(q => Math.hypot(q.x - h.dx, q.z - h.dz) < 2.6);
     h.open += ((near ? 1 : 0) - h.open) * Math.min(1, dt * 5);
     h.door.rotation.y = h.open * 1.7;
   });
   for (const ig of igloos.values()) {
-    const m = ig.model, target = me && me.igloo === ig && state === 'play' ? 0.25 : 1;
+    const m = ig.model, target = me && me.igloo === ig && state === 'play' ? 0.25 : occBuilding(ig.x, ig.z, ig.r + 0.8, m.top || 5) ? 0.3 : 1;
     if (Math.abs(m.fade - target) > 0.004) { m.fade += (target - m.fade) * k; setFade(m.mats, m.fade > 0.98 ? 1 : m.fade); }
     const far = !me || Math.hypot(ig.x - me.x, ig.z - me.z) > 55;
     if (far || state !== 'play') { m.tag.style.display = 'none'; continue; }
@@ -2865,7 +3102,7 @@ function render(dt) {
   updateBuildings(dt);
   const blink = p.inv > 0 && p.dashT <= 0 && Math.floor(p.inv * 14) % 2;
   elf.group.visible = !p.dead && !blink;
-  const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0) | (p.riding ? 2048 : 0) | (mySkin === 1 ? 4096 : mySkin === 2 ? 8192 : 0);
+  const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0) | (p.riding ? 2048 : 0) | (mySkin << 12);
   animElf(elf, p.x, p.y, p.z, p.face, Math.hypot(p.vx, p.vz) > 0.5 && p.onGround, flags, p.walk, dt, p.squash);
   elf.held.visible = elf.held.visible && p.ammo > 0;
   shieldMesh.visible = p.shield > 0 && !p.dead; if (shieldMesh.visible) { shieldMesh.position.set(p.x, p.y + 1.3, p.z); shieldMesh.material.opacity = 0.18 + 0.08 * Math.sin(time * 6); }
@@ -2943,7 +3180,7 @@ function render(dt) {
     } else if (e.wind > 0) {
       if (!e.tele) e.tele = telegraph();
       e.tele.visible = true; e.tele.position.set(e.x, e.y + 0.25, e.z); e.tele.rotation.y = e.face;
-      e.tele.scale.set(e.type === 'badsanta' ? 2 : 1, 1, e.T.maxRange * 0.9); e.tele.material.opacity = 0.2 + 0.25 * (0.5 + 0.5 * Math.sin(time * 20));
+      e.tele.scale.set(e.type === 'badsanta' ? 2 : e.type === 'dokkaebi' ? 3.2 : 1, 1, e.T.maxRange * 0.9); e.tele.material.opacity = 0.2 + 0.25 * (0.5 + 0.5 * Math.sin(time * 20));
     } else if (e.tele) e.tele.visible = false;
     if (e.tag) {
       const s = toScreen(new THREE.Vector3(e.x, e.y + e.T.h * e.T.scale + 1.4, e.z));
@@ -2952,13 +3189,14 @@ function render(dt) {
     if (state === 'play' && (e.hp < e.max || e.T.boss)) {
       const s = toScreen(new THREE.Vector3(e.x, e.y + e.T.h * (e.T.boss ? e.T.scale : 1) + 0.6, e.z));
       if (s.ok) {
-        if (!e.bar) { e.bar = document.createElement('div'); e.bar.className = 'hp' + (e.type === 'badsanta' || e.T.boss ? ' boss' : ''); e.bar.innerHTML = '<i></i>'; $('labels').appendChild(e.bar); }
+        if (!e.bar) { e.bar = document.createElement('div'); e.bar.className = 'hp' + (e.type === 'badsanta' || e.type === 'dokkaebi' || e.T.boss ? ' boss' : ''); e.bar.innerHTML = '<i></i>'; $('labels').appendChild(e.bar); }
         e.bar.style.left = s.x + 'px'; e.bar.style.top = s.y + 'px'; e.bar.firstChild.style.width = (e.hp / e.max * 100) + '%'; e.bar.style.display = '';
       } else if (e.bar) e.bar.style.display = 'none';
     } else if (e.bar) e.bar.style.display = 'none';
   }
   animFire(dt);
-  updateBoard(); updateGiantFade(dt);
+  updateBoard(); updateGiantFade(dt); updateOcclusion(dt);
+  { const hue = (time * 0.12) % 1; auroraBasic.color.setHSL(hue, 0.85, 0.62); auroraGlow.color.setHSL((hue + 0.1) % 1, 0.9, 0.6); auroraEm.emissive.setHSL((hue + 0.5) % 1, 0.9, 0.32); }
   if (giant.board && Math.floor(time * 3) % 4 !== ledPhase) { ledPhase = Math.floor(time * 3) % 4; if (boardLast && me && Math.hypot(me.x - GT.x, me.z - GT.z) < 70) drawBoard(...boardLast); }
   if (treeView && Math.random() < 0.1) treeView.info();
   const mineIg = igloos.get(myId), nextLv = mineIg ? W.IGLOO.LV[mineIg.lv + 1] : null;
@@ -2976,7 +3214,7 @@ function render(dt) {
   { const tk = me && !me.dead && state === 'play' ? nearTruck() : null;
     document.body.classList.toggle('neartruck', !!tk);
     if (tk) { const own = mySkins.has(tk.sk), fh = own ? t('{0} {1} 꺼내기 <small>(X)</small>', [tk.emoji, t(tk.food)]) : t('{0} {1} 사기 <small>{2}점 (X)</small>', [tk.emoji, t(tk.food), W.FOOD_COST.toLocaleString()]); if ($('foodBtn')._h !== fh) { $('foodBtn')._h = fh; $('foodBtn').innerHTML = fh; } }
-    document.body.classList.toggle('hasskin', !!(me && !me.dead && state === 'play' && mySkins.size));
+    document.body.classList.toggle('hasskin', !!(me && !me.dead && state === 'play' && hasWeapons()));
     const sh = t('{0} {1} <small>바꾸기 (Z)</small>', [FOOD_EMOJI[mySkin], t(FOOD_SK[mySkin])]); if ($('skinBtn')._h !== sh) { $('skinBtn')._h = sh; $('skinBtn').innerHTML = sh; } }
   document.body.classList.toggle('neartree', !!(me && !me.dead && state === 'play' && nearGiant()));
   document.body.classList.toggle('cansled', !!(me && !me.dead && state === 'play' && (ownSled || myScore >= W.SLED.cost)));
@@ -3123,9 +3361,10 @@ window.__game = {
   giftRow(x, z) { const ks = [...W.GIFT_KINDS, 'HEAL']; ks.forEach((k, i) => { const m = k === 'HEAL' ? makeHealPack() : makeGift(GIFT_INFO[k].color); const px = x + (i - ks.length / 2) * 2.2; m.group.position.set(px, heightAt(px, z) + 1, z); scene.add(m.group); }); return ks; },
   get songs() { return PLAYLIST.map(x => ({ name: x.name, beat: x.beat, notes: x.notes })); },
   yaw(a) { camYaw = camYawT = a; },
+  occ() { return [occ.hidT.length, occ.hidR.length, camera.position.x, camera.position.z, camera.position.y]; }, rares() { return [[...myRares].join(','), mySkin, lakeTag && lakeTag.style.display]; },
   get mem() { return { geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures, balls: balls.size, pops: popups.length }; },
   setSkin(k) { mySkin = k; },
-  model(type, x, z) { const T = TYPES[type], m = type === 'icebeast' ? makeIceBeast() : makeSeal(); m.group.scale.setScalar(T.scale); m.group.position.set(x, heightAt(x, z), z); scene.add(m.group); return true; },
+  model(type, x, z) { const T = TYPES[type], m = type === 'icebeast' ? makeIceBeast() : type === 'dokkaebi' ? makeDokkaebi() : makeSeal(); m.group.scale.setScalar(T.scale); m.group.position.set(x, heightAt(x, z), z); scene.add(m.group); return true; },
   buff(k, n = 1) { for (let i = 0; i < n; i++) giveBuff(k); }, avatars(x, z, looks) { looks.forEach((l, i) => { const m = makeAvatar(l); const px = x - (looks.length - 1) * 0.9 + i * 1.8; m.group.position.set(px, heightAt(px, z), z); scene.add(m.group); }); },
   get voice() { return { on: voice.on, hear: voice.hearOn, peers: [...voice.peers.values()].map(p => ({ id: p.id, st: p.pc.connectionState, sig: p.pc.signalingState })), remotes: [...remotes.values()].map(r => ({ id: r.id, vl: r.vl, vt: r.vt, link: needLink(r) })), myId }; },
 };

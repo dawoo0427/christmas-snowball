@@ -6,6 +6,21 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const W = require('./shared/world.js');
+// 희귀 장비 보관증: 가진 장비 목록에 서버 서명을 붙여 브라우저에 저장. 다시 들어올 때 서명이 맞으면 그대로 돌려준다
+// 비밀값: RARE_SECRET → 없으면 이미 있는 비밀 환경변수(TURN 토큰)에서 한 방향으로 만든 값 → 그것도 없으면 켤 때마다 새 값
+// (새 값이면 서버가 다시 켜질 때 예전 보관증은 무효)
+const RARE_SECRET = process.env.RARE_SECRET
+  || (process.env.TURN_KEY_API_TOKEN && crypto.createHash('sha256').update('snowball-rare:' + process.env.TURN_KEY_API_TOKEN).digest('hex'))
+  || crypto.randomBytes(24).toString('hex');
+const RARE_KEYS = new Set(W.RARES.map(r => r.key));
+const rareSig = list => crypto.createHmac('sha256', RARE_SECRET).update([...list].sort().join(',')).digest('hex').slice(0, 32);
+function rareVerify(rt) {
+  if (!rt || !Array.isArray(rt.own) || typeof rt.sig !== 'string' || rt.own.length > 40) return new Set();
+  const own = rt.own.filter(k => typeof k === 'string' && RARE_KEYS.has(k));
+  if (own.length !== rt.own.length) return new Set();
+  const a = Buffer.from(rareSig(own)), b = Buffer.from(rt.sig);
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? new Set(own) : new Set();
+}
 
 const PORT = +process.env.PORT || 3000;
 const SERVER_NAME = (process.env.SERVER_NAME || '눈마을').replace(/\s*\d+\s*서버\s*$/, '') || '눈마을';          // 서버 이름 앞부분 (뒤에 '1서버' '2서버' … 가 붙는다)
@@ -211,13 +226,15 @@ function createWorld(idx) {
         if (m.t !== 'hello') return;
         if (players.size >= MAX_PLAYERS) { conn.send({ t: 'full', max: MAX_PLAYERS }); return conn.close(); }
         const id = nextId++;
-        const look = W.cleanLook(m.look || { c: m.c });
+        const rares = rareVerify(m.rt);
+        const look = W.cleanLook(m.look || { c: m.c }, rares);
         p = { id, conn, look, n: cleanName(m.n) || '꼬마요정' + id, c: look.c, x: rand(-3, 3), z: 12 + rand(-2, 2), y: 0, face: Math.PI, vx: 0, vz: 0,
-          flags: 0, hp: W.MAX_HP, dead: false, score: +process.env.START_SCORE || 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, vl: false, vt: false, lastHitBy: 0, lastHitAt: 0, joined: Date.now(), allies: new Set(), reqTo: new Set(), skins: new Set(), skin: 0 };
+          flags: 0, hp: W.MAX_HP, dead: false, score: +process.env.START_SCORE || 0, combo: 0, best: 0, kills: 0, tokens: 6, ready: true, vl: false, vt: false, lastHitBy: 0, lastHitAt: 0, joined: Date.now(), allies: new Set(), reqTo: new Set(), skins: new Set(), skin: 0, rares };
         p.y = heightAt(p.x, p.z);
         players.set(id, p);
         conn.send({ t: 'welcome', id, server: NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c, q.look]), drops: [...drops.values()].map(d => [d.id, r1(d.x), r1(d.z), d.k]),
           g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)), ig: igList().map(igRow), orn: ornaments.map(ornRow) });
+        if (m.rt) conn.send({ t: 'rares', own: [...rares], sig: rareSig(rares) });
         broadcast({ t: 'pj', id, n: p.n, c: p.c, look: p.look }, p);
         log(`[${NAME}] 입장 ${p.n}#${id} (현재 ${players.size}명)`);
         return;
@@ -248,7 +265,8 @@ function createWorld(idx) {
         p.x = clamp(num(m.x, p.x), -W.LIMIT, W.LIMIT); p.z = clamp(num(m.z, p.z), -W.LIMIT, W.LIMIT);
         p.y = clamp(num(m.y, p.y), -20, 60); p.face = num(m.f, p.face);
         p.vx = clamp(num(m.vx), -40, 40); p.vz = clamp(num(m.vz), -40, 40);
-        p.flags = ((m.fl | 0) & (p.sled ? ~0 : ~2048) & ~(4096 | 8192)) | (p.skin === 1 ? 4096 : p.skin === 2 ? 8192 : 0);     // 2048 썰매(산 사람만), 4096 호떡·8192 붕어빵(서버가 정함) p.hp = clamp(m.hp | 0, 0, W.MAX_HP);
+        p.flags = ((m.fl | 0) & (p.sled ? ~0 : ~2048) & ~(7 << 12)) | (p.skin << 12);     // 2048 썰매(산 사람만), 4096·8192·16384 칸 = 던지는 것 번호(서버가 정함)
+        p.hp = clamp(m.hp | 0, 0, W.MAX_HP);
         const dead = !!m.d;
         if (dead && !p.dead) {
           p.score = Math.max(0, p.score - 300); p.combo = 0;
@@ -400,9 +418,9 @@ function createWorld(idx) {
         p.conn.send({ t: 'skin', sk: p.skin, own: [...p.skins], k: tk.k, bought });
         break;
       }
-      case 'skin': {               // 던질 것 바꾸기: 0 눈덩이, 1 호떡, 2 붕어빵 (산 것만)
+      case 'skin': {               // 던질 것 바꾸기: 0 눈덩이, 1 호떡, 2 붕어빵 (산 것만), 3~5 희귀 무기 (얻은 것만)
         const sk = m.sk | 0;
-        if (sk === 0 || p.skins.has(sk)) p.skin = sk;
+        if (sk === 0 || p.skins.has(sk) || p.rares.has(W.rareKey('s', sk))) p.skin = sk;
         p.conn.send({ t: 'skin', sk: p.skin, own: [...p.skins] });
         break;
       }
@@ -412,7 +430,7 @@ function createWorld(idx) {
         break;
       }
       case 'look': {               // 꾸미기 변경
-        p.look = W.cleanLook(m.look); p.c = p.look.c;
+        p.look = W.cleanLook(m.look, p.rares); p.c = p.look.c;
         broadcast({ t: 'lk', id: p.id, look: p.look });
         break;
       }
@@ -540,7 +558,7 @@ function createWorld(idx) {
     if (T.spread) for (let i = 0; i < T.spread; i++) angs.push({ a: base + (i - (T.spread - 1) / 2) * 0.2, spd: T.spd });
     else angs.push({ a: base + rand(-T.err, T.err), spd: T.spd });
     e.shots++; e.face = base;
-    const r = e.type === 'badsanta' ? 0.36 : 0.3, h = W.BALL_H;
+    const r = e.type === 'badsanta' || e.type === 'dokkaebi' ? 0.36 : 0.3, h = W.BALL_H;
     for (const s of angs) {
       const dx = Math.sin(s.a), dz = Math.cos(s.a);
       const b = { id: 'e' + (nextEBall++), owner: 'e', x: e.x + dx * (T.r + 0.3), z: e.z + dz * (T.r + 0.3), h, dx, dz, spd: s.spd, r, dmg: T.dmg, dist: 0, max: 34, fall: 0 };
@@ -591,7 +609,11 @@ function createWorld(idx) {
       if (e.spawn) { e.spawn.eid = 0; e.spawn.timer = W.MOB_RESPAWN; }
       const nDrop = e.T.drops || (Math.random() < (e.T.drop || 0) ? 1 : 0);
       const dropKinds = [...W.GIFT_KINDS].sort(() => Math.random() - 0.5);     // 얼음 괴수: 서로 다른 종류로    // 산타 2개, 보스 4개, 나머지는 확률로 1개
-      if (e.T.boss) { bossTimers[e.type] = e.T.every; broadcast({ t: 'boss', on: 0, by: p ? p.id : 0, type: e.type }); log(`[${NAME}] 보스(${e.type}) 처치 by ${p ? p.n : '?'}`); }
+      if (e.T.boss) {
+        bossTimers[e.type][e.slot | 0] = e.T.every;
+        broadcast({ t: 'boss', on: 0, by: p ? p.id : 0, type: e.type, e: e.id }); log(`[${NAME}] 보스(${e.type}) 처치 by ${p ? p.n : '?'}`);
+        if (p) rareLoot(p, e.T);
+      }
       for (let i = 0; i < nDrop; i++) {
         const a = rand(0, TAU), rr = e.T.boss ? e.T.r + 1 : 1.6, o = { x: e.x + Math.cos(a) * rr, z: e.z + Math.sin(a) * rr }; pushOut(o, 0.8);
         const d = { id: nextDrop++, x: o.x, z: o.z, k: e.T.uniqueDrops ? dropKinds[i % dropKinds.length] : W.GIFT_KINDS[Math.floor(Math.random() * W.GIFT_KINDS.length)], ttl: W.DROP_TTL };
@@ -599,20 +621,43 @@ function createWorld(idx) {
       }
     }
   }
-  // 보스: 종류마다 맵의 랜덤한 곳에 한 마리. 하프물범은 쓰러지면 90초 뒤, 고대 얼음 괴수는 5분마다 다른 곳에 다시
+  // 보스 처치 보상: 희귀 장비 (등급 확률대로, 아직 없는 것 중에서). 그 등급을 다 가졌으면 대신 보너스 점수
+  function rareLoot(p, T) {
+    if (!T.rare || Math.random() >= T.rare) return;
+    let roll = Math.random(), tier = 0;
+    for (let i = 0; i < T.tierP.length; i++) { if (roll < T.tierP[i]) { tier = i; break; } roll -= T.tierP[i]; tier = i; }
+    const cand = W.RARES.filter(r => r.tier === tier && !p.rares.has(r.key));
+    if (!cand.length) { const b = W.TIER_BONUS[tier]; p.score += b; p.conn.send({ t: 'rarebonus', tier, pts: b }); return; }
+    const it = cand[Math.floor(Math.random() * cand.length)];
+    p.rares.add(it.key);
+    p.conn.send({ t: 'rares', own: [...p.rares], sig: rareSig(p.rares), got: it.key });
+    broadcast({ t: 'rarenews', by: p.id, key: it.key }, p);
+    log(`[${NAME}] 희귀 장비 ${it.name}(${W.TIER_NAMES[tier]}) → ${p.n}`);
+  }
+  // 보스: 종류마다 정해진 수(하프물범 3마리, 고대 얼음 괴수 1마리)를 서로 멀리 떨어진 랜덤한 곳에.
+  // 자리(slot)마다 따로: 하프물범은 쓰러진 자리만 90초 뒤, 고대 얼음 괴수는 5분 뒤 다른 곳에 다시
   const BOSSES = Object.keys(TYPES).filter(k => TYPES[k].boss);
-  const bossTimers = Object.fromEntries(BOSSES.map(k => [k, +process.env.BOSS_FIRST_TEST || TYPES[k].first]));   // BOSS_FIRST_TEST: 테스트용 (실서버 미사용)
-  function spawnBoss(type) {
+  const bossTimers = Object.fromEntries(BOSSES.map(k => [k, Array.from({ length: TYPES[k].count || 1 }, () => +process.env.BOSS_FIRST_TEST || TYPES[k].first)]));   // BOSS_FIRST_TEST: 테스트용 (실서버 미사용)
+  function spawnBoss(type, slot) {
+    const others = [...enemies.values()].filter(o => o.T.boss);
     let s = null;
-    for (let k = 0; k < 50 && !s; k++) { const c = openSpot(40); if (Math.hypot(c.x, c.z) > W.VILLAGE_SAFE * 2.5 && !W.onIce(c.x, c.z)) s = c; }
-    if (!s) { bossTimers[type] = 10; return; }
-    const e = addEnemy(type, s.x, s.z, null); e.boss = true;
+    for (let k = 0; k < 80 && !s; k++) {
+      const c = openSpot(40);
+      if (Math.hypot(c.x, c.z) <= W.VILLAGE_SAFE * 2.5 || W.lakeAt(c.x, c.z, 4)) continue;
+      if (k < 60 && others.some(o => Math.hypot(o.x - c.x, o.z - c.z) < 220)) continue;     // 다른 보스와 멀리
+      s = c;
+    }
+    if (!s) { bossTimers[type][slot] = 10; return; }
+    const e = addEnemy(type, s.x, s.z, null); e.boss = true; e.slot = slot;
     broadcast({ t: 'boss', on: 1, x: r1(s.x), z: r1(s.z), type });
     log(`[${NAME}] 보스(${type}) 등장 (${s.x.toFixed(0)}, ${s.z.toFixed(0)})`);
   }
   function step(dt) {
     const active = players.size > 0;
-    if (active) for (const k of BOSSES) if (![...enemies.values()].some(e => e.type === k)) { bossTimers[k] -= dt; if (bossTimers[k] <= 0) spawnBoss(k); }
+    if (active) for (const k of BOSSES) bossTimers[k].forEach((tm, i) => {
+      for (const e of enemies.values()) if (e.type === k && e.slot === i) return;
+      bossTimers[k][i] -= dt; if (bossTimers[k][i] <= 0) spawnBoss(k, i);
+    });
     for (const p of players.values()) p.tokens = Math.min(20, p.tokens + dt * 24);
     if (active) {
       const tg = targets();
