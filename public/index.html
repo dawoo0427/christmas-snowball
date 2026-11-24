@@ -513,7 +513,10 @@ function buildHouse({ x, z, rot, col }, idx) {
 }
 // ---------- 간식: 호떡과 붕어빵 (손에 들 때와 던질 때 같은 모양) ----------
 // 크기는 반지름 1 기준. 손에 들 때와 날아갈 때 알맞게 줄여 쓴다
-function makeFood(sk) {
+// 한 번 만든 모양을 복사해서 쓴다 (던질 때마다 새로 만들면 3D 데이터가 끝없이 쌓여 휴대폰이 튕김)
+const foodTpl = {};
+function makeFood(sk) { if (!foodTpl[sk]) { foodTpl[sk] = buildFood(sk); foodTpl[sk].traverse(o => { if (o.geometry) o.geometry.userData.shared = true; }); } return foodTpl[sk].clone(); }
+function buildFood(sk) {
   const g = new THREE.Group();
   if (sk === 1) {         // 호떡: 노릇한 동그란 반죽 + 가운데 갈색 설탕 + 반짝이는 시럽
     mk(Cyl(1, 1, 0.34, 18), toon(0xd9933f), 0, 0, 0, g, false).scale.set(1, 1, 1);
@@ -876,7 +879,7 @@ function getStarGeo() {
   if (starGeo) return starGeo;
   const sh = new THREE.Shape();
   for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.065 : 0.15, x = Math.cos(a) * r, y = Math.sin(a) * r; if (i) sh.lineTo(x, y); else sh.moveTo(x, y); }
-  return (starGeo = new THREE.ShapeGeometry(sh));
+  starGeo = new THREE.ShapeGeometry(sh); starGeo.userData.shared = true; return starGeo;
 }
 function makeAvatar(look) {
   const L = W.cleanLook(look);
@@ -1423,7 +1426,7 @@ function addIgloo([id, x, z, rot, n, lv]) {
 }
 function removeIgloo(id) {
   const ig = igloos.get(id); if (!ig) return;
-  scene.remove(ig.model.g); ig.model.tag.remove(); igloos.delete(id); igArr = [...igloos.values()];
+  scene.remove(ig.model.g); disposeModel(ig.model.g); ig.model.tag.remove(); igloos.delete(id); igArr = [...igloos.values()];
 }
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
@@ -1440,6 +1443,13 @@ const net = { ws: null, open: false, lastMsg: 0, sendT: 0, retryT: 0, wantPlay: 
 let myServer = Math.max(1, +store.get('snowball-server', '1') || 1);
 const wsUrl = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?s=' + myServer;
 function send(obj) { if (net.ws && net.open && net.ws.readyState === 1) net.ws.send(JSON.stringify(obj)); }
+// 명중 신고는 프레임마다 한 묶음으로 (연사·트리플·연발이 쌓이면 한 번에 수십 발이라 하나씩 보내면 연결이 막힘)
+let hitQueue = [];
+const reportHit = (id, e, v) => { if (hitQueue.length < 80) hitQueue.push([id, e || 0, v || 0]); };
+function flushHits() { if (!hitQueue.length) return; send({ t: 'hcs', l: hitQueue }); hitQueue = []; }
+// 효과 한도: "명중!" 글자와 효과음이 초당 너무 많아지지 않게
+const fxBudget = { pop: 0, snd: 0, t: 0 };
+function fxAllow(kind, perSec) { const now = performance.now(); if (now - fxBudget.t > 1000) { fxBudget.t = now; fxBudget.pop = 0; fxBudget.snd = 0; } if (fxBudget[kind] >= perSec) return false; fxBudget[kind]++; return true; }
 function connect() {
   if (location.protocol === 'file:') { overlay('file'); return; }
   if (net.ws) { try { net.ws.close(); } catch (e) {} }
@@ -1478,7 +1488,7 @@ setInterval(() => { if (net.open && state === 'play') send({ t: 'hb' }); }, 1000
 document.addEventListener('visibilitychange', () => { if (!document.hidden && unlockEl) { unlockEl.play().catch(() => {}); if (ac && ac.state !== 'running') ac.resume(); } });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state === 'disconnected') { state = 'connecting'; connect(); } });
 function resetWorld() {
-  for (const d of drops.values()) scene.remove(d.model.group); drops.clear();
+  for (const d of drops.values()) { scene.remove(d.model.group); disposeModel(d.model.group); } drops.clear();
   for (const e of enemies.values()) removeEnemy(e); enemies.clear();
   for (const b of balls.values()) scene.remove(b.mesh); balls.clear();
   for (const r of remotes.values()) removeRemote(r); remotes.clear();
@@ -1516,12 +1526,12 @@ function onMsg(m) {
     case 'be': { const b = balls.get(m.id); if (b) { killBall(b); burst(m.x, m.y, m.z, b.r > 0.4 ? 16 : 8, 0xeef4ff, 5, 2); } break; }
     case 'hit': {
       const b = balls.get(m.id); if (b && !m.go) killBall(b);
-      burst(m.x, m.y, m.z, 14, 0xffffff, 7);
+      burst(m.x, m.y, m.z, m.go ? 6 : 14, 0xffffff, 7);
       const e = enemies.get(m.e);
       if (e) { e.flash = 0.15; e.squash = 0.4; }
       if (m.by === myId) {
-        sfx.hit(); shake = Math.max(shake, 0.2); myCombo = m.cb | 0;
-        if (e) popup(e.x, e.y + e.T.h + 0.5, e.z, m.k ? `+${m.pts}` : (myCombo >= 3 ? t("{0} 콤보!", [myCombo]) : t("명중!")), m.k ? '#ffd34d' : (myCombo >= 3 ? '#7dffb0' : '#ffffff'));
+        if (fxAllow('snd', 12)) sfx.hit(); shake = Math.max(shake, 0.2); myCombo = m.cb | 0;
+        if (e && (m.k || fxAllow('pop', 8))) popup(e.x, e.y + e.T.h + 0.5, e.z, m.k ? `+${m.pts}` : (myCombo >= 3 ? t("{0} 콤보!", [myCombo]) : t("명중!")), m.k ? '#ffd34d' : (myCombo >= 3 ? '#7dffb0' : '#ffffff'));
         if (m.k) myKills++;
       }
       if (m.k && e) killEnemy(e);
@@ -1629,7 +1639,7 @@ function onMsg(m) {
     case 'dropx': {
       const d = drops.get(m.id); if (!d) break;
       if (m.by === myId) { giveBuff(m.k, d); popup(me.x, me.y + 4, me.z, '+80', '#ffd34d'); }
-      scene.remove(d.model.group); drops.delete(m.id);
+      scene.remove(d.model.group); disposeModel(d.model.group); drops.delete(m.id);
       break;
     }
     case 'hoff': {
@@ -1663,7 +1673,7 @@ function applyGifts(list) {
   list.forEach((row, i) => {
     const [x, z, on, ti] = row; const kind = W.GIFT_KINDS[ti] || 'heal';
     let g = gifts[i];
-    if (!g || g.kind !== kind) { if (g) scene.remove(g.model.group); g = gifts[i] = { kind, ...GIFT_INFO[kind], model: makeGift(GIFT_INFO[kind].color), t: rand(0, 5), pending: 0 }; scene.add(g.model.group); }
+    if (!g || g.kind !== kind) { if (g) { scene.remove(g.model.group); disposeModel(g.model.group); } g = gifts[i] = { kind, ...GIFT_INFO[kind], model: makeGift(GIFT_INFO[kind].color), t: rand(0, 5), pending: 0 }; scene.add(g.model.group); }
     g.x = +x; g.z = +z; g.on = !!on; g.model.group.visible = g.on && g.pending <= 0;
   });
 }
@@ -1703,7 +1713,7 @@ function addRemote(id, nm) {
   const r = { id, model, tag, bar, lk: lookKey(lk), hpShowT: 0, c: nm.c, n: nm.n, x: 0, z: 0, y: 0, face: 0, vx: 0, vz: 0, flags: 0, hp: undefined, dead: false, score: 0, walk: 0, bubble: '', bubbleT: 0, tagHtml: '' };
   remotes.set(id, r); return r;
 }
-function removeRemote(r) { scene.remove(r.model.group); r.tag.remove(); r.bar.remove(); }
+function removeRemote(r) { scene.remove(r.model.group); disposeModel(r.model.group); r.tag.remove(); r.bar.remove(); }
 function addEnemy(id, type, x, z, face) {
   const T = TYPES[type];
   const model = type === 'penguin' ? makePenguin() : type === 'rudolph' ? makeRudolph() : type === 'badsanta' ? makeSanta() : type === 'seal' ? makeSeal() : type === 'icebeast' ? makeIceBeast() : makeSnowman('normal');
@@ -1712,7 +1722,7 @@ function addEnemy(id, type, x, z, face) {
   if (T.boss) { e.tag = document.createElement('div'); e.tag.className = 'tag'; e.tag.style.color = '#9fe3ff'; e.tag.textContent = `👑 ${T.name}`; $('labels').appendChild(e.tag); }
   enemies.set(id, e); return e;
 }
-function removeEnemy(e) { scene.remove(e.model.group); if (e.bar) e.bar.remove(); if (e.tele) scene.remove(e.tele); if (e.tag) e.tag.remove(); }
+function removeEnemy(e) { scene.remove(e.model.group); disposeModel(e.model.group); if (e.bar) e.bar.remove(); if (e.tele) scene.remove(e.tele); if (e.tag) e.tag.remove(); }
 function killEnemy(e) {
   burst(e.x, e.y + e.T.h * 0.5, e.z, e.T.boss ? 120 : e.type === 'badsanta' ? 60 : 36, 0xffffff, e.T.boss ? 16 : e.type === 'badsanta' ? 11 : 9, 4);
   burst(e.x, e.y + e.T.h * 0.7, e.z, 10, { penguin: 0x22304a, rudolph: 0x8d5a34, badsanta: 0xd32f2f, seal: 0x9fe3ff, icebeast: 0x7ff6ff }[e.type] || 0xff8a1f, 6);
@@ -2281,7 +2291,9 @@ function spawnBall(o) {
   return b;
 }
 // 한 번 던진 눈덩이들을 펼친다 (서버와 같은 규칙: world.js volley/ballStats)
+const MAX_BALLS = 260;
 function spawnVolley(o) {
+  if (o.owner === 'remote' && balls.size > MAX_BALLS) return;     // 남의 탄이 너무 많으면 그리지 않음 (내 판정에는 영향 없음)
   const st = W.cleanStacks(o.st), bs = W.ballStats(st, o.ch);
   const fx = st.boom ? 'boom' : st.ice ? 'ice' : st.pierce ? 'pierce' : '';
   for (const v of W.volley(st)) {
@@ -2290,6 +2302,8 @@ function spawnVolley(o) {
     b.max = bs.max;
   }
 }
+// 스프라이트(빛 효과)는 모두 한 모양을 함께 쓰므로 건너뛴다. 캐시해서 함께 쓰는 모양(shared)도 건너뛴다
+function disposeModel(obj) { obj.traverse(o => { if (o.isSprite || !o.geometry || o.geometry.userData.shared || o.geometry === ballGeo) return; o.geometry.dispose(); }); }
 function killBall(b) { scene.remove(b.mesh); balls.delete(b.id); }
 function giveBuff(kind, g) {
   const p = me, info = GIFT_INFO[kind] || GIFT_INFO.heal;
@@ -2645,14 +2659,14 @@ function updateBalls(dt) {
       for (const e of enemies.values()) {
         if (b.hitE && b.hitE.has(e.id)) continue;
         if (Math.hypot(b.x - e.x, b.z - e.z) < e.T.r + b.r && y > e.y - 0.3 && y < e.y + e.T.h) {
-          if (b.owner === 'me') send({ t: 'hc', id: b.id, e: e.id });
+          if (b.owner === 'me') reportHit(b.id, e.id, 0);
           (b.hitE || (b.hitE = new Set())).add(e.id);
           if (b.hitE.size > (b.pierce | 0)) { b.mesh.visible = false; b.ghost = true; break; }
         }
       }
       if (!b.ghost && b.pv) for (const r of remotes.values()) {
         if (r.dead || r.id === b.from || inVillage(r.x, r.z) || (b.owner === 'me' && myAllies.has(r.id)) || (b.owner === 'remote' && r.id === myId)) continue;
-        if (Math.hypot(b.x - r.x, b.z - r.z) < 0.6 + b.r && y > r.y - 0.1 && y < r.y + 2.4) { b.mesh.visible = false; b.ghost = true; r.hpShowT = 6; if (b.owner === 'me') { send({ t: 'hc', id: b.id, v: r.id }); sfx.hit(); popup(r.x, r.y + 3, r.z, t("명중!"), '#ff8a8a'); } break; }
+        if (Math.hypot(b.x - r.x, b.z - r.z) < 0.6 + b.r && y > r.y - 0.1 && y < r.y + 2.4) { b.mesh.visible = false; b.ghost = true; r.hpShowT = 6; if (b.owner === 'me') { reportHit(b.id, 0, r.id); if (fxAllow('snd', 12)) sfx.hit(); if (fxAllow('pop', 8)) popup(r.x, r.y + 3, r.z, t("명중!"), '#ff8a8a'); } break; }
       }
       if (b.ghost) { b.ghostT = (b.ghostT || 0) + dt; if (b.ghostT > 0.6) killBall(b); }
     } else {
@@ -2707,6 +2721,7 @@ function step(dt) {
     }
     if (myBubbleT > 0) myBubbleT -= dt;
     voiceTick(dt);
+    flushHits();
     net.sendT -= dt;
     if (net.sendT <= 0) {
       net.sendT = 1 / 15;
@@ -3108,6 +3123,8 @@ window.__game = {
   giftRow(x, z) { const ks = [...W.GIFT_KINDS, 'HEAL']; ks.forEach((k, i) => { const m = k === 'HEAL' ? makeHealPack() : makeGift(GIFT_INFO[k].color); const px = x + (i - ks.length / 2) * 2.2; m.group.position.set(px, heightAt(px, z) + 1, z); scene.add(m.group); }); return ks; },
   get songs() { return PLAYLIST.map(x => ({ name: x.name, beat: x.beat, notes: x.notes })); },
   yaw(a) { camYaw = camYawT = a; },
+  get mem() { return { geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures, balls: balls.size, pops: popups.length }; },
+  setSkin(k) { mySkin = k; },
   model(type, x, z) { const T = TYPES[type], m = type === 'icebeast' ? makeIceBeast() : makeSeal(); m.group.scale.setScalar(T.scale); m.group.position.set(x, heightAt(x, z), z); scene.add(m.group); return true; },
   buff(k, n = 1) { for (let i = 0; i < n; i++) giveBuff(k); }, avatars(x, z, looks) { looks.forEach((l, i) => { const m = makeAvatar(l); const px = x - (looks.length - 1) * 0.9 + i * 1.8; m.group.position.set(px, heightAt(px, z), z); scene.add(m.group); }); },
   get voice() { return { on: voice.on, hear: voice.hearOn, peers: [...voice.peers.values()].map(p => ({ id: p.id, st: p.pc.connectionState, sig: p.pc.signalingState })), remotes: [...remotes.values()].map(r => ({ id: r.id, vl: r.vl, vt: r.vt, link: needLink(r) })), myId }; },

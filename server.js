@@ -97,8 +97,8 @@ class Conn {
   }
   data(d) {
     this.buf = this.buf.length ? Buffer.concat([this.buf, d]) : d;
-    if (this.buf.length > 256 * 1024) return this.close();
     for (;;) {
+      // 덜 도착한 프레임이 너무 크면 끊는다 (정상 메시지가 한꺼번에 몰려온 건 끊지 않고 모두 처리)
       if (this.buf.length < 2) return;
       const b0 = this.buf[0], b1 = this.buf[1], fin = b0 & 0x80, op = b0 & 0x0f;
       let len = b1 & 0x7f, off = 2;
@@ -106,7 +106,7 @@ class Conn {
       if (len === 126) { if (this.buf.length < 4) return; len = this.buf.readUInt16BE(2); off = 4; }
       else if (len === 127) { if (this.buf.length < 10) return; if (this.buf.readUInt32BE(2)) return this.close(); len = this.buf.readUInt32BE(6); off = 10; }
       if (len > 64 * 1024) return this.close();
-      if (this.buf.length < off + 4 + len) return;
+      if (this.buf.length < off + 4 + len) { if (this.buf.length > 256 * 1024) this.close(); return; }
       const mask = this.buf.subarray(off, off + 4), payload = Buffer.allocUnsafe(len);
       for (let i = 0; i < len; i++) payload[i] = this.buf[off + 4 + i] ^ mask[i & 3];
       this.buf = this.buf.subarray(off + 4 + len);
@@ -275,6 +275,11 @@ function createWorld(idx) {
           balls.set(b.id, b);
         }
         broadcast({ t: 'b', id: `${p.id}.${cid}`, o: p.id, x: r2(x), z: r2(z), h: r2(h), dx: r2(dx), dz: r2(dz), ch, st, pv: pv ? 1 : 0, sk: p.skin }, p);
+        break;
+      }
+      case 'hcs': {                // 명중 신고 묶음 (한 프레임 동안 맞힌 것을 모아서 보냄): [[눈덩이 id, 몬스터 id, 플레이어 id], ...]
+        if (!Array.isArray(m.l)) break;
+        for (const r of m.l.slice(0, 80)) if (Array.isArray(r)) handle(p, { t: 'hc', id: r[0], e: r[1] || 0, v: r[2] || 0 });
         break;
       }
       case 'hc': {                 // 내 화면에서 맞은 걸 신고 → 서버가 거리만 확인하고 바로 적용 (공격 씹힘 방지)
