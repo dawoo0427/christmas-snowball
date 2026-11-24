@@ -167,6 +167,8 @@
   .custom .chips { display:flex; flex-wrap:wrap; gap:6px; }
   #overlay .custom .chips button { font-family:var(--body); font-size:13px; padding:6px 11px; border-radius:14px; background:#ffffff14; box-shadow:none; border:1.5px solid #ffffff30; }
   #overlay .custom .chips button.sel { background:#2f6fd6; border-color:#9cc3ff; }
+  #overlay .custom .chips button.cdot { width:36px; height:36px; padding:0; border-radius:50%; border:3px solid #ffffff40; }
+  #overlay .custom .chips button.cdot.sel { border-color:#fff; box-shadow:0 0 0 3px #2f6fd6; }
   .custom.treeedit { grid-template-columns:300px 1fr; }
   @media (max-width:560px) { .custom, .custom.treeedit { grid-template-columns:1fr; } #treeCv { margin:0 auto; display:block; max-width:100%; height:auto !important; } .custom canvas { width:180px; height:200px; margin:0 auto; display:block; } }
   .swatch { display:inline-flex; gap:6px; }
@@ -894,7 +896,8 @@ function makeAvatar(look) {
   }
   if (L.e === 4) { for (const sd of [-1, 1]) mk(getStarGeo(), gold, sd * 0.22, 0.05, fz + 0.08, head, false); mk(Box(0.14, 0.025, 0.03), gold, 0, 0.07, fz + 0.08, head, false); }
   if (L.e === 5) { mk(new THREE.TorusGeometry(0.14, 0.022, 6, 18), gold, 0.22, 0.04, fz + 0.07, head, false); const ch = mk(Cyl(0.008, 0.008, 0.42, 4), gold, 0.34, -0.17, fz, head, false); ch.rotation.z = 0.25; }
-  // 목 장식
+  // 목 장식 (눈사람·펭귄·진저브레드는 옷 색이 잘 보이도록, 목 장식이 없으면 옷 색 목도리)
+  if (L.k === 0 && (base === 2 || base === 3 || base === 5)) { mk(Torus(0.43, 0.1), cloth, 0, 1.13, 0, bd).rotation.x = Math.PI / 2; const tail = mk(Box(0.18, 0.42, 0.07), cloth, 0.22, 0.92, 0.42, bd); tail.rotation.z = 0.25; }
   if (L.k === 1) { mk(Torus(0.44, 0.12), toon(0xd32f2f), 0, 1.15, 0, bd).rotation.x = Math.PI / 2; mk(Box(0.2, 0.5, 0.08), toon(0xd32f2f), 0.25, 0.92, 0.42, bd).rotation.z = 0.2; for (const y of [0.8, 0.98]) mk(Box(0.21, 0.05, 0.09), white, 0.25 + (y - 0.92) * 0.2, y, 0.42, bd, false); }
   if (L.k === 2) { mk(Torus(0.42, 0.04), toon(0xd32f2f), 0, 1.15, 0, bd).rotation.x = Math.PI / 2; mk(Sph(0.11, 10, 8), gold, 0, 1.03, 0.44, bd); }
   if (L.k === 3) { for (const sd of [-1, 1]) { const w = mk(Cone(0.1, 0.18, 8), toon(0xd32f2f), sd * 0.1, 1.12, 0.46, bd); w.rotation.z = sd * Math.PI / 2; } mk(Sph(0.05, 8, 6), toon(0xb71c1c), 0, 1.12, 0.48, bd, false); }
@@ -2323,7 +2326,7 @@ function overlay(kind, err = '') {
     el.innerHTML = `<div><h1>👕 캐릭터 꾸미기</h1>
       <div class="custom"><canvas id="pv" width="440" height="520" aria-label="캐릭터 미리보기"></canvas><div>
         ${slots.map(([key, label]) => `<div class="slot"><b>${label}</b><div class="chips">${LOOK[key].map((n, i) => `<button data-k="${key}" data-v="${i}" class="${myLook[key] === i ? 'sel' : ''}">${n}</button>`).join('')}</div></div>`).join('')}
-        <div class="slot"><b>옷 색</b>${swatchHtml()}</div>
+        <div class="slot"><b>옷 색</b><div class="chips">${ELF_CSS.map((c, i) => `<button data-col="${i}" class="cdot ${myLook.c === i ? 'sel' : ''}" style="background:${c}" aria-label="옷 색 ${i + 1}" aria-pressed="${myLook.c === i}"></button>`).join('')}</div></div>
       </div></div>
       <div class="btns"><button id="done">완료</button></div></div>`;
     el.querySelectorAll('.chips button').forEach(b => b.onclick = () => {
@@ -2331,7 +2334,12 @@ function overlay(kind, err = '') {
       el.querySelectorAll(`.chips button[data-k="${b.dataset.k}"]`).forEach(x => x.classList.toggle('sel', x === b));
       previewSet();
     });
-    el.querySelectorAll('input[name=col]').forEach(r => r.addEventListener('change', () => { myLook.c = +r.value; saveLook(); previewSet(); }));
+    // 옷 색: 다른 항목과 같은 일반 버튼 (숨긴 라디오+라벨 방식은 아이폰에서 터치가 안 먹힐 때가 있었음)
+    el.querySelectorAll('button[data-col]').forEach(b => b.onclick = () => {
+      myLook.c = +b.dataset.col; saveLook();
+      el.querySelectorAll('button[data-col]').forEach(x => { x.classList.toggle('sel', x === b); x.setAttribute('aria-pressed', x === b); });
+      previewSet();
+    });
     $('done').onclick = () => {
       saveLook(); applyMyColor(); previewStop();
       if (state === 'play') { send({ t: 'look', look: myLook }); overlay(null); toast('👕 새 모습으로 변신!', lookSummary(myLook), 2); }
