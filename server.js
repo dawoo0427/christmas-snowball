@@ -158,7 +158,7 @@ const heals = W.layout.heals.map(h => ({ x: h.x, z: h.z, on: true, respawn: 0 })
 const HEAL_RESPAWN = W.HEAL_RESPAWN;
 const ornaments = [];            // 초대형 트리 장식 [{ id, k, a, y, n }] (서버가 켜져 있는 동안 유지)
 let nextOrn = 1;
-const ornRow = o => [o.id, o.k, r2(o.a), r2(o.y), o.n];
+const ornRow = o => [o.id, o.k, r2(o.a), r2(o.y), o.n, o.pid];
 const igloos = new Map();        // 주인 id -> { id, x, z, rot, n }
 const igList = () => [...igloos.values()];
 const igRow = ig => [ig.id, r1(ig.x), r1(ig.z), r2(ig.rot), ig.n, ig.lv];
@@ -357,9 +357,19 @@ function handle(p, m) {
       else if (!(y >= T.trunk + 0.3 && y <= T.h - 0.5)) why = '트리 위에 달아 주세요';
       if (why) { p.conn.send({ t: 'ornfail', why }); break; }
       p.score -= T.ornCost;
-      const o = { id: nextOrn++, k, a, y, n: p.n };
+      const o = { id: nextOrn++, k, a, y, n: p.n, pid: p.id };
       ornaments.push(o);
       broadcast({ t: 'orn', o: ornRow(o), by: p.id });
+      break;
+    }
+    case 'ornundo': {            // 내가 단 오너먼트 되돌리기 (마지막 것부터, 점수 돌려받기)
+      let i = -1;
+      if (m.id) i = ornaments.findIndex(o => o.id === (m.id | 0) && o.pid === p.id);
+      else for (let j = ornaments.length - 1; j >= 0; j--) if (ornaments[j].pid === p.id) { i = j; break; }
+      if (i < 0) { p.conn.send({ t: 'ornfail', why: '되돌릴 내 장식이 없어요' }); break; }
+      const [o] = ornaments.splice(i, 1);
+      p.score += W.GIANT_TREE.ornCost;
+      broadcast({ t: 'ornx', id: o.id, by: p.id });
       break;
     }
     case 'fish': {               // 얼음낚시 시작/그만

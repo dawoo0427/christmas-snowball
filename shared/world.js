@@ -19,9 +19,9 @@
   const VILLAGE_SAFE = 56;            // 마을 안전지대 반지름 (예전의 2배). 이 밖에서는 플레이어끼리 PvP 가능
   const ZONES = [220, 340];           // 마을에서 이 거리 밖부터 나쁜 루돌프, 나쁜 산타가 나온다
   // 안전지대의 초대형 크리스마스트리: 플레이어가 오너먼트로 꾸민다 (하나에 1,000점)
-  // (카메라 높이가 약 24라서, 카메라를 뚫지 않도록 높이 18.5로)
-  const GIANT_TREE = { x: 0, z: 30, r: 7.2, h: 18.5, trunk: 2.4,
-    tiers: [0, 1, 2, 3, 4, 5].map(i => ({ b: 2.4 + i * 2.3, r: 7.6 * (1 - i / 6.3), h: 4.6 })), ornCost: 1000, maxOrn: 400, near: 24 };
+  // 탑뷰 카메라(높이 약 24, 49도로 내려다봄)에서 꼭대기 전광판까지 잘리지 않고 보이도록 높이 약 12 + 전광판
+  const GIANT_TREE = { x: 0, z: 30, r: 5.8, h: 12.2, trunk: 1.8,
+    tiers: [0, 1, 2, 3, 4, 5].map(i => ({ b: 1.8 + i * 1.5, r: 6.2 * (1 - i / 6.3), h: 3.1 })), ornCost: 1000, maxOrn: 400, near: 20, view: 22 };
   // 트리 표면 반지름 (높이 y 에서 가장 바깥쪽 가지)
   GIANT_TREE.surfR = y => { let r = 0; for (const t of GIANT_TREE.tiers) if (y >= t.b && y <= t.b + t.h) r = Math.max(r, t.r * (1 - (y - t.b) / t.h)); return r; };
   const ORNAMENTS = [

@@ -54,15 +54,6 @@
   #allyAsk button[data-ok="0"] { background:#6d6d7a; }
   #plistSet button.ally { border-color:#7dffb0; }
   #plistSet button.ally.on { background:#2e7d32; border-color:#7dffb0; }
-  #treeBoard { position:absolute; transform:translate(-50%,-100%); z-index:2; display:none; text-align:center; pointer-events:none; white-space:nowrap;
-    background:#0b1430ee; border:3px solid #ffd34d; border-radius:14px; padding:7px 16px 6px; box-shadow:0 0 14px #ffd34d88, inset 0 0 10px #ffd34d33; }
-  #treeBoard::before, #treeBoard::after { content:''; position:absolute; left:10px; right:10px; height:4px; background:repeating-linear-gradient(90deg,#ff4d4d 0 6px,transparent 6px 12px,#ffd34d 12px 18px,transparent 18px 24px,#4dc3ff 24px 30px,transparent 30px 36px); animation:led 1.2s steps(3) infinite; }
-  #treeBoard::before { top:3px; } #treeBoard::after { bottom:3px; }
-  @keyframes led { to { background-position:36px 0; } }
-  #treeBoard small { display:block; font-family:var(--display); color:#ffd34d; font-size:13px; letter-spacing:1px; }
-  #treeBoard b { display:block; font-family:var(--display); font-weight:400; font-size:19px; color:#fff; }
-  #treeBoard i { position:absolute; left:50%; bottom:-11px; transform:translateX(-50%); color:#ffd34d; font-style:normal; font-size:12px; }
-  body.touch #treeBoard b { font-size:15px; } body.touch #treeBoard { padding:5px 12px 4px; }
   .tag.igtag { font-size:12px; color:#cfe8ff; background:#0b143099; }
   #sitBtn.on { background:#ffb74de6 !important; box-shadow:0 3px 0 #a86b12 !important; }
   body.playing.safe #teaBtn, body.playing.nearfire #sitBtn { display:block; }
@@ -630,49 +621,57 @@ function buildGiantTree() {
   const g = new THREE.Group(); g.position.set(GT.x, heightAt(GT.x, GT.z) - 0.2, GT.z); scene.add(g); giant.g = g;
   // 트리가 카메라와 내 캐릭터 사이를 가리면 반투명해지도록 재질을 따로 둔다
   const own = c => { const m = mat(c).clone(); m.transparent = true; return m; };
-  const trunkM = own(0x5a3a22); mk(Cyl(1.3, 1.7, GT.trunk + 0.6, 10), trunkM, 0, (GT.trunk + 0.6) / 2, 0, g);
+  const trunkM = own(0x5a3a22); mk(Cyl(0.9, 1.2, GT.trunk + 0.6, 10), trunkM, 0, (GT.trunk + 0.6) / 2, 0, g);
   const greens = [0x1d6b3a, 0x237a42, 0x1d6b3a, 0x2a8a4a, 0x1f7040, 0x2a8a4a].map(own);
   GT.tiers.forEach((t, i) => mk(Cone(t.r, t.h, 16), greens[i], 0, t.b + t.h / 2, 0, g));
   giant.mats = [trunkM, ...new Set(greens)]; giant.fade = 1;
   const deco = new THREE.Group(); g.add(deco); giant.deco = deco;      // 전구·별·오너먼트·전광판 (트리가 화면을 가릴 땐 숨김)
   // 눈 쌓인 가지 끝 + 기본 전구 줄
   const cols = [0xff4d4d, 0xffd34d, 0x4dc3ff, 0xff7dd8, 0x7dffb0];
-  for (let i = 0; i < 130; i++) {
-    const y = GT.trunk + 0.5 + (i / 130) * (GT.h - GT.trunk - 1.5), a = i * 0.9, r = GT.surfR(y) + 0.1, c = cols[i % 5];
-    const bulb = mk(Sph(0.18, 6, 4), mat(c, { basic: true }).clone(), Math.sin(a) * r, y, Math.cos(a) * r, deco, false);
+  for (let i = 0; i < 90; i++) {
+    const y = GT.trunk + 0.5 + (i / 90) * (GT.h - GT.trunk - 1), a = i * 0.9, r = GT.surfR(y) + 0.1, c = cols[i % 5];
+    const bulb = mk(Sph(0.13, 6, 4), mat(c, { basic: true }).clone(), Math.sin(a) * r, y, Math.cos(a) * r, deco, false);
     twinkleBulbs.push({ m: bulb, c: new THREE.Color(c), ph: i * 0.37 });
   }
   const sh = new THREE.Shape();
   for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.9 : 2.1; i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
   const sg = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false }); sg.translate(0, 0, -0.25);
-  const star = mk(sg, mat(0xffd34d, { em: 0xffc020, emI: 1.6, metal: 0.4 }), 0, GT.h + 1.2, 0, deco, false); stars.push(star);
-  glow(0xffd860, 11, 0, GT.h + 1.3, 0, deco, 1.2);
+  // 트리 끝: 1위 전광판(항상 카메라를 향하는 판) + 그 위의 금빛 별. 트리가 반투명해져도 보이게 따로 둔다
+  const topG = new THREE.Group(); topG.position.y = GT.h; g.add(topG);
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 300;
+  const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
+  const board = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }));
+  board.scale.set(9.6, 2.8, 1); board.position.y = 1.7; board.renderOrder = 3; topG.add(board);
+  giant.board = { cv, tex, sprite: board };
+  const star = mk(sg, mat(0xffd34d, { em: 0xffc020, emI: 1.6, metal: 0.4 }), 0, 3.75, 0, topG, false); star.scale.setScalar(0.62); stars.push(star);
+  glow(0xffd860, 6, 0, 3.8, 0, topG, 1.2);
   const lt = new THREE.PointLight(0xffd59a, 1.2, 40, 1.6); lt.position.set(0, GT.h * 0.5, 0); g.add(lt);
-  // 1위 전광판: 트리 꼭대기를 따라다니는 화면 표시 (탑뷰 카메라에서는 꼭대기가 화면 밖일 때가 많아 위쪽 가장자리에 붙는다)
-  const bd = document.createElement('div'); bd.id = 'treeBoard'; bd.innerHTML = '<small>👑 현재 랭킹 1위</small><b></b><i>▼</i>'; $('labels').appendChild(bd);
-  giant.board = bd;
   // 클릭 판정용 투명 원기둥
   giant.hit = new THREE.Mesh(new THREE.CylinderGeometry(GT.r, GT.r, GT.h + 3, 12), new THREE.MeshBasicMaterial({ visible: false }));
   giant.hit.position.set(0, (GT.h + 3) / 2, 0); g.add(giant.hit);
-  drawBoard('', '점수를 모아 1위에 올라 보세요!', 0);
+  drawBoard('', '점수를 모아 1위에 도전!', 0);
 }
+// 전광판 그리기: 글자가 판 밖으로 잘리지 않도록 폭에 맞춰 글자 크기를 줄인다
+let boardLast = null, ledPhase = 0;
 function drawBoard(title, name, score) {
-  giant.board.querySelector('b').textContent = score ? `${name} · ${score.toLocaleString()}점` : name;
+  boardLast = [title, name, score];
+  const { cv, tex } = giant.board, x = cv.getContext('2d'), w = cv.width, h = cv.height;
+  x.clearRect(0, 0, w, h);
+  const r = 44, m = 10; x.beginPath(); x.moveTo(m + r, m); x.arcTo(w - m, m, w - m, h - m, r); x.arcTo(w - m, h - m, m, h - m, r); x.arcTo(m, h - m, m, m, r); x.arcTo(m, m, w - m, m, r); x.closePath();
+  x.fillStyle = '#0b1430f0'; x.fill(); x.lineWidth = 12; x.strokeStyle = '#ffd34d'; x.stroke();
+  const led = ['#ff4d4d', '#ffd34d', '#4dc3ff', '#7dffb0'];
+  for (let i = 0; i < 22; i++) { const px = 50 + i * (w - 100) / 21; x.fillStyle = led[(i + ledPhase) % 4]; x.beginPath(); x.arc(px, 30, 7, 0, TAU); x.fill(); x.fillStyle = led[(i + ledPhase + 2) % 4]; x.beginPath(); x.arc(px, h - 30, 7, 0, TAU); x.fill(); }
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  const fit = (text, size, maxW) => { let s = size; x.font = `${s}px Jua, "Apple SD Gothic Neo", sans-serif`; while (s > 20 && x.measureText(text).width > maxW) { s -= 2; x.font = `${s}px Jua, "Apple SD Gothic Neo", sans-serif`; } };
+  const t1 = title || '👑 현재 랭킹 1위', t2 = score ? `${name} · ${score.toLocaleString()}점` : name;
+  x.fillStyle = '#ffd34d'; fit(t1, 58, w - 120); x.fillText(t1, w / 2, 102);
+  x.fillStyle = '#ffffff'; fit(t2, 76, w - 120); x.fillText(t2, w / 2, 192);
+  tex.needsUpdate = true;
 }
-// 전광판 위치: 트리 꼭대기의 화면 좌표, 화면 밖이면 가장자리에 붙임
-function placeBoard() {
-  const bd = giant.board; if (!bd) return;
-  const show = state === 'play' && me && Math.hypot(me.x - GT.x, me.z - GT.z) < 90;
-  if (!show) { bd.style.display = 'none'; return; }
-  tmpV.set(GT.x, heightAt(GT.x, GT.z) + GT.h + 2.5, GT.z).project(camera);
-  if (tmpV.z > 1) { bd.style.display = 'none'; return; }
-  const sx = (tmpV.x * 0.5 + 0.5) * innerWidth, sy = (-tmpV.y * 0.5 + 0.5) * innerHeight;
-  if (sx < -150 || sx > innerWidth + 150) { bd.style.display = 'none'; return; }
-  bd.style.display = 'block'; bd.style.left = clamp(sx, 110, innerWidth - 110) + 'px'; bd.style.top = clamp(sy, isTouch ? 96 : 118, innerHeight - 160) + 'px';
-}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (boardLast && giant.board) drawBoard(...boardLast); });
 // 오너먼트 모델 (트리 바깥쪽을 향하도록)
 function makeOrnament(k) {
-  const g = new THREE.Group(); g.scale.setScalar(0.85);
+  const g = new THREE.Group(); g.scale.setScalar(0.62);
   const shiny = (c, em) => mat(c, { metal: 0.6, rough: 0.25, em: em || 0x000000, emI: 0.6 });
   if (k === 'red' || k === 'gold' || k === 'blue') {
     mk(Sph(0.55, 14, 10), shiny({ red: 0xe53935, gold: 0xffc107, blue: 0x1e88e5 }[k], { red: 0x330000, gold: 0x332200, blue: 0x001133 }[k]), 0, 0, 0.3, g);
@@ -688,12 +687,13 @@ function makeOrnament(k) {
   else { mk(Box(0.75, 0.65, 0.75), toon(0x43a047), 0, 0, 0.35, g); mk(Box(0.78, 0.68, 0.18), toon(0xffd34d), 0, 0, 0.35, g, false); mk(Box(0.18, 0.68, 0.78), toon(0xffd34d), 0, 0, 0.35, g, false); }
   return g;
 }
-function addOrnament([id, k, a, y, n]) {
+function addOrnament([id, k, a, y, n, pid]) {
   if (giant.orns.has(id) || !giant.g) return;
   const m = makeOrnament(k), r = GT.surfR(y);
   m.position.set(Math.sin(a) * r, y, Math.cos(a) * r); m.rotation.y = a; giant.deco.add(m);
-  giant.orns.set(id, { id, k, a, y, n, m });
+  giant.orns.set(id, { id, k, a, y, n, pid, m });
 }
+function removeOrnament(id) { const o = giant.orns.get(id); if (!o) return; giant.deco.remove(o.m); giant.orns.delete(id); }
 function clearOrnaments() { for (const o of giant.orns.values()) giant.deco.remove(o.m); giant.orns.clear(); }
 // 1위 전광판 갱신 (나와 다른 플레이어 점수 중 가장 높은 사람)
 // 카메라→캐릭터 선분이 트리 줄기 가까이를 지나가면 트리를 반투명하게
@@ -710,7 +710,7 @@ function updateBoard() {
   let top = { n: nick, s: myScore }; for (const r of remotes.values()) if (r.score > top.s) top = { n: r.n, s: r.score };
   const txt = top.s > 0 ? `${top.n}|${top.s}` : '-';
   if (txt === giant.boardTxt) return; giant.boardTxt = txt;
-  if (top.s > 0) drawBoard('', top.n, top.s); else drawBoard('', '점수를 모아 1위에 올라 보세요!', 0);
+  if (top.s > 0) drawBoard('', top.n, top.s); else drawBoard('', '점수를 모아 1위에 도전!', 0);
 }
 const nearGiant = () => me && Math.hypot(me.x - GT.x, me.z - GT.z) < GT.near;
 function openTree() {
@@ -1436,6 +1436,12 @@ function onMsg(m) {
       if (treeView) { setTimeout(() => { if (treeView) { treeView.info(); treeView.draw(); } }, 50); }
       break;
     }
+    case 'ornx': {               // 오너먼트 되돌리기
+      const o = giant.orns.get(m.id); removeOrnament(m.id);
+      if (m.by === myId) { toast('↩️ 장식을 떼었어요', `+${GT.ornCost.toLocaleString()}점 돌려받음`, 1.4); if (o) burst(GT.x + Math.sin(o.a) * GT.surfR(o.y), heightAt(GT.x, GT.z) + o.y, GT.z + Math.cos(o.a) * GT.surfR(o.y), 10, 0xffffff, 3); }
+      if (treeView) setTimeout(() => { if (treeView) { treeView.info(); treeView.draw(); } }, 50);
+      break;
+    }
     case 'ornfail': toast('🎄 장식을 달 수 없어요', esc(m.why || ''), 1.8); break;
     case 'bought': if (m.item === 'sled') { const fresh = !ownSled; ownSled = true; if (fresh) { sfx.win(); toast('🛷 눈썰매 구매 완료!', `${m.cost ? `-${(+m.cost).toLocaleString()}점 · ` : ''}N 키 또는 🛷 버튼으로 타기`, 3); } } break;
     case 'buyfail': toast('🛷 구매할 수 없어요', esc(m.why || ''), 2); break;
@@ -1845,7 +1851,7 @@ setInterval(() => { if ($('settings').classList.contains('open')) syncSettings()
 // ============================================================
 const keys = {};
 const mouse = { nx: 0, ny: 0, has: false };
-let camYaw = 0, camYawT = 0, camDist = isTouch ? 28 : 30, rDrag = null;
+let camYaw = 0, camYawT = 0, camDist = isTouch ? 28 : 30, camZoom = 0, treeK = 0, rDrag = null;
 const typing = () => document.activeElement && document.activeElement.tagName === 'INPUT';
 function openChat() { if (state !== 'play') return; $('chatbox').classList.add('open'); for (const k in keys) keys[k] = false; resetTouch(); $('chatIn').focus(); }
 function closeChat() { $('chatbox').classList.remove('open'); $('chatIn').blur(); }
@@ -2285,10 +2291,14 @@ function overlay(kind, err = '') {
         <div><div class="slot"><b>오너먼트 고르기</b><div class="chips">${W.ORNAMENTS.map(o => `<button data-o="${o.k}" class="${o.k === pick ? 'sel' : ''}">${o.emoji} ${o.name}</button>`).join('')}</div></div>
         <p class="note" style="text-align:left">트리를 누른 곳에 오너먼트가 달려요.<br>하나에 <b>${GT.ornCost.toLocaleString()}점</b>이 차감되고, 모두에게 보여요.</p></div>
       </div>
-      <div class="btns"><button id="done">다 꾸몄어요</button></div></div>`;
+      <div class="btns"><button id="undo" style="background:#5c6bc0;box-shadow:0 4px 0 #303f9f">↩️ 되돌리기</button><button id="done">다 꾸몄어요</button></div></div>`;
     const cv = $('treeCv'), cx = cv.getContext('2d'), S = 330 / (GT.h + 2.5), ox = 150, oy = 365;
     const view = Math.atan2(me.x - GT.x, me.z - GT.z);
-    const info = () => { $('treeInfo').textContent = `장식 ${giant.orns.size}개 · 내 점수 ${myScore.toLocaleString()}점 · 하나에 ${GT.ornCost.toLocaleString()}점`; };
+    const mine = () => [...giant.orns.values()].filter(o => o.pid === myId).length;
+    const info = () => {
+      $('treeInfo').textContent = `장식 ${giant.orns.size}개 (내 장식 ${mine()}개) · 내 점수 ${myScore.toLocaleString()}점 · 하나에 ${GT.ornCost.toLocaleString()}점`;
+      const u = $('undo'); if (u) { u.disabled = !mine(); u.style.opacity = mine() ? 1 : 0.45; }
+    };
     const emojiOf = k => (W.ORNAMENTS.find(o => o.k === k) || {}).emoji || '•';
     let ghost = null;
     const draw = () => {
@@ -2297,7 +2307,7 @@ function overlay(kind, err = '') {
       GT.tiers.forEach((t, i) => { cx.fillStyle = ['#1d6b3a', '#237a42', '#1d6b3a', '#2a8a4a', '#1f7040', '#2a8a4a'][i]; cx.beginPath(); cx.moveTo(ox - t.r * S, oy - t.b * S); cx.lineTo(ox + t.r * S, oy - t.b * S); cx.lineTo(ox, oy - (t.b + t.h) * S); cx.closePath(); cx.fill(); });
       cx.font = '26px sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('⭐', ox, oy - (GT.h + 1.2) * S);
       const list = [...giant.orns.values()].map(o => ({ o, th: angDiff(view, o.a) })).filter(q => Math.abs(q.th) < Math.PI / 2).sort((p, q) => Math.abs(q.th) - Math.abs(p.th));
-      for (const { o, th } of list) { cx.globalAlpha = 0.5 + 0.5 * Math.cos(th); cx.font = `${Math.round(12 + 8 * Math.cos(th))}px sans-serif`; cx.fillText(emojiOf(o.k), ox + Math.sin(th) * GT.surfR(o.y) * S, oy - o.y * S); }
+      for (const { o, th } of list) { cx.globalAlpha = (o.pid === myId ? 0.65 : 0.4) + 0.35 * Math.cos(th); cx.font = `${Math.round(12 + 8 * Math.cos(th))}px sans-serif`; cx.fillText(emojiOf(o.k), ox + Math.sin(th) * GT.surfR(o.y) * S, oy - o.y * S); }
       cx.globalAlpha = 1;
       if (ghost) { cx.globalAlpha = ghost.ok ? 0.85 : 0.35; cx.font = '24px sans-serif'; cx.fillText(emojiOf(pick), ghost.x, ghost.y); cx.globalAlpha = 1; }
     };
@@ -2318,6 +2328,8 @@ function overlay(kind, err = '') {
     };
     el.querySelectorAll('.chips button').forEach(b => b.onclick = () => { pick = b.dataset.o; el.querySelectorAll('.chips button').forEach(x => x.classList.toggle('sel', x === b)); draw(); });
     $('done').onclick = () => overlay(null);
+    $('undo').onclick = () => { if (mine()) send({ t: 'ornundo' }); else toast('되돌릴 내 장식이 없어요', '', 1.2); };   // 마지막에 단 내 장식부터 떼고 점수를 돌려받음
+    el.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $('undo').click(); } };
     treeView = { draw, info }; info(); draw();
     return;
   }
@@ -2779,7 +2791,8 @@ function render(dt) {
     } else if (e.bar) e.bar.style.display = 'none';
   }
   animFire(dt);
-  updateBoard(); updateGiantFade(dt); placeBoard();
+  updateBoard(); updateGiantFade(dt);
+  if (giant.board && Math.floor(time * 3) % 4 !== ledPhase) { ledPhase = Math.floor(time * 3) % 4; if (boardLast && me && Math.hypot(me.x - GT.x, me.z - GT.z) < 70) drawBoard(...boardLast); }
   if (treeView && Math.random() < 0.1) treeView.info();
   const mineIg = igloos.get(myId), nextLv = mineIg ? W.IGLOO.LV[mineIg.lv + 1] : null;
   { const lbl = mineIg ? `${mineIg.lv ? '🏰 얼음성' : '🧊 이글루'} 옮기기 <small>(B)</small>` : `🧊 이글루 짓기 <small>${W.IGLOO.LV[0].cost.toLocaleString()}점 (B)</small>`; if ($('igBtn')._l !== lbl) { $('igBtn')._l = lbl; $('igBtn').innerHTML = lbl; } }
@@ -2805,8 +2818,12 @@ function render(dt) {
 
   camYaw = angLerp(camYaw, camYawT, Math.min(1, dt * 8));
   const pitch = 0.86;
-  const target = new THREE.Vector3(p.x, p.y + 1.2, p.z);
-  const want = new THREE.Vector3(Math.sin(camYaw) * Math.cos(pitch) * camDist, Math.sin(pitch) * camDist, Math.cos(camYaw) * Math.cos(pitch) * camDist).add(target);
+  // 초대형 트리 근처: 카메라를 조금 멀리 빼고, 나와 트리 사이를 바라보며 시선을 올려 트리 끝 전광판까지 화면 안에 들어오게
+  const nearTree = state === 'play' && Math.hypot(p.x - GT.x, p.z - GT.z) < GT.view;
+  treeK = lerp(treeK, nearTree ? 1 : 0, Math.min(1, dt * 2.5));
+  const target = new THREE.Vector3(lerp(p.x, GT.x, treeK * 0.6), p.y + 1.2 + treeK * 7, lerp(p.z, GT.z, treeK * 0.6));
+  camZoom = lerp(camDist, Math.max(camDist, 44), treeK);
+  const want = new THREE.Vector3(Math.sin(camYaw) * Math.cos(pitch) * camZoom, Math.sin(pitch) * camZoom, Math.cos(camYaw) * Math.cos(pitch) * camZoom).add(target);
   camPos.lerp(want, Math.min(1, dt * 6)); camLook.lerp(target, Math.min(1, dt * 10));
   camera.position.copy(camPos);
   if (shake > 0.01) { camera.position.x += rand(-shake, shake); camera.position.y += rand(-shake, shake); shake *= Math.pow(0.02, dt); }
