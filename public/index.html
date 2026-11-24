@@ -162,6 +162,9 @@
   #overlay .custom .chips button.cdot.sel { border-color:#fff; box-shadow:0 0 0 3px #2f6fd6; }
   .custom.treeedit { grid-template-columns:300px 1fr; }
   @media (max-width:560px) { .custom, .custom.treeedit { grid-template-columns:1fr; } #treeCv { margin:0 auto; display:block; max-width:100%; height:auto !important; } .custom canvas { width:180px; height:200px; margin:0 auto; display:block; } }
+  .langs { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:0 0 10px; }
+  #overlay .langs button { font-family:var(--body); font-size:14px; padding:6px 12px; border-radius:14px; background:#ffffff14; box-shadow:none; border:1.5px solid #ffffff40; }
+  #overlay .langs button.sel { background:#2f6fd6; border-color:#9cc3ff; }
   .swatch { display:inline-flex; gap:6px; }
   .swatch label { width:30px; height:30px; border-radius:50%; cursor:pointer; border:3px solid transparent; }
   .swatch input { position:absolute; opacity:0; width:1px; height:1px; }
@@ -259,16 +262,17 @@
 
 <script src="lib/three.min.js"></script>
 <script src="world.js"></script>
+<script src="i18n.js"></script>
 <script>
 (() => {
 'use strict';
 function boot() {
-  if (!window.World) { document.querySelector('#overlay h2').textContent = '월드 정보를 불러오지 못했어요. 새로고침해 주세요.'; return; }
+  if (!window.World) { document.querySelector('#overlay h2').textContent = t("월드 정보를 불러오지 못했어요. 새로고침해 주세요."); return; }
   if (window.THREE) return init();
   const s = document.createElement('script');
   s.src = 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js';
   s.onload = init;
-  s.onerror = () => { document.querySelector('#overlay h2').textContent = '3D 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.'; };
+  s.onerror = () => { document.querySelector('#overlay h2').textContent = t("3D 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요."); };
   document.head.appendChild(s);
 }
 
@@ -283,6 +287,15 @@ const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 const deco = W.rng(7);          // 장식용 난수 (게임 판정과 무관)
 const sr = (a, b) => deco.range(a, b);
 const $ = id => document.getElementById(id);
+// ---------- 다국어: 정적 HTML 과 공유 데이터 이름을 선택한 언어로 ----------
+if (!window.t) { window.t = (k, v) => (v ? String(k).replace(/\{(\w+)\}/g, (m, x) => (v[x] != null ? v[x] : m)) : k); window.LANG = 'ko'; window.LANGS = [['ko', '한국어']]; window.translateDom = () => {}; window.setLang = () => {}; }
+translateDom(document);
+for (const o of W.ORNAMENTS) o.name = t(o.name);
+for (const f of W.FISH) f.name = t(f.name);
+for (const l of W.IGLOO.LV) l.name = t(l.name);
+for (const k in W.TYPES) if (W.TYPES[k].name) W.TYPES[k].name = t(W.TYPES[k].name);
+// 서버가 보낸 안내 문구 (한국어 키 + 값)
+const tWhy = (why, wv = {}) => t(why || '', { ...wv, n: wv.n != null ? (+wv.n).toLocaleString() : '', name: wv.lv != null && W.IGLOO.LV[wv.lv] ? W.IGLOO.LV[wv.lv].name : (wv.name || '') });
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 const isTouch = matchMedia('(pointer:coarse)').matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
@@ -599,7 +612,7 @@ function makeIgloo(ig) {
     glow(0xbfe9ff, 3.5, 0, 1.6, 0, g, 1.0);
   }
   ig.spots = iglooSpots(ig).map(f => worldSpot(ig.x, ig.z, g.position.y, ig.rot, f));
-  const tag = document.createElement('div'); tag.className = 'tag igtag'; tag.textContent = `${lv ? '🏰' : '🧊'} ${nm ? nm.n : ''}의 ${W.IGLOO.LV[lv].name}`; $('labels').appendChild(tag);
+  const tag = document.createElement('div'); tag.className = 'tag igtag'; tag.textContent = t("{0} {1}의 {2}", [lv ? '🏰' : '🧊', nm ? nm.n : '', W.IGLOO.LV[lv].name]); $('labels').appendChild(tag);
   return { g, shell, mats: [...new Set(shell.map(m => m.material))], tag, fade: 1, top, spin: shell.filter(m => m.userData.spin), gate, open: 0 };
 }
 // 투명도 바꾸기: 반투명일 때는 깊이를 쓰지 않아 안쪽이 비친다
@@ -649,7 +662,7 @@ function buildGiantTree() {
   // 클릭 판정용 투명 원기둥
   giant.hit = new THREE.Mesh(new THREE.CylinderGeometry(GT.r, GT.r, GT.h + 3, 12), new THREE.MeshBasicMaterial({ visible: false }));
   giant.hit.position.set(0, (GT.h + 3) / 2, 0); g.add(giant.hit);
-  drawBoard('', '점수를 모아 1위에 도전!', 0);
+  drawBoard('', t("점수를 모아 1위에 도전!"), 0);
 }
 // 전광판 그리기: 글자가 판 밖으로 잘리지 않도록 폭에 맞춰 글자 크기를 줄인다
 let boardLast = null, ledPhase = 0;
@@ -663,7 +676,7 @@ function drawBoard(title, name, score) {
   for (let i = 0; i < 22; i++) { const px = 50 + i * (w - 100) / 21; x.fillStyle = led[(i + ledPhase) % 4]; x.beginPath(); x.arc(px, 30, 7, 0, TAU); x.fill(); x.fillStyle = led[(i + ledPhase + 2) % 4]; x.beginPath(); x.arc(px, h - 30, 7, 0, TAU); x.fill(); }
   x.textAlign = 'center'; x.textBaseline = 'middle';
   const fit = (text, size, maxW) => { let s = size; x.font = `${s}px Jua, "Apple SD Gothic Neo", sans-serif`; while (s > 20 && x.measureText(text).width > maxW) { s -= 2; x.font = `${s}px Jua, "Apple SD Gothic Neo", sans-serif`; } };
-  const t1 = title || '👑 현재 랭킹 1위', t2 = score ? `${name} · ${score.toLocaleString()}점` : name;
+  const t1 = title || t("👑 현재 랭킹 1위"), t2 = score ? t("{0} · {1}점", [name, score.toLocaleString()]) : name;
   x.fillStyle = '#ffd34d'; fit(t1, 58, w - 120); x.fillText(t1, w / 2, 102);
   x.fillStyle = '#ffffff'; fit(t2, 76, w - 120); x.fillText(t2, w / 2, 192);
   tex.needsUpdate = true;
@@ -710,12 +723,12 @@ function updateBoard() {
   let top = { n: nick, s: myScore }; for (const r of remotes.values()) if (r.score > top.s) top = { n: r.n, s: r.score };
   const txt = top.s > 0 ? `${top.n}|${top.s}` : '-';
   if (txt === giant.boardTxt) return; giant.boardTxt = txt;
-  if (top.s > 0) drawBoard('', top.n, top.s); else drawBoard('', '점수를 모아 1위에 도전!', 0);
+  if (top.s > 0) drawBoard('', top.n, top.s); else drawBoard('', t("점수를 모아 1위에 도전!"), 0);
 }
 const nearGiant = () => me && Math.hypot(me.x - GT.x, me.z - GT.z) < GT.near;
 function openTree() {
   if (state !== 'play' || !me || me.dead) return;
-  if (!nearGiant()) { toast('🎄 초대형 트리 가까이 가야 꾸밀 수 있어요', '마을 안 큰 트리', 1.8); return; }
+  if (!nearGiant()) { toast(t("🎄 초대형 트리 가까이 가야 꾸밀 수 있어요"), t("마을 안 큰 트리"), 1.8); return; }
   overlay('tree');
 }
 function buildBigTree(x = 0, z = 0, sc = 1) {
@@ -772,14 +785,14 @@ const ELF_CSS = ['#ff6b6b', '#6fb3ff', '#c48dff', '#ffb74d', '#4dd0b0', '#ff7fb0
 // ---------- 플레이어 아바타 & 꾸미기 ----------
 // 순서는 shared/world.js 의 LOOK_SLOTS 개수와 맞춘다
 const LOOK = {
-  a: ['요정', '꼬마 산타', '눈사람', '펭귄', '루돌프', '진저브레드'],
-  h: ['기본', '요정 모자', '산타 모자', '루돌프 머리띠', '털모자', '귀마개', '왕관', '실크햇', '없음'],
-  e: ['기본', '동그란 안경', '선글라스', '하트 안경', '별 안경', '외눈 안경', '윙크'],
-  n: ['기본', '루돌프 코', '당근 코', '황금 코', '반창고'],
-  m: ['미소', '산타 수염', '콧수염', '메롱', '사탕 물기', '깜짝 입'],
-  r: ['기본', '요정 귀', '곰 귀', '토끼 귀', '고양이 귀', '방울 귀걸이'],
-  k: ['없음', '목도리', '방울 목걸이', '나비넥타이'],
-  b: ['없음', '선물 자루', '빨간 망토', '천사 날개'],
+  a: [t("요정"), t("꼬마 산타"), t("눈사람"), t("펭귄"), t("루돌프"), t("진저브레드")],
+  h: [t("기본"), t("요정 모자"), t("산타 모자"), t("루돌프 머리띠"), t("털모자"), t("귀마개"), t("왕관"), t("실크햇"), t("없음")],
+  e: [t("기본"), t("동그란 안경"), t("선글라스"), t("하트 안경"), t("별 안경"), t("외눈 안경"), t("윙크")],
+  n: [t("기본"), t("루돌프 코"), t("당근 코"), t("황금 코"), t("반창고")],
+  m: [t("미소"), t("산타 수염"), t("콧수염"), t("메롱"), t("사탕 물기"), t("깜짝 입")],
+  r: [t("기본"), t("요정 귀"), t("곰 귀"), t("토끼 귀"), t("고양이 귀"), t("방울 귀걸이")],
+  k: [t("없음"), t("목도리"), t("방울 목걸이"), t("나비넥타이")],
+  b: [t("없음"), t("선물 자루"), t("빨간 망토"), t("천사 날개")],
 };
 const BASE_HAT = [1, 2, 7, 5, 3, 8];        // 아바타별 '기본' 모자
 const lookKey = l => Object.keys(W.LOOK_SLOTS).map(k => l[k] | 0).join('.');
@@ -1012,17 +1025,17 @@ function makePenguin() {
   return { group: g, bd, held, body: navy };
 }
 const GIFT_INFO = {
-  heal: { color: 0xe53935, label: '체력 +40', c: '#ff8fa3' }, triple: { color: 0x1e88e5, label: '트리플 샷!', c: '#7dd3ff' },
-  giant: { color: 0x8e24aa, label: '왕눈덩이!', c: '#d0a8ff' }, fast: { color: 0x43a047, label: '스피드 업!', c: '#8dffa8' },
-  power: { color: 0xff6d00, label: '공격력 UP!', c: '#ffab6b' }, rapid: { color: 0xfdd835, label: '연사 UP! 눈덩이 수 증가', c: '#fff176' },
-  shield: { color: 0x00bcd4, label: '보호막! 피해 절반', c: '#80deea' },
-  pierce: { color: 0x90a4ae, label: '관통 눈덩이!', c: '#cfd8dc' }, boom: { color: 0xb71c1c, label: '폭발 눈덩이!', c: '#ff7043' },
-  ice: { color: 0xb3e5fc, label: '얼음 눈덩이!', c: '#b3e5fc' }, snipe: { color: 0x3949ab, label: '저격 눈덩이!', c: '#9fa8ff' },
-  double: { color: 0xf06292, label: '연발 샷!', c: '#ff9ec4' },
+  heal: { color: 0xe53935, label: t("체력 +40"), c: '#ff8fa3' }, triple: { color: 0x1e88e5, label: t("트리플 샷!"), c: '#7dd3ff' },
+  giant: { color: 0x8e24aa, label: t("왕눈덩이!"), c: '#d0a8ff' }, fast: { color: 0x43a047, label: t("스피드 업!"), c: '#8dffa8' },
+  power: { color: 0xff6d00, label: t("공격력 UP!"), c: '#ffab6b' }, rapid: { color: 0xfdd835, label: t("연사 UP! 눈덩이 수 증가"), c: '#fff176' },
+  shield: { color: 0x00bcd4, label: t("보호막! 피해 절반"), c: '#80deea' },
+  pierce: { color: 0x90a4ae, label: t("관통 눈덩이!"), c: '#cfd8dc' }, boom: { color: 0xb71c1c, label: t("폭발 눈덩이!"), c: '#ff7043' },
+  ice: { color: 0xb3e5fc, label: t("얼음 눈덩이!"), c: '#b3e5fc' }, snipe: { color: 0x3949ab, label: t("저격 눈덩이!"), c: '#9fa8ff' },
+  double: { color: 0xf06292, label: t("연발 샷!"), c: '#ff9ec4' },
 };
 // 버프 이름 (HUD 표시용), 단계는 ×숫자
-const BUFF_NAME = { triple: ['트리플 샷', '#7dd3ff'], giant: ['왕눈덩이', '#d0a8ff'], fast: ['스피드', '#8dffa8'], power: ['공격력', '#ffab6b'], rapid: ['연사', '#fff176'],
-  pierce: ['관통', '#cfd8dc'], boom: ['폭발', '#ff7043'], ice: ['얼음', '#b3e5fc'], snipe: ['저격', '#9fa8ff'], double: ['연발', '#ff9ec4'] };
+const BUFF_NAME = { triple: [t("트리플 샷"), '#7dd3ff'], giant: [t("왕눈덩이"), '#d0a8ff'], fast: [t("스피드"), '#8dffa8'], power: [t("공격력"), '#ffab6b'], rapid: [t("연사"), '#fff176'],
+  pierce: [t("관통"), '#cfd8dc'], boom: [t("폭발"), '#ff7043'], ice: [t("얼음"), '#b3e5fc'], snipe: [t("저격"), '#9fa8ff'], double: [t("연발"), '#ff9ec4'] };
 // 나쁜 산타: 빨간 옷, 흰 수염, 화난 눈썹, 등에 석탄 자루
 function makeSanta() {
   const g = new THREE.Group(), bd = new THREE.Group(); g.add(bd);
@@ -1233,19 +1246,19 @@ const midiOf = n => { const m = /^([A-G])(#|b)?(\d)$/.exec(n); return 12 * (+m[3
 const hz = n => 440 * Math.pow(2, (midiOf(n) - 69) / 12);
 const parseSong = str => str.trim().split(/\s+/).reduce((a, v, i, arr) => (i % 2 ? a : a.concat([[v === 'R' ? 0 : hz(v), parseFloat(arr[i + 1])]])), []);
 const PLAYLIST = [
-  { name: '징글벨', beat: 0.24, notes: SONG.map(([n, d]) => [n === 'R' ? 0 : NOTE[n], d]) },
+  { name: t("징글벨"), beat: 0.24, notes: SONG.map(([n, d]) => [n === 'R' ? 0 : NOTE[n], d]) },
   { name: 'We Wish You a Merry Christmas', beat: 0.3, notes: parseSong(`G4 1 C5 1 C5 .5 D5 .5 C5 .5 B4 .5 A4 1 A4 1 A4 1 D5 1 D5 .5 E5 .5 D5 .5 C5 .5 B4 1 G4 1 G4 1
     E5 1 E5 .5 F5 .5 E5 .5 D5 .5 C5 1 A4 1 G4 .5 G4 .5 A4 1 D5 1 B4 1 C5 2 R 1
     G4 1 C5 1 C5 1 C5 1 B4 2 B4 1 C5 1 B4 1 A4 1 G4 2 D5 1 E5 1 D5 .5 D5 .5 C5 .5 C5 .5 G5 1 G4 1 G4 .5 G4 .5 A4 1 D5 1 B4 1 C5 3 R 2`) },
-  { name: '창 밖을 보라 (Deck the Halls)', beat: 0.26, notes: parseSong(`G5 1.5 F5 .5 E5 1 D5 1 C5 1 D5 1 E5 1 C5 1 D5 .5 E5 .5 F5 .5 D5 .5 E5 1.5 D5 .5 C5 1 B4 1 C5 2
+  { name: t("창 밖을 보라 (Deck the Halls)"), beat: 0.26, notes: parseSong(`G5 1.5 F5 .5 E5 1 D5 1 C5 1 D5 1 E5 1 C5 1 D5 .5 E5 .5 F5 .5 D5 .5 E5 1.5 D5 .5 C5 1 B4 1 C5 2
     G5 1.5 F5 .5 E5 1 D5 1 C5 1 D5 1 E5 1 C5 1 D5 .5 E5 .5 F5 .5 D5 .5 E5 1.5 D5 .5 C5 1 B4 1 C5 2
     D5 1.5 E5 .5 F5 1 D5 1 E5 1.5 F5 .5 G5 1 D5 1 E5 .5 F#5 .5 G5 1 A5 .5 B5 .5 C6 1 B5 1 A5 1 G5 2
     G5 1.5 F5 .5 E5 1 D5 1 C5 1 D5 1 E5 1 C5 1 A5 .5 A5 .5 A5 .5 A5 .5 G5 1.5 F5 .5 E5 1 D5 1 C5 2 R 2`) },
-  { name: '기쁘다 구주 오셨네 (Joy to the World)', beat: 0.34, notes: parseSong(`C5 2 B4 1.5 A4 .5 G4 3 F4 1 E4 2 D4 2 C4 3 G4 1 A4 3 A4 1 B4 3 B4 1 C5 3 R 1
+  { name: t("기쁘다 구주 오셨네 (Joy to the World)"), beat: 0.34, notes: parseSong(`C5 2 B4 1.5 A4 .5 G4 3 F4 1 E4 2 D4 2 C4 3 G4 1 A4 3 A4 1 B4 3 B4 1 C5 3 R 1
     C5 1 C5 1 B4 1 A4 1 G4 1 G4 1.5 F4 .5 E4 1 C5 1 C5 1 B4 1 A4 1 G4 1 G4 1.5 F4 .5 E4 1
     E4 1 E4 1 E4 1 E4 1 E4 .5 F4 .5 G4 3 F4 .5 E4 .5 D4 1 D4 1 D4 1 D4 .5 E4 .5 F4 3
     E4 .5 D4 .5 C4 1 C5 2 A4 1 G4 1.5 F4 .5 E4 1 F4 1 E4 2 D4 2 C4 4 R 2`) },
-  { name: '오 크리스마스 트리', beat: 0.4, notes: parseSong(`G4 1 C5 .75 C5 .25 C5 1.5 D5 .5 E5 .75 E5 .25 E5 1.5 E5 .5 D5 .5 E5 .5 F5 1 B4 1 D5 1 C5 2
+  { name: t("오 크리스마스 트리"), beat: 0.4, notes: parseSong(`G4 1 C5 .75 C5 .25 C5 1.5 D5 .5 E5 .75 E5 .25 E5 1.5 E5 .5 D5 .5 E5 .5 F5 1 B4 1 D5 1 C5 2
     G5 .5 G5 .5 E5 .5 A5 1.5 G5 .5 G5 .5 F5 .5 F5 1.5 F5 .5 F5 .5 D5 .5 G5 1.5 F5 .5 F5 .5 E5 .5 E5 1
     G4 1 C5 .75 C5 .25 C5 1.5 D5 .5 E5 .75 E5 .25 E5 1.5 E5 .5 D5 .5 E5 .5 F5 1 B4 1 D5 1 C5 3 R 2`) },
 ];
@@ -1280,7 +1293,7 @@ setInterval(() => {
 //  게임 상태
 // ============================================================
 let state = 'boot', time = 0, shake = 0, playTime = 0;
-let nick = store.get('snowball-nick', '') || ['루돌프', '꼬마요정', '눈꽃', '진저', '별사탕'][Math.floor(Math.random() * 5)];
+let nick = store.get('snowball-nick', '') || [t("루돌프"), t("꼬마요정"), t("눈꽃"), t("진저"), t("별사탕")][Math.floor(Math.random() * 5)];
 let colorIdx = (+store.get('snowball-color', Math.floor(Math.random() * 6)) || 0) % 6;
 let myLook = (() => { try { return W.cleanLook(JSON.parse(store.get('snowball-look', 'null')) || { c: colorIdx }); } catch (e) { return W.cleanLook({ c: colorIdx }); } })();
 colorIdx = myLook.c;
@@ -1369,7 +1382,7 @@ function onMsg(m) {
   switch (m.t) {
     case 'welcome': {
       resetWorld();
-      myId = m.id; serverName = m.server || '';
+      myId = m.id; serverName = t(m.server || '');
       for (const [id, n, c, look] of m.players) names.set(id, { n, c, look: look || { c } });
       for (const [id, x, z, k] of (m.drops || [])) addDrop(id, x, z, k);
       me = newPlayer(m.x, m.z); myScore = 0; myCombo = 0; myKills = 0; playTime = 0;
@@ -1382,13 +1395,13 @@ function onMsg(m) {
       for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = '';
       document.body.classList.add('playing');
       state = 'play'; overlay(null); audio();
-      toast(`${esc(serverName)} 입장!`, '설원의 몬스터를 물리치고 점수를 모아 보세요');
-      feed(`<span class="sys">${esc(serverName)}에 들어왔어요. 지금 ${names.size}명이 놀고 있어요.</span>`);
+      toast(t("{0} 입장!", [esc(serverName)]), t("설원의 몬스터를 물리치고 점수를 모아 보세요"));
+      feed(t("<span class=\"sys\">{0}에 들어왔어요. 지금 {1}명이 놀고 있어요.</span>", [esc(serverName), names.size]));
       break;
     }
-    case 'full': state = 'title'; overlay('title', `서버가 가득 찼어요 (최대 ${m.max | 0}명). 잠시 후 다시 시도해 주세요.`); break;
-    case 'pj': names.set(m.id, { n: m.n, c: m.c, look: m.look || { c: m.c } }); feed(`<span class="sys">${esc(m.n)} 님이 들어왔어요</span>`); break;
-    case 'pl': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">${esc(nm.n)} 님이 나갔어요</span>`); names.delete(m.id); allySent.delete(m.id); { const k = allyInbox.indexOf(m.id); if (k >= 0) { allyInbox.splice(k, 1); showAllyAsk(); } } const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } closePeer(m.id); break; }
+    case 'full': state = 'title'; overlay('title', t("서버가 가득 찼어요 (최대 {0}명). 잠시 후 다시 시도해 주세요.", [m.max | 0])); break;
+    case 'pj': names.set(m.id, { n: m.n, c: m.c, look: m.look || { c: m.c } }); feed(t("<span class=\"sys\">{0} 님이 들어왔어요</span>", [esc(m.n)])); break;
+    case 'pl': { const nm = names.get(m.id); if (nm) feed(t("<span class=\"sys\">{0} 님이 나갔어요</span>", [esc(nm.n)])); names.delete(m.id); allySent.delete(m.id); { const k = allyInbox.indexOf(m.id); if (k >= 0) { allyInbox.splice(k, 1); showAllyAsk(); } } const r = remotes.get(m.id); if (r) { removeRemote(r); remotes.delete(m.id); } closePeer(m.id); break; }
     case 's': applySnapshot(m); break;
     case 'b': if (m.o !== 'e') { if (!balls.has(m.id + '.0')) spawnVolley({ id: m.id, owner: 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, ch: m.ch, st: m.st, pv: m.pv }); break; }
       if (!balls.has(m.id)) spawnBall({ id: m.id, owner: m.o === 'e' ? 'enemy' : 'remote', from: m.o, x: m.x, z: m.z, h: m.h, dx: m.dx, dz: m.dz, spd: m.s, r: m.r, dmg: m.dm || (m.o === 'e' ? 15 : 1), pv: !!m.pv, kind: m.k | 0 }); if (m.o === 'e') { const near = Math.hypot(m.x - me.x, m.z - me.z) < 30; if (near) sfx.ethrow(); } break;
@@ -1400,7 +1413,7 @@ function onMsg(m) {
       if (e) { e.flash = 0.15; e.squash = 0.4; }
       if (m.by === myId) {
         sfx.hit(); shake = Math.max(shake, 0.2); myCombo = m.cb | 0;
-        if (e) popup(e.x, e.y + e.T.h + 0.5, e.z, m.k ? `+${m.pts}` : (myCombo >= 3 ? `${myCombo} 콤보!` : '명중!'), m.k ? '#ffd34d' : (myCombo >= 3 ? '#7dffb0' : '#ffffff'));
+        if (e) popup(e.x, e.y + e.T.h + 0.5, e.z, m.k ? `+${m.pts}` : (myCombo >= 3 ? t("{0} 콤보!", [myCombo]) : t("명중!")), m.k ? '#ffd34d' : (myCombo >= 3 ? '#7dffb0' : '#ffffff'));
         if (m.k) myKills++;
       }
       if (m.k && e) killEnemy(e);
@@ -1418,33 +1431,33 @@ function onMsg(m) {
     }
     case 'ig': {                 // 이글루가 지어짐 (같은 사람이 다시 지으면 옮겨짐)
       addIgloo(m.i);
-      const nm = names.get(m.i[0]), L = W.IGLOO.LV[m.i[5] | 0], cost = m.cost ? ` · -${(+m.cost).toLocaleString()}점` : '';
+      const nm = names.get(m.i[0]), L = W.IGLOO.LV[m.i[5] | 0], cost = m.cost ? t(" · -{0}점", [(+m.cost).toLocaleString()]) : '';
       if (m.i[0] === myId) {
         sfx.gift();
-        if (m.up) { toast(`🏰 ${L.name} 완성!`, `더 크고 웅장해졌어요${cost}`, 3); sfx.win(); }
-        else if (m.mv) toast(`${m.i[5] ? '🏰 얼음성' : '🧊 이글루'}을 옮겼어요`, '', 1.8);
-        else toast('🧊 이글루 완성!', `몬스터는 못 들어와요. 안에서 쉬면 체력이 차요${cost}`, 2.8);
-      } else if (nm && (m.up || Math.hypot(m.i[1] - me.x, m.i[2] - me.z) < 60)) feed(`<span class="sys">${m.up ? '🏰' : '🧊'} ${esc(nm.n)} 님이 ${m.up ? `${L.name}으로 업그레이드했어요` : '이글루를 지었어요'}</span>`);
+        if (m.up) { toast(t("🏰 {0} 완성!", [L.name]), t("더 크고 웅장해졌어요{0}", [cost]), 3); sfx.win(); }
+        else if (m.mv) toast(t("{0}을 옮겼어요", [m.i[5] ? t("🏰 얼음성") : t("🧊 이글루")]), '', 1.8);
+        else toast(t("🧊 이글루 완성!"), t("몬스터는 못 들어와요. 안에서 쉬면 체력이 차요{0}", [cost]), 2.8);
+      } else if (nm && (m.up || Math.hypot(m.i[1] - me.x, m.i[2] - me.z) < 60)) feed(t("<span class=\"sys\">{0} {1} 님이 {2}</span>", [m.up ? '🏰' : '🧊', esc(nm.n), m.up ? t("{0}으로 업그레이드했어요", [L.name]) : t("이글루를 지었어요")]));
       break;
     }
     case 'igx': removeIgloo(m.id); break;
     case 'orn': {                // 누군가 초대형 트리를 꾸밈
       addOrnament(m.o);
       const o = W.ORNAMENTS.find(q => q.k === m.o[1]);
-      if (m.by === myId) { sfx.pop(); toast(`${o ? o.emoji : '🎄'} 장식을 달았어요!`, `-${GT.ornCost.toLocaleString()}점`, 1.4); }
-      else if (Math.hypot(GT.x - me.x, GT.z - me.z) < 60) feed(`<span class="sys">🎄 ${esc(m.o[4])} 님이 트리에 ${o ? o.emoji + ' ' + o.name : '장식'}을 달았어요</span>`);
+      if (m.by === myId) { sfx.pop(); toast(t("{0} 장식을 달았어요!", [o ? o.emoji : '🎄']), t("-{0}점", [GT.ornCost.toLocaleString()]), 1.4); }
+      else if (Math.hypot(GT.x - me.x, GT.z - me.z) < 60) feed(t("<span class=\"sys\">🎄 {0} 님이 트리에 {1}을 달았어요</span>", [esc(m.o[4]), o ? o.emoji + ' ' + o.name : t("장식")]));
       if (treeView) { setTimeout(() => { if (treeView) { treeView.info(); treeView.draw(); } }, 50); }
       break;
     }
     case 'ornx': {               // 오너먼트 되돌리기
       const o = giant.orns.get(m.id); removeOrnament(m.id);
-      if (m.by === myId) { toast('↩️ 장식을 떼었어요', `+${GT.ornCost.toLocaleString()}점 돌려받음`, 1.4); if (o) burst(GT.x + Math.sin(o.a) * GT.surfR(o.y), heightAt(GT.x, GT.z) + o.y, GT.z + Math.cos(o.a) * GT.surfR(o.y), 10, 0xffffff, 3); }
+      if (m.by === myId) { toast(t("↩️ 장식을 떼었어요"), t("+{0}점 돌려받음", [GT.ornCost.toLocaleString()]), 1.4); if (o) burst(GT.x + Math.sin(o.a) * GT.surfR(o.y), heightAt(GT.x, GT.z) + o.y, GT.z + Math.cos(o.a) * GT.surfR(o.y), 10, 0xffffff, 3); }
       if (treeView) setTimeout(() => { if (treeView) { treeView.info(); treeView.draw(); } }, 50);
       break;
     }
-    case 'ornfail': toast('🎄 장식을 달 수 없어요', esc(m.why || ''), 1.8); break;
-    case 'bought': if (m.item === 'sled') { const fresh = !ownSled; ownSled = true; if (fresh) { sfx.win(); toast('🛷 눈썰매 구매 완료!', `${m.cost ? `-${(+m.cost).toLocaleString()}점 · ` : ''}N 키 또는 🛷 버튼으로 타기`, 3); } } break;
-    case 'buyfail': toast('🛷 구매할 수 없어요', esc(m.why || ''), 2); break;
+    case 'ornfail': toast(t("🎄 장식을 달 수 없어요"), esc(tWhy(m.why, m.wv)), 1.8); break;
+    case 'bought': if (m.item === 'sled') { const fresh = !ownSled; ownSled = true; if (fresh) { sfx.win(); toast(t("🛷 눈썰매 구매 완료!"), t("{0}N 키 또는 🛷 버튼으로 타기", [m.cost ? t("-{0}점 · ", [(+m.cost).toLocaleString()]) : '']), 3); } } break;
+    case 'buyfail': toast(t("🛷 구매할 수 없어요"), esc(tWhy(m.why, m.wv)), 2); break;
     case 'slam': {               // 하프물범 배치기
       const y = heightAt(m.x, m.z);
       burst(m.x, y + 0.4, m.z, 50, 0xffffff, m.r * 2.2, 3); burst(m.x, y + 0.3, m.z, 20, 0x9fe3ff, m.r * 1.6, 2);
@@ -1454,20 +1467,20 @@ function onMsg(m) {
     }
     case 'boss': {
       const T = TYPES[m.type] || TYPES.seal;
-      if (m.on) { toast(`🦭 ${T.name}이 나타났어요!`, `처치하면 ${T.pts.toLocaleString()}점 + 선물 ${T.drops}개 · 미니맵의 👑`, 3.2); feed(`<span class="sys">👑 ${T.name} 등장! 미니맵을 확인하세요</span>`); sfx.win(); }
-      else { const nm = names.get(m.by); bossDots = []; feed(`<span class="sys">🎉 ${esc(m.by === myId ? nick : nm ? nm.n : '누군가')} 님이 ${T.name}을 쓰러뜨렸어요!</span>`); if (m.by === myId) toast(`🎉 ${T.name} 처치!`, `+${T.pts.toLocaleString()}점`, 3); }
+      if (m.on) { toast(t("🦭 {0}이 나타났어요!", [T.name]), t("처치하면 {0}점 + 선물 {1}개 · 미니맵의 👑", [T.pts.toLocaleString(), T.drops]), 3.2); feed(t("<span class=\"sys\">👑 {0} 등장! 미니맵을 확인하세요</span>", [T.name])); sfx.win(); }
+      else { const nm = names.get(m.by); bossDots = []; feed(t("<span class=\"sys\">🎉 {0} 님이 {1}을 쓰러뜨렸어요!</span>", [esc(m.by === myId ? nick : nm ? nm.n : t("누군가")), T.name])); if (m.by === myId) toast(t("🎉 {0} 처치!", [T.name]), t("+{0}점", [T.pts.toLocaleString()]), 3); }
       break;
     }
     case 'catch': {              // 얼음낚시 결과
       const f = W.FISH.find(q => q.k === m.k) || W.FISH[0];
       me.fishJerk = 0.6; popup(me.x, me.y + 3, me.z, `${f.emoji} ${f.name} +${m.pts}`, f.k === 'gold' ? '#ffd34d' : f.k === 'boot' ? '#bdbdbd' : '#7dd3ff');
       burst(me.x + Math.sin(me.face) * 1.7, me.y + 0.3, me.z + Math.cos(me.face) * 1.7, f.k === 'gold' ? 30 : 10, f.k === 'gold' ? 0xffd34d : 0x9fe3ff, 4);
-      if (f.k === 'gold') { sfx.win(); toast('✨ 황금 물고기!', `+${m.pts}점`, 2.4); } else sfx.pop();
+      if (f.k === 'gold') { sfx.win(); toast(t("✨ 황금 물고기!"), t("+{0}점", [m.pts]), 2.4); } else sfx.pop();
       break;
     }
     case 'fishx': if (me.fish) { me.fish = false; } break;
-    case 'goldfish': { const nm = names.get(m.id); if (nm) feed(`<span class="sys">✨ ${esc(nm.n)} 님이 황금 물고기를 낚았어요!</span>`); break; }
-    case 'igfail': toast('🧊 여기에는 지을 수 없어요', esc(m.why || ''), 2); break;
+    case 'goldfish': { const nm = names.get(m.id); if (nm) feed(t("<span class=\"sys\">✨ {0} 님이 황금 물고기를 낚았어요!</span>", [esc(nm.n)])); break; }
+    case 'igfail': toast(t("🧊 여기에는 지을 수 없어요"), esc(tWhy(m.why, m.wv)), 2); break;
     case 'allies': {
       myAllies.clear(); for (const id of m.ids || []) { myAllies.add(id); allySent.delete(id); }
       plistKey = ''; if ($('settings').classList.contains('open')) renderPlayerList();
@@ -1478,9 +1491,9 @@ function onMsg(m) {
       allyInbox.push(m.from); showAllyAsk(); sfx.chat();
       break;
     }
-    case 'allyOk': { const nm = names.get(m.id); toast('🤝 동맹 결성!', `${esc(nm ? nm.n : '')} 님과는 서로 공격해도 피해가 없어요`, 2.6); sfx.pop(); feed(`<span class="sys">🤝 ${esc(nm ? nm.n : '')} 님과 동맹을 맺었어요</span>`); break; }
-    case 'allyNo': { allySent.delete(m.id); const nm = names.get(m.id); toast(m.why === 'full' ? '동맹은 최대 10명까지예요' : `${esc(nm ? nm.n : '')} 님이 동맹을 거절했어요`, '', 2); plistKey = ''; break; }
-    case 'allyOff': { const nm = names.get(m.id); feed(`<span class="sys">${esc(nm ? nm.n : '')} 님이 동맹을 해제했어요</span>`); break; }
+    case 'allyOk': { const nm = names.get(m.id); toast(t("🤝 동맹 결성!"), t("{0} 님과는 서로 공격해도 피해가 없어요", [esc(nm ? nm.n : '')]), 2.6); sfx.pop(); feed(t("<span class=\"sys\">🤝 {0} 님과 동맹을 맺었어요</span>", [esc(nm ? nm.n : '')])); break; }
+    case 'allyNo': { allySent.delete(m.id); const nm = names.get(m.id); toast(m.why === 'full' ? t("동맹은 최대 10명까지예요") : t("{0} 님이 동맹을 거절했어요", [esc(nm ? nm.n : '')]), '', 2); plistKey = ''; break; }
+    case 'allyOff': { const nm = names.get(m.id); feed(t("<span class=\"sys\">{0} 님이 동맹을 해제했어요</span>", [esc(nm ? nm.n : '')])); break; }
     case 'lk': { const nm = names.get(m.id); if (nm) { nm.look = m.look; nm.c = m.look.c; } break; }
     case 'dmg': {                // 다른 플레이어가 맞힌 걸 서버가 확인해 준 피해
       if (appliedHits.has(m.id) || myAllies.has(m.by)) break;
@@ -1492,10 +1505,10 @@ function onMsg(m) {
     case 'drop': {
       addDrop(m.id, m.x, m.z, m.k);
       // 안내 문구는 나쁜 산타·하프물범일 때만 (한 번 처치에 한 번). 일반 몬스터는 선물만 조용히 떨어진다
-      const who = m.src === 'badsanta' ? '나쁜 산타' : m.src === 'seal' ? '거대 하프물범' : '';
+      const who = m.src === 'badsanta' ? t("나쁜 산타") : m.src === 'seal' ? t("거대 하프물범") : '';
       if (who && !m.n) {
-        if (m.by === myId) toast(`🎁 ${who}가 선물을 떨어뜨렸어요!`, '반짝이는 선물을 주워 보세요', 2.2);
-        else if (Math.hypot(m.x - me.x, m.z - me.z) < 60) feed(`<span class="sys">🎁 근처에서 ${who}가 선물을 떨어뜨렸어요</span>`);
+        if (m.by === myId) toast(t("🎁 {0}가 선물을 떨어뜨렸어요!", [who]), t("반짝이는 선물을 주워 보세요"), 2.2);
+        else if (Math.hypot(m.x - me.x, m.z - me.z) < 60) feed(t("<span class=\"sys\">🎁 근처에서 {0}가 선물을 떨어뜨렸어요</span>", [who]));
       }
       break;
     }
@@ -1509,14 +1522,14 @@ function onMsg(m) {
       const h = heals[m.i]; if (h) { h.on = false; h.model.group.visible = false; }
       if (m.by === myId && h) {
         me.hp = Math.min(me.maxHp, me.hp + W.HEAL_AMOUNT); sfx.gift();
-        burst(h.x, heightAt(h.x, h.z) + 1, h.z, 24, 0x5dff9a, 6); popup(me.x, me.y + 3.2, me.z, `+${W.HEAL_AMOUNT} 회복`, '#7dffb0');
+        burst(h.x, heightAt(h.x, h.z) + 1, h.z, 24, 0x5dff9a, 6); popup(me.x, me.y + 3.2, me.z, t("+{0} 회복", [W.HEAL_AMOUNT]), '#7dffb0');
       }
       break;
     }
     case 'ko': {
       const a = names.get(m.a), v = names.get(m.v);
-      feed(`<span class="sys">⚔️ <b style="color:${ELF_CSS[(a ? a.c : 0) % 6]}">${esc(a ? a.n : '?')}</b> 님이 <b style="color:${ELF_CSS[(v ? v.c : 0) % 6]}">${esc(v ? v.n : '?')}</b> 님을 쓰러뜨렸어요</span>`);
-      if (m.a === myId) { toast('⚔️ KO!', `+${W.KO_POINTS}점`, 1.5); sfx.pop(); }
+      feed(t("<span class=\"sys\">⚔️ <b style=\"color:{0}\">{1}</b> 님이 <b style=\"color:{2}\">{3}</b> 님을 쓰러뜨렸어요</span>", [ELF_CSS[(a ? a.c : 0) % 6], esc(a ? a.n : '?'), ELF_CSS[(v ? v.c : 0) % 6], esc(v ? v.n : '?')]));
+      if (m.a === myId) { toast('⚔️ KO!', t("+{0}점", [W.KO_POINTS]), 1.5); sfx.pop(); }
       break;
     }
     case 'hon': { const h = heals[m.i]; if (h) { h.pending = 0; setHeal(m.i, true); } break; }
@@ -1619,7 +1632,7 @@ function resetPeers() { for (const id of [...voice.peers.keys()]) closePeer(id, 
 async function setVoice(on) {
   if (on === voice.on || voice.busy) return;
   if (on) {
-    if (!voiceSupported) { toast('보이스 채팅을 쓸 수 없어요', '이 브라우저는 음성 연결을 지원하지 않아요', 3); syncSettings(); return; }
+    if (!voiceSupported) { toast(t("보이스 채팅을 쓸 수 없어요"), t("이 브라우저는 음성 연결을 지원하지 않아요"), 3); syncSettings(); return; }
     voice.busy = true; syncSettings();
     await loadIce();
     try {
@@ -1627,14 +1640,14 @@ async function setVoice(on) {
       voice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     } catch (e) {
       voice.busy = false; syncSettings();
-      toast('마이크를 쓸 수 없어요', '브라우저 주소창의 권한 설정에서 마이크를 허용해 주세요', 3.5); return;
+      toast(t("마이크를 쓸 수 없어요"), t("브라우저 주소창의 권한 설정에서 마이크를 허용해 주세요"), 3.5); return;
     }
     voice.busy = false; voice.on = true;
     audio();
     try { const src = ac.createMediaStreamSource(voice.stream); voice.analyser = ac.createAnalyser(); voice.analyser.fftSize = 512; voice.buf = new Uint8Array(voice.analyser.fftSize); src.connect(voice.analyser); } catch (e) { voice.analyser = null; }
     applyMic();
     sendVoiceFlags(); resetPeers();
-    toast('🎙️ 보이스 채팅 켜짐', '근처 친구들과 대화해요 · 이어폰 권장 · V로 마이크 끄기', 3);
+    toast(t("🎙️ 보이스 채팅 켜짐"), t("근처 친구들과 대화해요 · 이어폰 권장 · V로 마이크 끄기"), 3);
   } else {
     voice.on = false;
     sendVoiceFlags(); resetPeers();
@@ -1652,7 +1665,7 @@ function applyMic() {
 function toggleMic() {
   if (!voice.on) { setVoice(true); return; }
   voice.micOn = !voice.micOn; store.set('snowball-mic', voice.micOn ? '1' : '0'); applyMic(); syncSettings();
-  toast(voice.micOn ? '🎙️ 마이크 켜짐' : '🔇 마이크 꺼짐', '', 1);
+  toast(voice.micOn ? t("🎙️ 마이크 켜짐") : t("🔇 마이크 꺼짐"), '', 1);
 }
 function createPeer(id, initiator) {
   const pc = new RTCPeerConnection(rtcConfig());
@@ -1741,10 +1754,10 @@ function syncSettings() {
   $('optHear').checked = voice.hearOn;
   $('optRelay').checked = voice.relayOnly && turnReady; $('optRelay').disabled = !turnReady;
   $('optMusic').checked = musicOn; $('optSfx').checked = sfxOn;
-  $('vstat').textContent = !voiceSupported ? '이 브라우저에서는 보이스 채팅을 쓸 수 없어요.'
-    : voice.busy ? '마이크 권한을 기다리는 중이에요…'
-    : voiceActive() ? `지금 근처 ${voice.connected}명과 연결돼 있어요. 멀어질수록 목소리가 작아져요.${turnReady ? (voice.relayOnly ? ' 중계 서버로 연결 중이라 IP가 보이지 않아요.' : ' 연결이 어려우면 중계 서버를 써요.') : ' (중계 서버가 없어 일부 네트워크에선 연결이 안 될 수 있어요)'}`
-    : '듣기와 말하기가 모두 꺼져 있어요. 근처 플레이어끼리만 연결돼요.';
+  $('vstat').textContent = !voiceSupported ? t("이 브라우저에서는 보이스 채팅을 쓸 수 없어요.")
+    : voice.busy ? t("마이크 권한을 기다리는 중이에요…")
+    : voiceActive() ? t("지금 근처 {0}명과 연결돼 있어요. 멀어질수록 목소리가 작아져요.{1}", [voice.connected, turnReady ? (voice.relayOnly ? t(" 중계 서버로 연결 중이라 IP가 보이지 않아요.") : t(" 연결이 어려우면 중계 서버를 써요.")) : t(" (중계 서버가 없어 일부 네트워크에선 연결이 안 될 수 있어요)")])
+    : t("듣기와 말하기가 모두 꺼져 있어요. 근처 플레이어끼리만 연결돼요.");
   renderPlayerList();
 }
 let plistKey = '';
@@ -1753,7 +1766,7 @@ function showAllyAsk() {
   while (allyInbox.length && !names.has(allyInbox[0])) allyInbox.shift();
   if (!allyInbox.length) { box.classList.remove('open'); return; }
   const nm = names.get(allyInbox[0]);
-  $('allyAskText').textContent = `🤝 ${nm.n} 님이 동맹을 신청했어요`;
+  $('allyAskText').textContent = t("🤝 {0} 님이 동맹을 신청했어요", [nm.n]);
   box.classList.add('open');
 }
 $('allyAsk').addEventListener('click', e => {
@@ -1769,47 +1782,47 @@ function renderPlayerList() {
     const muted = voice.muted.has(r.id), blocked = voice.blocked.has(r.id);
     const d = Math.round(Math.hypot(r.x - me.x, r.z - me.z));
     return `<div class="prow"><b style="color:${ELF_CSS[r.c % 6]}">${esc(r.n)}</b><small>${r.voice ? '🎙️ ' : ''}${d}m</small>
-      <button data-act="ally" data-id="${r.id}" class="ally ${myAllies.has(r.id) ? 'on' : ''}" aria-pressed="${myAllies.has(r.id)}">${myAllies.has(r.id) ? '🤝 동맹 해제' : allyInbox.includes(r.id) ? '🤝 수락' : allySent.has(r.id) ? '신청함…' : '🤝 동맹'}</button>
-      <button data-act="mute" data-id="${r.id}" class="${muted ? 'on' : ''}" aria-pressed="${muted}">${muted ? '🔇 음소거됨' : '음소거'}</button>
-      <button data-act="block" data-id="${r.id}" class="${blocked ? 'on' : ''}" aria-pressed="${blocked}">${blocked ? '🚫 차단됨' : '차단'}</button></div>`;
-  }).join('') : '<p class="empty">지금은 나 혼자 있어요.</p>';
+      <button data-act="ally" data-id="${r.id}" class="ally ${myAllies.has(r.id) ? 'on' : ''}" aria-pressed="${myAllies.has(r.id)}">${myAllies.has(r.id) ? t("🤝 동맹 해제") : allyInbox.includes(r.id) ? t("🤝 수락") : allySent.has(r.id) ? t("신청함…") : t("🤝 동맹")}</button>
+      <button data-act="mute" data-id="${r.id}" class="${muted ? 'on' : ''}" aria-pressed="${muted}">${muted ? t("🔇 음소거됨") : t("음소거")}</button>
+      <button data-act="block" data-id="${r.id}" class="${blocked ? 'on' : ''}" aria-pressed="${blocked}">${blocked ? t("🚫 차단됨") : t("차단")}</button></div>`;
+  }).join('') : t("<p class=\"empty\">지금은 나 혼자 있어요.</p>");
 }
 $('plistSet').addEventListener('click', e => {
   const b = e.target.closest('button[data-act]'); if (!b) return;
   if (b.dataset.act === 'ally') {
-    const id = +b.dataset.id, r = remotes.get(id), name = r ? r.n : '플레이어';
-    if (myAllies.has(id)) { send({ t: 'unally', id }); toast(`${esc(name)} 님과 동맹 해제`, '', 1.5); }
+    const id = +b.dataset.id, r = remotes.get(id), name = r ? r.n : t("플레이어");
+    if (myAllies.has(id)) { send({ t: 'unally', id }); toast(t("{0} 님과 동맹 해제", [esc(name)]), '', 1.5); }
     else if (allyInbox.includes(id)) { allyInbox.splice(allyInbox.indexOf(id), 1); send({ t: 'allyAns', id, ok: 1 }); showAllyAsk(); }
     else if (!allySent.has(id)) {
-      if (myAllies.size >= W.MAX_ALLIES) { toast('동맹은 최대 10명까지예요', '', 1.5); return; }
-      allySent.add(id); send({ t: 'ally', id }); toast(`🤝 ${esc(name)} 님에게 동맹 신청`, '상대가 수락하면 서로 피해를 입지 않아요', 2);
+      if (myAllies.size >= W.MAX_ALLIES) { toast(t("동맹은 최대 10명까지예요"), '', 1.5); return; }
+      allySent.add(id); send({ t: 'ally', id }); toast(t("🤝 {0} 님에게 동맹 신청", [esc(name)]), t("상대가 수락하면 서로 피해를 입지 않아요"), 2);
     }
     plistKey = ''; renderPlayerList(); return;
   }
   const id = +b.dataset.id, r = remotes.get(id), set = b.dataset.act === 'mute' ? voice.muted : voice.blocked;
   if (set.has(id)) set.delete(id); else set.add(id);
   if (b.dataset.act === 'block' && voice.blocked.has(id)) closePeer(id);
-  const name = r ? r.n : '플레이어';
-  if (b.dataset.act === 'mute') toast(voice.muted.has(id) ? `🔇 ${esc(name)} 음소거` : `${esc(name)} 음소거 해제`, '', 1.5);
-  else toast(voice.blocked.has(id) ? `🚫 ${esc(name)} 차단` : `${esc(name)} 차단 해제`, voice.blocked.has(id) ? '목소리와 채팅이 보이지 않아요' : '', 2);
+  const name = r ? r.n : t("플레이어");
+  if (b.dataset.act === 'mute') toast(voice.muted.has(id) ? t("🔇 {0} 음소거", [esc(name)]) : t("{0} 음소거 해제", [esc(name)]), '', 1.5);
+  else toast(voice.blocked.has(id) ? t("🚫 {0} 차단", [esc(name)]) : t("{0} 차단 해제", [esc(name)]), voice.blocked.has(id) ? t("목소리와 채팅이 보이지 않아요") : '', 2);
   plistKey = ''; renderPlayerList();
 });
 function upgradeIgloo() {
   if (state !== 'play' || !me || me.dead) return;
   const mine = igloos.get(myId);
-  if (!mine) { toast('🏰 먼저 이글루를 지어 주세요', `${W.IGLOO.LV[0].cost.toLocaleString()}점`, 2); return; }
+  if (!mine) { toast(t("🏰 먼저 이글루를 지어 주세요"), t("{0}점", [W.IGLOO.LV[0].cost.toLocaleString()]), 2); return; }
   const next = W.IGLOO.LV[mine.lv + 1];
-  if (!next) { toast('🏰 이미 최종 얼음성이에요!', '', 1.6); return; }
-  if (myScore < next.cost) { toast(`🏰 ${next.name}은 ${next.cost.toLocaleString()}점이 필요해요`, `지금 ${myScore.toLocaleString()}점`, 2); return; }
+  if (!next) { toast(t("🏰 이미 최종 얼음성이에요!"), '', 1.6); return; }
+  if (myScore < next.cost) { toast(t("🏰 {0}은 {1}점이 필요해요", [next.name, next.cost.toLocaleString()]), t("지금 {0}점", [myScore.toLocaleString()]), 2); return; }
   send({ t: 'igup' });
 }
 function buildIgloo() {
   if (state !== 'play' || !me || me.dead) return;
   const mine = igloos.get(myId), cost = mine ? 0 : W.IGLOO.LV[0].cost, R = W.IGLOO.LV[mine ? mine.lv : 0].r;
-  if (myScore < cost) { toast(`🧊 이글루는 ${cost.toLocaleString()}점이 필요해요`, `지금 ${myScore.toLocaleString()}점`, 2); return; }
+  if (myScore < cost) { toast(t("🧊 이글루는 {0}점이 필요해요", [cost.toLocaleString()]), t("지금 {0}점", [myScore.toLocaleString()]), 2); return; }
   const d = R + 2.4, x = me.x + Math.sin(me.face) * d, z = me.z + Math.cos(me.face) * d, rot = Math.atan2(me.x - x, me.z - z);
   const why = W.iglooSpot(x, z, igArr, myId, R);
-  if (why) { toast('🧊 여기에는 지을 수 없어요', why, 2); return; }
+  if (why) { toast(t("🧊 여기에는 지을 수 없어요"), t(why), 2); return; }
   send({ t: 'igloo', x: r2(x), z: r2(z), rot: r2(rot) });
 }
 $('igBtn').addEventListener('click', e => { e.stopPropagation(); audio(); buildIgloo(); });
@@ -1877,7 +1890,7 @@ addEventListener('keydown', e => {
     if (k === 'g') startFish();
     if (k === 'escape') toggleSettings();
   }
-  if (k === 'm') { musicOn = !musicOn; store.set('snowball-music', musicOn ? '1' : '0'); toast(musicOn ? '♪ 음악 켜짐' : '음악 꺼짐', '', 1); syncSettings(); }
+  if (k === 'm') { musicOn = !musicOn; store.set('snowball-music', musicOn ? '1' : '0'); toast(musicOn ? t("♪ 음악 켜짐") : t("음악 꺼짐"), '', 1); syncSettings(); }
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (me) me.charging = false; resetTouch(); });
@@ -2007,19 +2020,19 @@ function toggleSit() {
   if (me.fish) stopFish();
   me.riding = false;
   const sp = nearestSpot();
-  if (!sp) { toast('🪑 가까이에 앉거나 누울 곳이 없어요', '모닥불 옆 의자, 집·이글루의 의자와 침대를 찾아 보세요', 2); return; }
+  if (!sp) { toast(t("🪑 가까이에 앉거나 누울 곳이 없어요"), t("모닥불 옆 의자, 집·이글루의 의자와 침대를 찾아 보세요"), 2); return; }
   me.sit = sp; me.charging = false; me.vx = me.vz = 0; me.dashT = 0; me.tea = sp.kind === 'lie' ? 0 : me.tea;
-  if (sp.kind === 'lie') toast('🛏️ 쿨쿨…', '누워 있으면 체력이 빨리 차요', 1.6);
+  if (sp.kind === 'lie') toast(t("🛏️ 쿨쿨…"), t("누워 있으면 체력이 빨리 차요"), 1.6);
 }
 // 얼음낚시: 얼음 호수 위에서 G. 가만히 있으면 5초마다 서버가 물고기를 준다
 function startFish() {
   if (state !== 'play' || !me || me.dead) return;
   if (me.fish) { stopFish(); return; }
-  if (!onIce(me.x, me.z)) { toast('🎣 얼음낚시는 얼음 호수 위에서만 할 수 있어요', '맵 아래쪽 호수로 가 보세요', 2); return; }
+  if (!onIce(me.x, me.z)) { toast(t("🎣 얼음낚시는 얼음 호수 위에서만 할 수 있어요"), t("맵 아래쪽 호수로 가 보세요"), 2); return; }
   if (me.sit) standUp();
   me.riding = false;
   me.fish = true; me.charging = false; me.tea = 0; me.vx = me.vz = 0; me.dashT = 0;
-  send({ t: 'fish', on: 1 }); toast('🎣 얼음낚시 시작!', '5초마다 무언가 걸려요. 움직이면 그만둬요', 2);
+  send({ t: 'fish', on: 1 }); toast(t("🎣 얼음낚시 시작!"), t("5초마다 무언가 걸려요. 움직이면 그만둬요"), 2);
 }
 function stopFish() { if (!me || !me.fish) return; me.fish = false; send({ t: 'fish', on: 0 }); }
 // 군고구마: 모닥불 의자에 앉아 있을 때. 4.5초 동안 호호 불며 먹고, 다 먹으면 체력 +20
@@ -2027,29 +2040,29 @@ const YAM_TIME = 4.5;
 function startYam() {
   if (state !== 'play' || !me || me.dead) return;
   if (me.yam > 0) { me.yam = 0; return; }
-  if (!me.sit || !me.sit.fire) { toast('🍠 모닥불 앞 통나무 의자에 앉아야 먹을 수 있어요', 'F 키로 앉기', 2); return; }
+  if (!me.sit || !me.sit.fire) { toast(t("🍠 모닥불 앞 통나무 의자에 앉아야 먹을 수 있어요"), t("F 키로 앉기"), 2); return; }
   me.tea = 0; me.yam = YAM_TIME; me.yamBite = 0.8;
-  toast('🍠 군고구마 냠냠', '모닥불에 잘 익었어요', 1.6);
+  toast(t("🍠 군고구마 냠냠"), t("모닥불에 잘 익었어요"), 1.6);
 }
 // 눈썰매: 50,000점 이상이면 구매 가능. 타면 이동 3배, 공격 불가
 function buySled() {
   if (state !== 'play' || !me) return;
   if (ownSled) { toggleRide(); return; }
-  if (myScore < W.SLED.cost) { toast(`🛷 눈썰매는 ${W.SLED.cost.toLocaleString()}점이 필요해요`, `지금 ${myScore.toLocaleString()}점`, 2); return; }
+  if (myScore < W.SLED.cost) { toast(t("🛷 눈썰매는 {0}점이 필요해요", [W.SLED.cost.toLocaleString()]), t("지금 {0}점", [myScore.toLocaleString()]), 2); return; }
   send({ t: 'buy', item: 'sled' });
 }
 function toggleRide() {
   if (state !== 'play' || !me || me.dead) return;
   if (!ownSled) { buySled(); return; }
-  if (me.riding) { me.riding = false; toast('🛷 썰매에서 내렸어요', '', 1.2); return; }
+  if (me.riding) { me.riding = false; toast(t("🛷 썰매에서 내렸어요"), '', 1.2); return; }
   if (me.sit) standUp(); if (me.fish) stopFish(); me.tea = 0; me.yam = 0; me.charging = false;
-  me.riding = true; toast('🛷 눈썰매 출발!', `이동 속도 ×${W.SLED.speed} · 타는 동안 공격 불가`, 1.8);
+  me.riding = true; toast(t("🛷 눈썰매 출발!"), t("이동 속도 ×{0} · 타는 동안 공격 불가", [W.SLED.speed]), 1.8);
 }
 function startTea() {
   if (state !== 'play' || !me || me.dead) return;
   if (me.tea > 0) { me.tea = 0; return; }
   me.yam = 0; me.riding = false;
-  if (!me.inVillage) { toast('☕ 티타임은 안전지대에서만', '마을의 초록 원 안으로 돌아오세요', 2); return; }
+  if (!me.inVillage) { toast(t("☕ 티타임은 안전지대에서만"), t("마을의 초록 원 안으로 돌아오세요"), 2); return; }
   me.tea = W.TEA_TIME; me.charging = false; me.teaStart = time;
 }
 function startReload() {
@@ -2123,7 +2136,7 @@ function aimDir() {
 }
 function throwPlayer() {
   const p = me; p.charging = false;
-  if (p.riding) { if (!p.rideWarn || time - p.rideWarn > 3) { p.rideWarn = time; toast('🛷 썰매를 탈 때는 던질 수 없어요', 'N 키로 내리기', 1.4); } return; }
+  if (p.riding) { if (!p.rideWarn || time - p.rideWarn > 3) { p.rideWarn = time; toast(t("🛷 썰매를 탈 때는 던질 수 없어요"), t("N 키로 내리기"), 1.4); } return; }
   if (!canThrow() || p.cd > 0) return;
   const ch = p.charge >= 0.5 ? 1 : 0, st = myStacks();
   const dir = aimDir(); p.face = Math.atan2(dir.x, dir.z);
@@ -2192,17 +2205,17 @@ let hudCache = '';
 function updateHUD() {
   const p = me;
   const h = `${Math.max(0, Math.round(p.hp))} / ${p.maxHp}`;
-  const ammo = (p.maxAmmo > 20 ? `<span style="color:#fff;margin:0">❄ ${p.ammo} / ${p.maxAmmo}</span>` : Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('')) + (p.reloadT > 0 ? `<span>눈 뭉치는 중… ${p.reloadT.toFixed(1)}초</span>` : '');
+  const ammo = (p.maxAmmo > 20 ? `<span style="color:#fff;margin:0">❄ ${p.ammo} / ${p.maxAmmo}</span>` : Array.from({ length: p.maxAmmo }, (_, i) => `<i class="${i < p.ammo ? '' : 'off'}"></i>`).join('')) + (p.reloadT > 0 ? t("<span>눈 뭉치는 중… {0}초</span>", [p.reloadT.toFixed(1)]) : '');
   const stk = Object.keys(BUFF_NAME).filter(k => p[k] > 0).map(k => `<b style="color:${BUFF_NAME[k][1]};font-weight:400">${BUFF_NAME[k][0]}${W.STACK_MAX[k] > 1 ? ' ×' + p[k] : ''}</b>`).join(' · ');
-  const buffs = [p.riding && `<span style="color:#ffcc80">🛷 눈썰매 · 이동 ×${W.SLED.speed}${p.fast ? ` (스피드 ×${p.fast}과 중첩)` : ''} · 공격 불가</span>`, stk && `<span style="max-width:240px">${stk}</span>`, p.shield > 0 && `<span style="color:#80deea">보호막 ${p.shield.toFixed(0)}s</span>`, p.slowT > 0 && '<span style="color:#b3e5fc">🧊 얼어서 느려짐</span>',
-    voice.on ? `<span style="color:${voice.micOn ? '#7dffb0' : '#cfe0ff'}">${voice.micOn ? (voice.talking ? '🔊 말하는 중' : '🎙️ 마이크 켜짐') : '🔇 마이크 꺼짐'} · 근처 ${voice.connected}명 (V)</span>` : voice.hearOn && voice.connected > 0 && `<span style="color:#cfe0ff">🎧 근처 ${voice.connected}명 목소리 듣는 중</span>`, p.tea > 0 && '<span style="color:#ffcc80">☕ 티타임 중… 따뜻해요</span>', p.rest && !p.dead && `<span style="color:#ffb74d">${p.sit && p.sit.kind === 'lie' ? '🛏️ 침대에서' : p.sit && !p.sit.fire ? '🪑 앉아서' : `🔥 모닥불${p.sit ? ' 앞에 앉아' : '에서'}`} 쉬는 중${p.hp < p.maxHp ? ' · 체력 회복' : ''}</span>`,
-    !p.dead && (p.inVillage ? `<span style="color:#3ddc84">🏠 안전지대${p.hp < p.maxHp ? ' · 회복 중' : ''}</span>` : '<span style="color:#ff8a8a">⚔️ PvP 구역 · 다른 플레이어도 공격할 수 있어요</span>')].filter(Boolean).join('');
-  let nearN = 0, danger = ''; for (const e of enemies.values()) { const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < 40) { nearN++; if (e.T.boss) danger = ` · 🦭 ${e.T.name} 근처!`; else if (e.type === 'badsanta' && !danger.includes('🦭')) danger = ' · 🎅 나쁜 산타 주의!'; } }
-  const zone = Math.hypot(p.x, p.z), area = zone < W.VILLAGE_SAFE ? '마을' : zone < W.ZONES[0] ? '눈밭 (눈사람·펭귄)' : zone < W.ZONES[1] ? '숲 (나쁜 루돌프 출몰)' : '먼 설원 (나쁜 산타 출몰)';
-  const obj = `⚔️ 처치 <b>${myKills}</b>` + `<small>${area} · 근처 몬스터 ${nearN}${danger}</small>`;
-  const sc = `${myScore.toLocaleString()}점`, cb = myCombo >= 3 ? `${myCombo} 콤보 x${Math.min(4, 1 + Math.floor(myCombo / 3) * 0.5).toFixed(1)}` : '';
+  const buffs = [p.riding && t("<span style=\"color:#ffcc80\">🛷 눈썰매 · 이동 ×{0}{1} · 공격 불가</span>", [W.SLED.speed, p.fast ? t(" (스피드 ×{0}과 중첩)", [p.fast]) : '']), stk && `<span style="max-width:240px">${stk}</span>`, p.shield > 0 && t("<span style=\"color:#80deea\">보호막 {0}s</span>", [p.shield.toFixed(0)]), p.slowT > 0 && t("<span style=\"color:#b3e5fc\">🧊 얼어서 느려짐</span>"),
+    voice.on ? t("<span style=\"color:{0}\">{1} · 근처 {2}명 (V)</span>", [voice.micOn ? '#7dffb0' : '#cfe0ff', voice.micOn ? (voice.talking ? t("🔊 말하는 중") : t("🎙️ 마이크 켜짐")) : t("🔇 마이크 꺼짐"), voice.connected]) : voice.hearOn && voice.connected > 0 && t("<span style=\"color:#cfe0ff\">🎧 근처 {0}명 목소리 듣는 중</span>", [voice.connected]), p.tea > 0 && t("<span style=\"color:#ffcc80\">☕ 티타임 중… 따뜻해요</span>"), p.rest && !p.dead && t("<span style=\"color:#ffb74d\">{0} 쉬는 중{1}</span>", [p.sit && p.sit.kind === 'lie' ? t("🛏️ 침대에서") : p.sit && !p.sit.fire ? t("🪑 앉아서") : t("🔥 모닥불{0}", [p.sit ? t(" 앞에 앉아") : t("에서")]), p.hp < p.maxHp ? t(" · 체력 회복") : '']),
+    !p.dead && (p.inVillage ? t("<span style=\"color:#3ddc84\">🏠 안전지대{0}</span>", [p.hp < p.maxHp ? t(" · 회복 중") : '']) : t("<span style=\"color:#ff8a8a\">⚔️ PvP 구역 · 다른 플레이어도 공격할 수 있어요</span>"))].filter(Boolean).join('');
+  let nearN = 0, danger = ''; for (const e of enemies.values()) { const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < 40) { nearN++; if (e.T.boss) danger = t(" · 🦭 {0} 근처!", [e.T.name]); else if (e.type === 'badsanta' && !danger.includes('🦭')) danger = t(" · 🎅 나쁜 산타 주의!"); } }
+  const zone = Math.hypot(p.x, p.z), area = zone < W.VILLAGE_SAFE ? t("마을") : zone < W.ZONES[0] ? t("눈밭 (눈사람·펭귄)") : zone < W.ZONES[1] ? t("숲 (나쁜 루돌프 출몰)") : t("먼 설원 (나쁜 산타 출몰)");
+  const obj = t("⚔️ 처치 <b>{0}</b>", [myKills]) + t("<small>{0} · 근처 몬스터 {1}{2}</small>", [area, nearN, danger]);
+  const sc = t("{0}점", [myScore.toLocaleString()]), cb = myCombo >= 3 ? t("{0} 콤보 x{1}", [myCombo, Math.min(4, 1 + Math.floor(myCombo / 3) * 0.5).toFixed(1)]) : '';
   const all = [{ id: myId, n: nick, score: myScore, c: colorIdx }, ...[...remotes.values()].map(r => ({ id: r.id, n: r.n, score: r.score, c: r.c }))].sort((a, b) => b.score - a.score);
-  const board = `<div>🟢 ${esc(serverName)} · ${all.length}명 접속</div>` + all.slice(0, 5).map((q, i) => `<div class="${q.id === myId ? 'me' : ''}">${i + 1}. <b style="color:${q.id === myId ? 'var(--gold)' : ELF_CSS[q.c % 6]}">${esc(q.n)}</b> ${q.score.toLocaleString()}</div>`).join('');
+  const board = t("<div>🟢 {0} · {1}명 접속</div>", [esc(serverName), all.length]) + all.slice(0, 5).map((q, i) => `<div class="${q.id === myId ? 'me' : ''}">${i + 1}. <b style="color:${q.id === myId ? 'var(--gold)' : ELF_CSS[q.c % 6]}">${esc(q.n)}</b> ${q.score.toLocaleString()}</div>`).join('');
   const key = h + ammo + buffs + obj + sc + cb + board;
   if (key !== hudCache) { hudCache = key; const bar = $('hpbar').firstElementChild, ratio = clamp(p.hp / p.maxHp, 0, 1); bar.style.width = (ratio * 100) + '%'; bar.className = ratio > 0.6 ? 'high' : ratio > 0.3 ? 'mid' : ''; $('hpbar').lastElementChild.textContent = h; $('ammo').innerHTML = ammo; $('buffs').innerHTML = buffs; $('objective').innerHTML = obj; $('score').textContent = sc; $('combo').textContent = cb; $('board').innerHTML = board; }
 }
@@ -2247,16 +2260,11 @@ function drawMinimap() {
 //  오버레이 화면
 // ============================================================
 function swatchHtml() {
-  return `<div class="swatch" role="radiogroup" aria-label="옷 색깔">${ELF_CSS.map((c, i) => `<input type="radio" name="col" id="col${i}" value="${i}" ${i === colorIdx ? 'checked' : ''}><label for="col${i}" style="background:${c}" title="옷 색 ${i + 1}"></label>`).join('')}</div>`;
+  return t("<div class=\"swatch\" role=\"radiogroup\" aria-label=\"옷 색깔\">{0}</div>", [ELF_CSS.map((c, i) => t("<input type=\"radio\" name=\"col\" id=\"col{0}\" value=\"{1}\" {2}><label for=\"col{3}\" style=\"background:{4}\" title=\"옷 색 {5}\"></label>", [i, i, i === colorIdx ? 'checked' : '', i, c, i + 1])).join('')]);
 }
 function keysHtml() {
-  return isTouch ? `<div class="keys"><b>왼쪽 화면</b><span>드래그해서 이동</span><b>오른쪽 화면</b><span>드래그로 조준 → 떼면 던지기</span>
-    <b>톡 치기</b><span>가장 가까운 적에게 자동으로 던지기</span><b>꾹 끌기</b><span>0.5초 이상 모으면 강한 눈덩이</span>
-    <b>점프 · 대시</b><span>날아오는 눈덩이 피하기</span><b>💬 · ⚙️</b><span>채팅 · 설정 (보이스 채팅)</span></div>`
-  : `<div class="keys"><b>WASD</b><span>이동 (카메라 기준)</span><b>마우스</b><span>조준 · 적 근처를 가리키면 자동 조준</span>
-    <b>좌클릭</b><span>던지기 · 꾹 누르면 강한 눈덩이</span><b>Shift / Space</b><span>대시(잠깐 무적) / 점프로 눈덩이 피하기</span>
-    <b>R</b><span>눈 뭉치기(재장전)</span><b>Enter / V</b><span>채팅 / 마이크 켜기·끄기</span><b>⚙️ 또는 Esc</b><span>설정 (보이스 채팅, 음악, 효과음)</span>
-    <b>빨간 줄</b><span>적이 그 방향으로 던질 예정!</span><b>🟢 안전지대</b><span>마을의 초록 원 안 · 체력 회복, 공격받지 않음</span><b>🔥 모닥불 · F · T</b><span>모닥불 옆에서 쉬면 빠르게 회복 · F로 의자에 앉기 · T로 티타임</span><b>⚔️ 원 밖</b><span>다른 플레이어와도 눈싸움(PvP)</span></div>`;
+  return isTouch ? t("<div class=\"keys\"><b>왼쪽 화면</b><span>드래그해서 이동</span><b>오른쪽 화면</b><span>드래그로 조준 → 떼면 던지기</span>\n    <b>톡 치기</b><span>가장 가까운 적에게 자동으로 던지기</span><b>꾹 끌기</b><span>0.5초 이상 모으면 강한 눈덩이</span>\n    <b>점프 · 대시</b><span>날아오는 눈덩이 피하기</span><b>💬 · ⚙️</b><span>채팅 · 설정 (보이스 채팅)</span></div>")
+  : t("<div class=\"keys\"><b>WASD</b><span>이동 (카메라 기준)</span><b>마우스</b><span>조준 · 적 근처를 가리키면 자동 조준</span>\n    <b>좌클릭</b><span>던지기 · 꾹 누르면 강한 눈덩이</span><b>Shift / Space</b><span>대시(잠깐 무적) / 점프로 눈덩이 피하기</span>\n    <b>R</b><span>눈 뭉치기(재장전)</span><b>Enter / V</b><span>채팅 / 마이크 켜기·끄기</span><b>⚙️ 또는 Esc</b><span>설정 (보이스 채팅, 음악, 효과음)</span>\n    <b>빨간 줄</b><span>적이 그 방향으로 던질 예정!</span><b>🟢 안전지대</b><span>마을의 초록 원 안 · 체력 회복, 공격받지 않음</span><b>🔥 모닥불 · F · T</b><span>모닥불 옆에서 쉬면 빠르게 회복 · F로 의자에 앉기 · T로 티타임</span><b>⚔️ 원 밖</b><span>다른 플레이어와도 눈싸움(PvP)</span></div>");
 }
 let overlayKind = null, healthTimer = null;
 let treeView = null;
@@ -2270,41 +2278,30 @@ function overlay(kind, err = '') {
   if (!kind) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
   if (kind === 'title') {
-    el.innerHTML = `<div><h1>🎄 크리스마스 눈싸움 3D</h1><h2>눈마을 밖 설원에 못된 눈사람, 펭귄, 나쁜 루돌프, 나쁜 산타가 돌아다녀요.<br>멀리 갈수록 강해져요! 초록 안전지대 밖에서는 다른 플레이어와도 겨뤄 보세요.</h2>
-      <div class="row"><span class="srv" id="srv"><i></i> 서버 확인 중…</span></div>
-      <div class="row"><input id="nick" maxlength="12" value="${esc(nick)}" aria-label="닉네임" placeholder="닉네임"></div>
-      <div class="row"><span class="note" id="lookSum"></span></div>
-      <div class="btns"><button id="go">입장하기</button><button id="lookGo" style="background:#2f6fd6;box-shadow:0 4px 0 #1a3f80">👕 꾸미기</button></div>
-      <div class="err">${esc(err)}</div>
-      ${keysHtml()}</div>`;
+    el.innerHTML = t("<div><h1>🎄 크리스마스 눈싸움 3D</h1><h2>눈마을 밖 설원에 못된 눈사람, 펭귄, 나쁜 루돌프, 나쁜 산타가 돌아다녀요.<br>멀리 갈수록 강해져요! 초록 안전지대 밖에서는 다른 플레이어와도 겨뤄 보세요.</h2>\n      <div class=\"row\"><span class=\"srv\" id=\"srv\"><i></i> 서버 확인 중…</span></div>\n      <div class=\"row\"><input id=\"nick\" maxlength=\"12\" value=\"{0}\" aria-label=\"닉네임\" placeholder=\"닉네임\"></div>\n      <div class=\"row\"><span class=\"note\" id=\"lookSum\"></span></div>\n      <div class=\"btns\"><button id=\"go\">입장하기</button><button id=\"lookGo\" style=\"background:#2f6fd6;box-shadow:0 4px 0 #1a3f80\">👕 꾸미기</button></div>\n      <div class=\"err\">{1}</div>\n      {2}</div>", [esc(nick), esc(err), keysHtml()]);
     const save = () => {
-      nick = ($('nick').value || '').trim().slice(0, 12) || '꼬마요정'; store.set('snowball-nick', nick);
+      nick = ($('nick').value || '').trim().slice(0, 12) || t("꼬마요정"); store.set('snowball-nick', nick);
     };
+    el.firstElementChild.insertAdjacentHTML('afterbegin', `<div class="langs" role="group" aria-label="${esc(t('언어'))}">${LANGS.map(([c, n]) => `<button data-lang="${c}" class="${c === LANG ? 'sel' : ''}" aria-pressed="${c === LANG}">${n}</button>`).join('')}</div>`);
+    el.querySelectorAll('.langs button').forEach(b => b.onclick = () => { if (b.dataset.lang === LANG) return; save(); setLang(b.dataset.lang); });
     $('lookSum').textContent = lookSummary(myLook);
     $('lookGo').onclick = () => { save(); overlay('custom'); };
-    const go = () => { audio(); save(); $('go').disabled = true; $('go').textContent = '접속 중…'; state = 'connecting'; connect(); };
+    const go = () => { audio(); save(); $('go').disabled = true; $('go').textContent = t("접속 중…"); state = 'connecting'; connect(); };
     $('go').onclick = go;
     $('nick').addEventListener('submit-enter', go);
     const check = () => fetch('health', { cache: 'no-store' }).then(r => r.json()).then(h => {
-      const s = $('srv'); if (s) s.innerHTML = `<i class="on"></i> ${esc(h.server)} · ${h.players}명 접속 중`;
-    }).catch(() => { const s = $('srv'); if (s) s.innerHTML = '<i></i> 서버에 연결할 수 없어요'; });
+      const s = $('srv'); if (s) s.innerHTML = t("<i class=\"on\"></i> {0} · {1}명 접속 중", [esc(t(h.server)), h.players]);
+    }).catch(() => { const s = $('srv'); if (s) s.innerHTML = t("<i></i> 서버에 연결할 수 없어요"); });
     check(); healthTimer = setInterval(check, 5000);
   }
   if (kind === 'tree') {
     let pick = W.ORNAMENTS[0].k;
-    el.innerHTML = `<div><h1>🎄 초대형 트리 꾸미기</h1>
-      <h2 id="treeInfo"></h2>
-      <div class="custom treeedit">
-        <canvas id="treeCv" width="300" height="380" style="width:300px;height:380px;border-radius:16px;background:radial-gradient(circle at 50% 35%, #2a3a6e, #0b1430);touch-action:none;cursor:crosshair" aria-label="트리를 눌러 장식 달기"></canvas>
-        <div><div class="slot"><b>오너먼트 고르기</b><div class="chips">${W.ORNAMENTS.map(o => `<button data-o="${o.k}" class="${o.k === pick ? 'sel' : ''}">${o.emoji} ${o.name}</button>`).join('')}</div></div>
-        <p class="note" style="text-align:left">트리를 누른 곳에 오너먼트가 달려요.<br>하나에 <b>${GT.ornCost.toLocaleString()}점</b>이 차감되고, 모두에게 보여요.</p></div>
-      </div>
-      <div class="btns"><button id="undo" style="background:#5c6bc0;box-shadow:0 4px 0 #303f9f">↩️ 되돌리기</button><button id="done">다 꾸몄어요</button></div></div>`;
+    el.innerHTML = t("<div><h1>🎄 초대형 트리 꾸미기</h1>\n      <h2 id=\"treeInfo\"></h2>\n      <div class=\"custom treeedit\">\n        <canvas id=\"treeCv\" width=\"300\" height=\"380\" style=\"width:300px;height:380px;border-radius:16px;background:radial-gradient(circle at 50% 35%, #2a3a6e, #0b1430);touch-action:none;cursor:crosshair\" aria-label=\"트리를 눌러 장식 달기\"></canvas>\n        <div><div class=\"slot\"><b>오너먼트 고르기</b><div class=\"chips\">{0}</div></div>\n        <p class=\"note\" style=\"text-align:left\">트리를 누른 곳에 오너먼트가 달려요.<br>하나에 <b>{1}점</b>이 차감되고, 모두에게 보여요.</p></div>\n      </div>\n      <div class=\"btns\"><button id=\"undo\" style=\"background:#5c6bc0;box-shadow:0 4px 0 #303f9f\">↩️ 되돌리기</button><button id=\"done\">다 꾸몄어요</button></div></div>", [W.ORNAMENTS.map(o => `<button data-o="${o.k}" class="${o.k === pick ? 'sel' : ''}">${o.emoji} ${o.name}</button>`).join(''), GT.ornCost.toLocaleString()]);
     const cv = $('treeCv'), cx = cv.getContext('2d'), S = 330 / (GT.h + 2.5), ox = 150, oy = 365;
     const view = Math.atan2(me.x - GT.x, me.z - GT.z);
     const mine = () => [...giant.orns.values()].filter(o => o.pid === myId).length;
     const info = () => {
-      $('treeInfo').textContent = `장식 ${giant.orns.size}개 (내 장식 ${mine()}개) · 내 점수 ${myScore.toLocaleString()}점 · 하나에 ${GT.ornCost.toLocaleString()}점`;
+      $('treeInfo').textContent = t("장식 {0}개 (내 장식 {1}개) · 내 점수 {2}점 · 하나에 {3}점", [giant.orns.size, mine(), myScore.toLocaleString(), GT.ornCost.toLocaleString()]);
       const u = $('undo'); if (u) { u.disabled = !mine(); u.style.opacity = mine() ? 1 : 0.45; }
     };
     const emojiOf = k => (W.ORNAMENTS.find(o => o.k === k) || {}).emoji || '•';
@@ -2330,25 +2327,20 @@ function overlay(kind, err = '') {
     cv.onpointerleave = () => { ghost = null; draw(); };
     cv.onpointerdown = e => {
       e.preventDefault(); const sp = spot(e); ghost = sp;
-      if (!sp.ok) { toast('🎄 트리 위를 눌러 주세요', '', 1.2); return; }
-      if (myScore < GT.ornCost) { toast(`🎄 오너먼트 하나에 ${GT.ornCost.toLocaleString()}점이 필요해요`, `지금 ${myScore.toLocaleString()}점`, 1.8); return; }
+      if (!sp.ok) { toast(t("🎄 트리 위를 눌러 주세요"), '', 1.2); return; }
+      if (myScore < GT.ornCost) { toast(t("🎄 오너먼트 하나에 {0}점이 필요해요", [GT.ornCost.toLocaleString()]), t("지금 {0}점", [myScore.toLocaleString()]), 1.8); return; }
       send({ t: 'orn', k: pick, a: r2(sp.a), y: r2(sp.h) });
     };
     el.querySelectorAll('.chips button').forEach(b => b.onclick = () => { pick = b.dataset.o; el.querySelectorAll('.chips button').forEach(x => x.classList.toggle('sel', x === b)); draw(); });
     $('done').onclick = () => overlay(null);
-    $('undo').onclick = () => { if (mine()) send({ t: 'ornundo' }); else toast('되돌릴 내 장식이 없어요', '', 1.2); };   // 마지막에 단 내 장식부터 떼고 점수를 돌려받음
+    $('undo').onclick = () => { if (mine()) send({ t: 'ornundo' }); else toast(t("되돌릴 내 장식이 없어요"), '', 1.2); };   // 마지막에 단 내 장식부터 떼고 점수를 돌려받음
     el.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $('undo').click(); } };
     treeView = { draw, info }; info(); draw();
     return;
   }
   if (kind === 'custom') {
-    const slots = [['a', '캐릭터'], ['h', '머리'], ['e', '눈'], ['n', '코'], ['m', '입'], ['r', '귀'], ['k', '목'], ['b', '등']];
-    el.innerHTML = `<div><h1>👕 캐릭터 꾸미기</h1>
-      <div class="custom"><canvas id="pv" width="440" height="520" aria-label="캐릭터 미리보기"></canvas><div>
-        ${slots.map(([key, label]) => `<div class="slot"><b>${label}</b><div class="chips">${LOOK[key].map((n, i) => `<button data-k="${key}" data-v="${i}" class="${myLook[key] === i ? 'sel' : ''}">${n}</button>`).join('')}</div></div>`).join('')}
-        <div class="slot"><b>옷 색</b><div class="chips">${ELF_CSS.map((c, i) => `<button data-col="${i}" class="cdot ${myLook.c === i ? 'sel' : ''}" style="background:${c}" aria-label="옷 색 ${i + 1}" aria-pressed="${myLook.c === i}"></button>`).join('')}</div></div>
-      </div></div>
-      <div class="btns"><button id="done">완료</button></div></div>`;
+    const slots = [['a', t("캐릭터")], ['h', t("머리")], ['e', t("눈")], ['n', t("코")], ['m', t("입")], ['r', t("귀")], ['k', t("목")], ['b', t("등")]];
+    el.innerHTML = t("<div><h1>👕 캐릭터 꾸미기</h1>\n      <div class=\"custom\"><canvas id=\"pv\" width=\"440\" height=\"520\" aria-label=\"캐릭터 미리보기\"></canvas><div>\n        {0}\n        <div class=\"slot\"><b>옷 색</b><div class=\"chips\">{1}</div></div>\n      </div></div>\n      <div class=\"btns\"><button id=\"done\">완료</button></div></div>", [slots.map(([key, label]) => `<div class="slot"><b>${label}</b><div class="chips">${LOOK[key].map((n, i) => `<button data-k="${key}" data-v="${i}" class="${myLook[key] === i ? 'sel' : ''}">${n}</button>`).join('')}</div></div>`).join(''), ELF_CSS.map((c, i) => t("<button data-col=\"{0}\" class=\"cdot {1}\" style=\"background:{2}\" aria-label=\"옷 색 {3}\" aria-pressed=\"{4}\"></button>", [i, myLook.c === i ? 'sel' : '', c, i + 1, myLook.c === i])).join('')]);
     el.querySelectorAll('.chips button').forEach(b => b.onclick = () => {
       myLook[b.dataset.k] = +b.dataset.v; saveLook();
       el.querySelectorAll(`.chips button[data-k="${b.dataset.k}"]`).forEach(x => x.classList.toggle('sel', x === b));
@@ -2362,22 +2354,22 @@ function overlay(kind, err = '') {
     });
     $('done').onclick = () => {
       saveLook(); applyMyColor(); previewStop();
-      if (state === 'play') { send({ t: 'look', look: myLook }); overlay(null); toast('👕 새 모습으로 변신!', lookSummary(myLook), 2); }
+      if (state === 'play') { send({ t: 'look', look: myLook }); overlay(null); toast(t("👕 새 모습으로 변신!"), lookSummary(myLook), 2); }
       else overlay('title');
     };
     previewStart($('pv'));
   }
   if (kind === 'disconnected') {
-    el.innerHTML = `<div><h1>연결이 끊겼어요</h1><h2 id="retry">잠시 후 자동으로 다시 연결해요…</h2><div class="btns"><button id="go">지금 다시 연결</button></div></div>`;
+    el.innerHTML = t("<div><h1>연결이 끊겼어요</h1><h2 id=\"retry\">잠시 후 자동으로 다시 연결해요…</h2><div class=\"btns\"><button id=\"go\">지금 다시 연결</button></div></div>");
     $('go').onclick = () => { state = 'connecting'; connect(); };
   }
   if (kind === 'file') {
-    el.innerHTML = `<div><h1>서버 주소로 열어 주세요</h1><h2>이 게임은 온라인 서버에서 돌아가요.<br>파일을 직접 열지 말고, 서버를 실행한 뒤 그 주소(예: http://localhost:3000)로 접속해 주세요.</h2></div>`;
+    el.innerHTML = t("<div><h1>서버 주소로 열어 주세요</h1><h2>이 게임은 온라인 서버에서 돌아가요.<br>파일을 직접 열지 말고, 서버를 실행한 뒤 그 주소(예: http://localhost:3000)로 접속해 주세요.</h2></div>");
   }
 }
 function lookSummary(l) {
   const hat = l.h === 0 ? LOOK.h[BASE_HAT[l.a]] : LOOK.h[l.h];
-  return [LOOK.a[l.a], hat !== '없음' && hat, l.e && LOOK.e[l.e], l.n && LOOK.n[l.n], l.m && LOOK.m[l.m], l.r && LOOK.r[l.r], l.k && LOOK.k[l.k], l.b && LOOK.b[l.b]].filter(Boolean).join(' · ');
+  return [LOOK.a[l.a], hat !== t("없음") && hat, l.e && LOOK.e[l.e], l.n && LOOK.n[l.n], l.m && LOOK.m[l.m], l.r && LOOK.r[l.r], l.k && LOOK.k[l.k], l.b && LOOK.b[l.b]].filter(Boolean).join(' · ');
 }
 // 꾸미기 미리보기: 작은 별도 3D 화면에서 내 캐릭터가 천천히 돈다
 const pv = { r: null, scene: null, cam: null, model: null, raf: 0 };
@@ -2406,7 +2398,7 @@ function updateMe(dt) {
   if (keys['e'] || held.camR) camYawT -= dt * 1.8;
   if (p.dead) {
     p.respawnT -= dt;
-    $('respawn').style.display = 'block'; $('respawn').textContent = `쓰러졌어요… ${Math.max(1, Math.ceil(p.respawnT))}초 뒤 마을에서 부활`;
+    $('respawn').style.display = 'block'; $('respawn').textContent = t("쓰러졌어요… {0}초 뒤 마을에서 부활", [Math.max(1, Math.ceil(p.respawnT))]);
     if (p.respawnT <= 0) { Object.assign(p, newPlayer()); p.inv = 2; $('respawn').style.display = 'none'; burst(p.x, p.y + 1, p.z, 30, 0xffd34d, 6); }
     return;
   }
@@ -2442,8 +2434,8 @@ function updateMe(dt) {
     if (!p.sit || !p.sit.fire) p.yam = 0;
     else {
       p.yam -= dt; p.yamBite -= dt;
-      if (p.yamBite <= 0) { p.yamBite = 1.1; popup(p.x, p.y + 2.6, p.z, '냠냠', '#ffcc80'); }
-      if (p.yam <= 0) { p.yam = 0; const add = Math.min(20, p.maxHp - p.hp); p.hp += add; popup(p.x, p.y + 3, p.z, add > 0 ? `🍠 +${add}` : '🍠 맛있다!', '#ffb74d'); sfx.pop(); }
+      if (p.yamBite <= 0) { p.yamBite = 1.1; popup(p.x, p.y + 2.6, p.z, t("냠냠"), '#ffcc80'); }
+      if (p.yam <= 0) { p.yam = 0; const add = Math.min(20, p.maxHp - p.hp); p.hp += add; popup(p.x, p.y + 3, p.z, add > 0 ? `🍠 +${add}` : t("🍠 맛있다!"), '#ffb74d'); sfx.pop(); }
     }
   }
   if (p.sit && p.sit.kind === 'lie') { p.zzT = (p.zzT || 0) - dt; if (p.zzT <= 0) { p.zzT = 2.2; popup(p.x - Math.sin(p.face) * 1.6, p.y + 1, p.z - Math.cos(p.face) * 1.6, 'Zz…', '#cfe0ff'); } }
@@ -2524,7 +2516,7 @@ function updateBalls(dt) {
       }
       if (!b.ghost && b.pv) for (const r of remotes.values()) {
         if (r.dead || r.id === b.from || inVillage(r.x, r.z) || (b.owner === 'me' && myAllies.has(r.id)) || (b.owner === 'remote' && r.id === myId)) continue;
-        if (Math.hypot(b.x - r.x, b.z - r.z) < 0.6 + b.r && y > r.y - 0.1 && y < r.y + 2.4) { b.mesh.visible = false; b.ghost = true; r.hpShowT = 6; if (b.owner === 'me') { send({ t: 'hc', id: b.id, v: r.id }); sfx.hit(); popup(r.x, r.y + 3, r.z, '명중!', '#ff8a8a'); } break; }
+        if (Math.hypot(b.x - r.x, b.z - r.z) < 0.6 + b.r && y > r.y - 0.1 && y < r.y + 2.4) { b.mesh.visible = false; b.ghost = true; r.hpShowT = 6; if (b.owner === 'me') { send({ t: 'hc', id: b.id, v: r.id }); sfx.hit(); popup(r.x, r.y + 3, r.z, t("명중!"), '#ff8a8a'); } break; }
       }
       if (b.ghost) { b.ghostT = (b.ghostT || 0) + dt; if (b.ghostT > 0.6) killBall(b); }
     } else {
@@ -2590,7 +2582,7 @@ function step(dt) {
     camYawT += dt * 0.12;
     if (state === 'disconnected') {
       net.retryT -= dt;
-      const el = $('retry'); if (el) el.textContent = `${Math.max(0, Math.ceil(net.retryT))}초 뒤 자동으로 다시 연결해요…`;
+      const el = $('retry'); if (el) el.textContent = t("{0}초 뒤 자동으로 다시 연결해요…", [Math.max(0, Math.ceil(net.retryT))]);
       if (net.retryT <= 0) { net.retryT = 5; state = 'connecting'; connect(); setTimeout(() => { if (state === 'connecting') state = 'disconnected'; }, 4000); }
     }
   }
@@ -2683,7 +2675,7 @@ function setTag(el, name, color, bubble) {
 // 집·이글루: 안에 들어가면 반투명, 누가 다가오면 문이 열림
 let lakeTag = null;
 function updateBuildings(dt) {
-  if (!lakeTag) { lakeTag = document.createElement('div'); lakeTag.className = 'tag igtag'; lakeTag.textContent = '🎣 얼음낚시터'; $('labels').appendChild(lakeTag); }
+  if (!lakeTag) { lakeTag = document.createElement('div'); lakeTag.className = 'tag igtag'; lakeTag.textContent = t("🎣 얼음낚시터"); $('labels').appendChild(lakeTag); }
   { const show = me && state === 'play' && Math.hypot(LAKE.x - me.x, LAKE.z - me.z) < 80, sp = show && toScreen(new THREE.Vector3(LAKE.x, heightAt(LAKE.x, LAKE.z) + 3, LAKE.z));
     lakeTag.style.display = sp && sp.ok ? '' : 'none'; if (sp) { lakeTag.style.left = sp.x + 'px'; lakeTag.style.top = sp.y + 'px'; } }
   const k = Math.min(1, dt * 6), who = [me, ...remotes.values()].filter(q => q && !q.dead);
@@ -2803,12 +2795,12 @@ function render(dt) {
   if (giant.board && Math.floor(time * 3) % 4 !== ledPhase) { ledPhase = Math.floor(time * 3) % 4; if (boardLast && me && Math.hypot(me.x - GT.x, me.z - GT.z) < 70) drawBoard(...boardLast); }
   if (treeView && Math.random() < 0.1) treeView.info();
   const mineIg = igloos.get(myId), nextLv = mineIg ? W.IGLOO.LV[mineIg.lv + 1] : null;
-  { const lbl = mineIg ? `${mineIg.lv ? '🏰 얼음성' : '🧊 이글루'} 옮기기 <small>(B)</small>` : `🧊 이글루 짓기 <small>${W.IGLOO.LV[0].cost.toLocaleString()}점 (B)</small>`; if ($('igBtn')._l !== lbl) { $('igBtn')._l = lbl; $('igBtn').innerHTML = lbl; } }
-  { const lbl = nextLv ? `🏰 ${nextLv.name} <small>${nextLv.cost.toLocaleString()}점 (U)</small>` : ''; if ($('upBtn')._l !== lbl) { $('upBtn')._l = lbl; $('upBtn').innerHTML = lbl; } }
+  { const lbl = mineIg ? t("{0} 옮기기 <small>(B)</small>", [mineIg.lv ? t("🏰 얼음성") : t("🧊 이글루")]) : t("🧊 이글루 짓기 <small>{0}점 (B)</small>", [W.IGLOO.LV[0].cost.toLocaleString()]); if ($('igBtn')._l !== lbl) { $('igBtn')._l = lbl; $('igBtn').innerHTML = lbl; } }
+  { const lbl = nextLv ? t("🏰 {0} <small>{1}점 (U)</small>", [nextLv.name, nextLv.cost.toLocaleString()]) : ''; if ($('upBtn')._l !== lbl) { $('upBtn')._l = lbl; $('upBtn').innerHTML = lbl; } }
   document.body.classList.toggle('canigloo', !!(me && !me.dead && state === 'play' && !me.inVillage && (mineIg || myScore >= W.IGLOO.LV[0].cost)));
   document.body.classList.toggle('canup', !!(me && !me.dead && state === 'play' && nextLv && myScore >= nextLv.cost));
-  if (me && state === 'play' && !mineIg && myScore >= W.IGLOO.LV[0].cost && !me.igHint) { me.igHint = true; toast('🧊 이글루를 지을 수 있어요!', `${W.IGLOO.LV[0].cost.toLocaleString()}점을 써서 마을 밖에 짓기 (B)`, 3); }
-  if (me && state === 'play' && onIce(me.x, me.z) && !me.iceHint) { me.iceHint = true; toast('🎣 얼음낚시터', 'G 키 또는 🎣 버튼으로 낚시해 보세요', 2.6); }
+  if (me && state === 'play' && !mineIg && myScore >= W.IGLOO.LV[0].cost && !me.igHint) { me.igHint = true; toast(t("🧊 이글루를 지을 수 있어요!"), t("{0}점을 써서 마을 밖에 짓기 (B)", [W.IGLOO.LV[0].cost.toLocaleString()]), 3); }
+  if (me && state === 'play' && onIce(me.x, me.z) && !me.iceHint) { me.iceHint = true; toast(t("🎣 얼음낚시터"), t("G 키 또는 🎣 버튼으로 낚시해 보세요"), 2.6); }
   document.body.classList.toggle('safe', !!(me && me.inVillage && !me.dead && state === 'play'));
   const nsp = me && !me.dead && state === 'play' && !me.sit ? nearestSpot() : null;
   document.body.classList.toggle('nearfire', !!(me && !me.dead && state === 'play' && (me.sit || nsp)));
@@ -2816,12 +2808,12 @@ function render(dt) {
   $('teaBtn').classList.toggle('on', me.tea > 0);
   document.body.classList.toggle('neartree', !!(me && !me.dead && state === 'play' && nearGiant()));
   document.body.classList.toggle('cansled', !!(me && !me.dead && state === 'play' && (ownSled || myScore >= W.SLED.cost)));
-  { const sb = $('sledBtn'), sh = !ownSled ? `🛷 눈썰매 구매 <small>${W.SLED.cost.toLocaleString()}점 (N)</small>` : me.riding ? '🛷 내리기 <small>(N)</small>' : '🛷 썰매 타기 <small>(N)</small>'; sb.classList.toggle('on', !!me.riding); if (sb._h !== sh) { sb._h = sh; sb.innerHTML = sh; } }
-  if (me && state === 'play' && !ownSled && myScore >= W.SLED.cost && !me.sledHint) { me.sledHint = true; toast('🛷 눈썰매를 살 수 있어요!', `${W.SLED.cost.toLocaleString()}점 · 이동 속도 3배`, 3); }
+  { const sb = $('sledBtn'), sh = !ownSled ? t("🛷 눈썰매 구매 <small>{0}점 (N)</small>", [W.SLED.cost.toLocaleString()]) : me.riding ? t("🛷 내리기 <small>(N)</small>") : t("🛷 썰매 타기 <small>(N)</small>"); sb.classList.toggle('on', !!me.riding); if (sb._h !== sh) { sb._h = sh; sb.innerHTML = sh; } }
+  if (me && state === 'play' && !ownSled && myScore >= W.SLED.cost && !me.sledHint) { me.sledHint = true; toast(t("🛷 눈썰매를 살 수 있어요!"), t("{0}점 · 이동 속도 3배", [W.SLED.cost.toLocaleString()]), 3); }
   document.body.classList.toggle('fireseat', !!(me && !me.dead && state === 'play' && me.sit && me.sit.fire));
-  { const yb = $('yamBtn'), yh = me.yam > 0 ? '🍠 그만 먹기 <small>(Y)</small>' : '🍠 군고구마 <small>(Y)</small>'; yb.classList.toggle('on', me.yam > 0); if (yb._h !== yh) { yb._h = yh; yb.innerHTML = yh; } }
-  { const fb = $('fishBtn'), fh = me.fish ? '🎣 그만하기 <small>(G)</small>' : '🎣 얼음낚시 <small>(G)</small>'; fb.classList.toggle('on', !!me.fish); if (fb._h !== fh) { fb._h = fh; fb.innerHTML = fh; } }
-  { const sb = $('sitBtn'), on = !!me.sit, html = on ? '🙋 일어나기 <small>(F)</small>' : nsp && nsp.kind === 'lie' ? '🛏️ 눕기 <small>(F)</small>' : '🪑 앉기 <small>(F)</small>'; sb.classList.toggle('on', on); if (sb._h !== html) { sb._h = html; sb.innerHTML = html; } }
+  { const yb = $('yamBtn'), yh = me.yam > 0 ? t("🍠 그만 먹기 <small>(Y)</small>") : t("🍠 군고구마 <small>(Y)</small>"); yb.classList.toggle('on', me.yam > 0); if (yb._h !== yh) { yb._h = yh; yb.innerHTML = yh; } }
+  { const fb = $('fishBtn'), fh = me.fish ? t("🎣 그만하기 <small>(G)</small>") : t("🎣 얼음낚시 <small>(G)</small>"); fb.classList.toggle('on', !!me.fish); if (fb._h !== fh) { fb._h = fh; fb.innerHTML = fh; } }
+  { const sb = $('sitBtn'), on = !!me.sit, html = on ? t("🙋 일어나기 <small>(F)</small>") : nsp && nsp.kind === 'lie' ? t("🛏️ 눕기 <small>(F)</small>") : t("🪑 앉기 <small>(F)</small>"); sb.classList.toggle('on', on); if (sb._h !== html) { sb._h = html; sb.innerHTML = html; } }
   if (friendly) { friendly.bd.scale.y = 1 + Math.sin(time * 2) * 0.02; friendly.armL.rotation.x = Math.sin(time * 4) * 0.6 - 0.4; }
 
   camYaw = angLerp(camYaw, camYawT, Math.min(1, dt * 8));
@@ -2955,7 +2947,7 @@ window.__game = {
   get score() { return myScore; }, get balls() { return balls; }, get myId() { return myId; },
   teleport(x, z) { me.x = x; me.z = z; }, showcase(x, z) { [makeSnowman('normal'), makePenguin(), makeRudolph(), makeSanta()].forEach((m, i) => { const px = x - 4.5 + i * 3; m.group.position.set(px, heightAt(px, z), z); if (i === 3) m.group.scale.setScalar(1.25); scene.add(m.group); }); }, cam(d) { camDist = d; }, face(a) { me.face = a; },
   throwAt(x, z) { mouse.has = false; aimTarget = null; aim.set(x, heightAt(x, z), z); me.charging = true; me.charge = 0; me.cd = 0; throwPlayer(); },
-  chat(s) { send({ t: 'chat', s }); },
+  chat(s) { send({ t: 'chat', s }); }, raw(o) { send(o); },
   giftRow(x, z) { const ks = [...W.GIFT_KINDS, 'HEAL']; ks.forEach((k, i) => { const m = k === 'HEAL' ? makeHealPack() : makeGift(GIFT_INFO[k].color); const px = x + (i - ks.length / 2) * 2.2; m.group.position.set(px, heightAt(px, z) + 1, z); scene.add(m.group); }); return ks; },
   get songs() { return PLAYLIST.map(x => ({ name: x.name, beat: x.beat, notes: x.notes })); },
   yaw(a) { camYaw = camYawT = a; },
