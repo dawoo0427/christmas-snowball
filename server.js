@@ -13,6 +13,7 @@ const RARE_SECRET = process.env.RARE_SECRET
   || (process.env.TURN_KEY_API_TOKEN && crypto.createHash('sha256').update('snowball-rare:' + process.env.TURN_KEY_API_TOKEN).digest('hex'))
   || crypto.randomBytes(24).toString('hex');
 const RARE_KEYS = new Set(W.RARES.map(r => r.key));
+if (process.env.SM_TEST) { W.SNOWMAN.build = 6; W.SNOWMAN.life = 10; }      // 테스트 전용: 눈사람 시간 단축 (실서버 미사용)
 const rareSig = list => crypto.createHmac('sha256', RARE_SECRET).update([...list].sort().join(',')).digest('hex').slice(0, 32);
 function rareVerify(rt) {
   if (!rt || !Array.isArray(rt.own) || typeof rt.sig !== 'string' || rt.own.length > 40) return new Set();
@@ -186,6 +187,10 @@ function createWorld(idx) {
   const igloos = new Map();        // 주인 id -> { id, x, z, rot, n }
   const igList = () => [...igloos.values()];
   const igRow = ig => [ig.id, r1(ig.x), r1(ig.z), r2(ig.rot), ig.n, ig.lv];
+  // 플레이어가 만든 눈사람 (안전지대). 만드는 중이면 done=false, 완성되면 expire(실제 시각)에 사라짐
+  const snowmen = new Map(); let nextSm = 1;
+  const smRow = s => { const now = Date.now(); return { id: s.id, x: r2(s.x), z: r2(s.z), f: r2(s.f), by: s.by, n: s.n, c: s.c, el: r1((now - s.start) / 1000), left: s.done ? r1((s.expire - now) / 1000) : null }; };
+  function smRemove(s, why) { snowmen.delete(s.id); const p = players.get(s.by); if (p && p.building === s.id) p.building = 0; broadcast({ t: 'smx', id: s.id, why }); }
 
   function broadcast(obj, except) { const s = JSON.stringify(obj), buf = Buffer.from(s); for (const p of players.values()) if (p !== except && p.ready) p.conn.frame(1, buf); }
   function addEnemy(type, x, z, spawn) {
@@ -233,7 +238,7 @@ function createWorld(idx) {
         p.y = heightAt(p.x, p.z);
         players.set(id, p);
         conn.send({ t: 'welcome', id, server: NAME, x: p.x, z: p.z, players: [...players.values()].map(q => [q.id, q.n, q.c, q.look]), drops: [...drops.values()].map(d => [d.id, r1(d.x), r1(d.z), d.k]),
-          g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)), ig: igList().map(igRow), orn: ornaments.map(ornRow) });
+          g: gifts.map(g => [r1(g.x), r1(g.z), g.on ? 1 : 0, g.ti]), h: heals.map(h => (h.on ? 1 : 0)), ig: igList().map(igRow), orn: ornaments.map(ornRow), sm: [...snowmen.values()].map(smRow) });
         if (m.rt) conn.send({ t: 'rares', own: [...rares], sig: rareSig(rares) });
         broadcast({ t: 'pj', id, n: p.n, c: p.c, look: p.look }, p);
         log(`[${NAME}] 입장 ${p.n}#${id} (현재 ${players.size}명)`);
@@ -422,6 +427,23 @@ function createWorld(idx) {
         const sk = m.sk | 0;
         if (sk === 0 || p.skins.has(sk) || p.rares.has(W.rareKey('s', sk))) p.skin = sk;
         p.conn.send({ t: 'skin', sk: p.skin, own: [...p.skins] });
+        break;
+      }
+      case 'smk': {                // 눈사람 만들기 시작(on 1) / 그만(on 0)
+        const SM = W.SNOWMAN;
+        if (!m.on) { const s = snowmen.get(p.building); if (s && !s.done) smRemove(s, 'cancel'); break; }
+        if (p.building || p.dead) break;
+        const fail = why => p.conn.send({ t: 'smfail', why });
+        if (!inVillage(p.x, p.z)) { fail('안전지대(마을) 안에서만 만들 수 있어요'); break; }
+        const mine = [...snowmen.values()].filter(s => s.by === p.id);
+        if (mine.length >= SM.each) { p.conn.send({ t: 'smfail', why: '눈사람은 한 사람당 {n}개까지예요 (완성 10분 뒤 사라져요)', wv: { n: SM.each } }); break; }
+        if (snowmen.size >= SM.max) { fail('마을에 눈사람이 너무 많아요. 조금 뒤에 다시 해 보세요'); break; }
+        const f = num(m.f, p.face), x = p.x + Math.sin(f) * 1.5, z = p.z + Math.cos(f) * 1.5;
+        if (!inVillage(x, z) || hitsCollider(x, heightAt(x, z) + 1, z, 0.9)) { fail('여기는 자리가 좁아요. 넓은 곳에서 해 보세요'); break; }
+        if ([...snowmen.values()].some(s => Math.hypot(s.x - x, s.z - z) < 2.6)) { fail('다른 눈사람과 너무 가까워요'); break; }
+        const s = { id: nextSm++, x, z, f: f + Math.PI, by: p.id, n: p.n, c: p.c | 0, start: Date.now(), done: false, expire: 0, px: p.x, pz: p.z };
+        snowmen.set(s.id, s); p.building = s.id;
+        broadcast({ t: 'sm', ...smRow(s) });
         break;
       }
       case 'fish': {               // 얼음낚시 시작/그만
@@ -694,6 +716,20 @@ function createWorld(idx) {
             hitEnemy(b, e); if (b.hit) break;
           }
         }
+      }
+    }
+    // 눈사람: 만드는 사람이 자리를 뜨거나 쓰러지거나 나가면 중단, 60초 뒤 완성, 완성 10분 뒤 사라짐
+    if (snowmen.size) {
+      const now = Date.now();
+      for (const s of [...snowmen.values()]) {
+        if (!s.done) {
+          const p = players.get(s.by);
+          if (!p || p.dead || p.building !== s.id || Math.hypot(p.x - s.px, p.z - s.pz) > 1.5) { smRemove(s, 'cancel'); continue; }
+          if (now - s.start >= W.SNOWMAN.build * 1000) {
+            s.done = true; s.expire = now + W.SNOWMAN.life * 1000; p.building = 0; p.score += 100;
+            broadcast({ t: 'smd', id: s.id, left: W.SNOWMAN.life });
+          }
+        } else if (now >= s.expire) smRemove(s, 'melt');
       }
     }
     // 얼음낚시: 가만히 앉아 있으면 5초마다 랜덤 물고기

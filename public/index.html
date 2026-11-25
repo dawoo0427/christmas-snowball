@@ -59,7 +59,11 @@
   #plistSet button.ally.on { background:#2e7d32; border-color:#7dffb0; }
   .tag.igtag { font-size:12px; color:#cfe8ff; background:#0b143099; }
   #sitBtn.on { background:#ffb74de6 !important; box-shadow:0 3px 0 #a86b12 !important; }
-  body.playing.safe #teaBtn, body.playing.nearfire #sitBtn { display:block; }
+  body.playing.safe #teaBtn, body.playing.nearfire #sitBtn, body.playing.safe #smBtn, body.playing.building #smBtn { display:block; }
+  #smBtn.on { background:#4fc3f7e6 !important; box-shadow:0 3px 0 #1a6f99 !important; }
+  .tag.smtag { font-size:12px; color:#e8f4ff; background:#0b143099; padding:2px 8px; }
+  .tag.smtag i { display:block; height:4px; margin-top:3px; border-radius:2px; background:#ffffff33; overflow:hidden; }
+  .tag.smtag i b { display:block; height:100%; background:#7dd3ff; }
   body.touch #actBtns { bottom:calc(88px + env(safe-area-inset-bottom,0px)); flex-direction:column-reverse; gap:6px; }
   body.touch #actBtns .act { font-size:13px; padding:5px 10px; border-width:1.5px; border-radius:16px; box-shadow:0 2px 0 #3e2723; }
   body.touch #actBtns .act small { display:none; }
@@ -254,7 +258,7 @@
 </div>
 <button id="gear" aria-label="설정 열기" title="설정">⚙️</button>
 <div id="allyAsk" role="alertdialog" aria-live="assertive"><span id="allyAskText"></span><button data-ok="1">🤝 수락</button><button data-ok="0">거절</button></div>
-<div id="actBtns"><button id="igBtn" class="act" aria-label="이글루 짓기">🧊 이글루 짓기 <small>(B)</small></button><button id="foodBtn" class="act" aria-label="간식 사기"></button><button id="skinBtn" class="act" aria-label="던질 것 바꾸기"></button><button id="treeBtn" class="act" aria-label="트리 꾸미기">🎄 트리 꾸미기 <small>(H)</small></button><button id="sledBtn" class="act" aria-label="눈썰매"></button><button id="fishBtn" class="act" aria-label="얼음낚시">🎣 얼음낚시 <small>(G)</small></button><button id="upBtn" class="act" aria-label="얼음성 업그레이드"></button><button id="yamBtn" class="act" aria-label="군고구마 먹기">🍠 군고구마 <small>(Y)</small></button><button id="sitBtn" class="act" aria-label="앉기 또는 눕기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button></div>
+<div id="actBtns"><button id="igBtn" class="act" aria-label="이글루 짓기">🧊 이글루 짓기 <small>(B)</small></button><button id="foodBtn" class="act" aria-label="간식 사기"></button><button id="skinBtn" class="act" aria-label="던질 것 바꾸기"></button><button id="treeBtn" class="act" aria-label="트리 꾸미기">🎄 트리 꾸미기 <small>(H)</small></button><button id="sledBtn" class="act" aria-label="눈썰매"></button><button id="fishBtn" class="act" aria-label="얼음낚시">🎣 얼음낚시 <small>(G)</small></button><button id="upBtn" class="act" aria-label="얼음성 업그레이드"></button><button id="yamBtn" class="act" aria-label="군고구마 먹기">🍠 군고구마 <small>(Y)</small></button><button id="sitBtn" class="act" aria-label="앉기 또는 눕기">🪑 앉기 <small>(F)</small></button><button id="teaBtn" class="act" aria-label="티타임">☕ 티타임 <small>(T)</small></button><button id="smBtn" class="act" aria-label="눈사람 만들기">⛄ 눈사람 만들기 <small>(J)</small></button></div>
 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <h3 id="setTitle">설정</h3>
   <label class="opt" for="optHear"><span>다른 사람 목소리 듣기<small>마이크 없이도 근처 플레이어 목소리가 들려요</small></span><input type="checkbox" id="optHear" checked></label>
@@ -1693,7 +1697,7 @@ function removeIgloo(id) {
 }
 function newPlayer(x = rand(-3, 3), z = 12 + rand(-2, 2)) {
   return { x, z, y: heightAt(x, z), vx: 0, vz: 0, vy: 0, onGround: true, face: Math.PI, hp: W.MAX_HP, maxHp: W.MAX_HP, ammo: 10, maxAmmo: 10,
-    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, armor: 0, slowT: 0, tea: 0, yam: 0, riding: false, rest: 0, restT: 0, sit: null, fish: false, fishJerk: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
+    reloadT: 0, inv: 0, charging: false, charge: 0, cd: 0, triple: 0, giant: 0, fast: 0, power: 0, rapid: 0, shield: 0, pierce: 0, boom: 0, ice: 0, snipe: 0, double: 0, armor: 0, slowT: 0, tea: 0, yam: 0, riding: false, rest: 0, restT: 0, sit: null, fish: false, fishJerk: 0, build: 0, buildWait: 0, dashT: 0, dashCD: 0, dx: 0, dz: 0,
     walk: 0, throwAnim: 0, regenT: 0, inVillage: true, dead: false, respawnT: 0, squash: 0 };
 }
 
@@ -1757,6 +1761,7 @@ function resetWorld() {
   for (const r of remotes.values()) removeRemote(r); remotes.clear();
   names.clear();
   for (const id of [...igloos.keys()]) removeIgloo(id);
+  for (const id of [...builtMen.keys()]) removeBuiltSnowman(id);
   ownSled = false; mySkin = 0; mySkins = new Set(); myAllies.clear(); allySent.clear(); allyInbox.length = 0; showAllyAsk();
 }
 function onMsg(m) {
@@ -1771,6 +1776,7 @@ function onMsg(m) {
       if (m.h) m.h.forEach((on, i) => setHeal(i, !!on));
       for (const row of (m.ig || [])) addIgloo(row);
       clearOrnaments(); for (const row of (m.orn || [])) addOrnament(row); giant.boardTxt = '';
+      for (const r of (m.sm || [])) addBuiltSnowman(r);
       camYaw = camYawT = 0;
       sendVoiceFlags();
       for (const id of ['stats', 'objective', 'mini', 'scorebox', 'help']) $(id).style.visibility = '';
@@ -1893,6 +1899,22 @@ function onMsg(m) {
       break;
     }
     case 'fishx': if (me.fish) { me.fish = false; } break;
+    case 'sm': { addBuiltSnowman(m); if (m.by === myId) { toast(t("⛄ 눈사람 만들기 시작!"), t("1분 동안 눈을 굴려 만들어요. 움직이면 그만둬요"), 2.4); sfx.pop(); } break; }
+    case 'smd': {
+      const sm = builtMen.get(m.id); if (!sm) break;
+      sm.done = true; sm.endAt = performance.now() + m.left * 1000; setSnowmanStage(sm.model, 1);
+      burst(sm.x, heightAt(sm.x, sm.z) + 2.6, sm.z, 30, 0xffffff, 5, 3);
+      if (sm.by === myId) { me.build = 0; sfx.win(); toast(t("⛄ 눈사람 완성!"), t("+100점 · 10분 동안 마을에 남아요"), 3); }
+      break;
+    }
+    case 'smx': {
+      const sm = builtMen.get(m.id);
+      if (sm && sm.by === myId && m.why === 'cancel') toast(t("⛄ 눈사람 만들기를 그만뒀어요"), '', 1.5);
+      if (sm && sm.by === myId && m.why === 'melt') feed(t("<span class=\"sys\">⛄ 내 눈사람이 녹아 사라졌어요</span>"));
+      removeBuiltSnowman(m.id, m.why === 'melt');
+      break;
+    }
+    case 'smfail': me.buildWait = 0; toast(t("⛄ 여기서는 만들 수 없어요"), esc(tWhy(m.why, m.wv)), 2); break;
     case 'goldfish': { const nm = names.get(m.id); if (nm) feed(t("<span class=\"sys\">✨ {0} 님이 황금 물고기를 낚았어요!</span>", [esc(nm.n)])); break; }
     case 'igfail': toast(t("🧊 여기에는 지을 수 없어요"), esc(tWhy(m.why, m.wv)), 2); break;
     case 'allies': {
@@ -2262,6 +2284,8 @@ function toggleSettings(open) {
 }
 $('gear').addEventListener('click', () => { audio(); toggleSettings(true); });
 $('teaBtn').addEventListener('click', e => { e.stopPropagation(); audio(); startTea(); });
+$('smBtn').addEventListener('click', e => { e.stopPropagation(); audio(); toggleBuild(); });
+$('smBtn').addEventListener('pointerdown', e => e.stopPropagation());
 $('teaBtn').addEventListener('pointerdown', e => e.stopPropagation());
 $('sitBtn').addEventListener('click', e => { e.stopPropagation(); audio(); toggleSit(); });
 $('sitBtn').addEventListener('pointerdown', e => e.stopPropagation());
@@ -2308,6 +2332,7 @@ addEventListener('keydown', e => {
     if (k === 'b') buildIgloo();
     if (k === 'u') upgradeIgloo();
     if (k === 'g') startFish();
+    if (k === 'j') toggleBuild();
     if (k === 'escape') toggleSettings();
   }
   if (k === 'm') { musicOn = !musicOn; store.set('snowball-music', musicOn ? '1' : '0'); toast(musicOn ? t("♪ 음악 켜짐") : t("음악 꺼짐"), '', 1); syncSettings(); }
@@ -2455,6 +2480,84 @@ function startFish() {
   send({ t: 'fish', on: 1 }); toast(t("🎣 얼음낚시 시작!"), t("5초마다 무언가 걸려요. 움직이면 그만둬요"), 2);
 }
 function stopFish() { if (!me || !me.fish) return; me.fish = false; send({ t: 'fish', on: 0 }); }
+// ---- 안전지대 눈사람 만들기: 버튼을 누르면 1분 동안 눈을 굴려 만드는 동작, 완성되면 10분(실제 시간) 뒤 녹아 사라짐 ----
+const builtMen = new Map();     // id -> { id, x, z, f, by, n, c, t0, done, endAt, model, tag }
+function toggleBuild() {
+  if (state !== 'play' || !me || me.dead) return;
+  if (me.build) { send({ t: 'smk', on: 0 }); me.build = 0; return; }
+  if (me.buildWait) return;
+  if (!me.inVillage) { toast(t("⛄ 눈사람은 안전지대(마을)에서 만들 수 있어요"), '', 2); return; }
+  if (me.riding) { toast(t("⛄ 썰매에서 내려야 만들 수 있어요"), '', 1.8); return; }
+  if (me.sit) standUp();
+  stopFish(); me.tea = 0; me.yam = 0; me.charging = false; me.vx = me.vz = 0; me.dashT = 0;
+  me.buildWait = 1; setTimeout(() => { if (me) me.buildWait = 0; }, 1500);
+  send({ t: 'smk', on: 1, f: me.face });
+}
+function makeBuiltSnowman(c) {
+  const g = new THREE.Group(), snow = toon(0xf4f8ff), coal = toon(0x22222a), cloth = toon(ELF_COLORS[c % 6]);
+  const pile = mk(Sph(0.9, 16, 10), snow, 0, 0, 0, g); pile.scale.set(1.2, 0.28, 1.2);       // 처음 모아 둔 눈더미
+  const part = (r, y) => { const o = new THREE.Group(); o.position.y = y; g.add(o); mk(Sph(r, 18, 14), snow, 0, 0, 0, o); return o; };
+  const base = part(0.78, 0.68), mid = part(0.56, 1.62), head = part(0.4, 2.34);
+  for (const y of [-0.05, 0.18]) mk(Sph(0.06, 8, 6), coal, 0, y, 0.54, mid, false);       // 단추
+  const face = new THREE.Group(); head.add(face);
+  for (const sd of [-1, 1]) mk(Sph(0.055, 8, 6), coal, sd * 0.14, 0.08, 0.36, face, false);
+  for (let i = 0; i < 5; i++) { const a = (i - 2) * 0.28; mk(Sph(0.035, 6, 4), coal, Math.sin(a) * 0.22, -0.12 - Math.cos(a) * 0.04 + 0.04, 0.34, face, false); }
+  const nose = mk(Cone(0.06, 0.32, 8), toon(0xff8a1f), 0, -0.01, 0.5, face, false); nose.rotation.x = Math.PI / 2;
+  const arms = new THREE.Group(); mid.add(arms);
+  for (const sd of [-1, 1]) { const st = mk(Cyl(0.03, 0.04, 0.9, 5), toon(0x6b3f1f), sd * 0.85, 0.2, 0, arms, false); st.rotation.z = sd * 1.1; const f = mk(Cyl(0.02, 0.025, 0.25, 4), toon(0x6b3f1f), sd * 1.22, 0.42, 0, arms, false); f.rotation.z = sd * 0.4; }
+  const scarf = new THREE.Group(); g.add(scarf); scarf.position.y = 2.0;
+  mk(Torus(0.4, 0.09), cloth, 0, 0, 0, scarf).rotation.x = Math.PI / 2;
+  mk(Box(0.18, 0.5, 0.07), cloth, 0.22, -0.25, 0.36, scarf).rotation.z = 0.2;
+  const hat = new THREE.Group(); hat.position.y = 2.66; hat.rotation.z = 0.12; g.add(hat);       // 양동이 모자
+  mk(Cyl(0.26, 0.3, 0.38, 14), toon(0x8d6e63), 0, 0.1, 0, hat); mk(Torus(0.3, 0.03), toon(0x5d4037), 0, -0.08, 0, hat).rotation.x = Math.PI / 2;
+  return { group: g, pile, base, mid, head, face, arms, scarf, hat };
+}
+// 진행도(0~1)에 따라 아래 눈덩이 → 몸통 → 머리 → 팔 → 얼굴 → 목도리 → 모자 순서로 완성
+function setSnowmanStage(m, k) {
+  const grow = (o, a, b) => { const v = clamp((k - a) / (b - a), 0, 1); o.visible = v > 0; o.scale.setScalar(Math.max(0.001, 0.25 + 0.75 * v)); };
+  m.pile.scale.set(1.2 * (1 - clamp(k / 0.35, 0, 1) * 0.7), 0.28, 1.2 * (1 - clamp(k / 0.35, 0, 1) * 0.7));
+  grow(m.base, 0, 0.35); grow(m.mid, 0.35, 0.6); grow(m.head, 0.6, 0.78);
+  m.arms.visible = k >= 0.82; m.face.visible = k >= 0.86; m.scarf.visible = k >= 0.92; m.hat.visible = k >= 0.97;
+}
+function addBuiltSnowman(r) {
+  if (builtMen.has(r.id)) return;
+  const model = makeBuiltSnowman(r.c | 0), y = heightAt(r.x, r.z);
+  model.group.position.set(r.x, y, r.z); model.group.rotation.y = r.f; scene.add(model.group);
+  const tag = document.createElement('div'); tag.className = 'tag smtag'; tag.style.display = 'none'; $('labels').appendChild(tag);
+  const now = performance.now(), sm = { ...r, model, tag, t0: now - (r.el || 0) * 1000, done: r.left != null, endAt: r.left != null ? now + r.left * 1000 : 0, melt: 0, tagTxt: '' };
+  setSnowmanStage(model, sm.done ? 1 : 0); builtMen.set(r.id, sm);
+  if (r.by === myId && !sm.done) { me.build = r.id; me.buildAt = { x: me.x, z: me.z }; me.face = r.f - Math.PI; }
+  return sm;
+}
+function removeBuiltSnowman(id, melt) {
+  const sm = builtMen.get(id); if (!sm) return;
+  if (melt) burst(sm.x, heightAt(sm.x, sm.z) + 1.2, sm.z, 24, 0xffffff, 4, 2);
+  scene.remove(sm.model.group); disposeModel(sm.model.group); sm.tag.remove(); builtMen.delete(id);
+  if (me && me.build === id) me.build = 0;
+}
+function updateBuiltSnowmen(dt) {
+  const now = performance.now(), B = W.SNOWMAN.build * 1000;
+  for (const sm of builtMen.values()) {
+    const g = sm.model.group;
+    if (!sm.done) {
+      const k = clamp((now - sm.t0) / B, 0, 0.995); setSnowmanStage(sm.model, k);
+      if (Math.random() < dt * 5) burst(sm.x + rand(-0.6, 0.6), heightAt(sm.x, sm.z) + 0.3 + k * 1.5, sm.z + rand(-0.6, 0.6), 1, 0xffffff, 1.5, 1);
+    } else {
+      const left = (sm.endAt - now) / 1000;
+      const melt = left < 20 ? clamp(1 - left / 20, 0, 1) : 0;          // 마지막 20초 동안 조금씩 녹아내림
+      g.scale.set(1 + melt * 0.15, 1 - melt * 0.45, 1 + melt * 0.15);
+    }
+    const d = me ? Math.hypot(sm.x - me.x, sm.z - me.z) : 999;
+    if (d > 26 || state !== 'play') { sm.tag.style.display = 'none'; continue; }
+    const sp = toScreen(new THREE.Vector3(sm.x, heightAt(sm.x, sm.z) + 3.3, sm.z));
+    if (!sp.ok) { sm.tag.style.display = 'none'; continue; }
+    let txt;
+    if (sm.done) { const left = Math.max(0, Math.ceil((sm.endAt - now) / 1000)); txt = `⛄ ${t("{0}의 눈사람", [esc(sm.n)])} · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; }
+    else { const pc = Math.floor(clamp((now - sm.t0) / B, 0, 1) * 100); txt = `⛄ ${t("{0} 님이 만드는 중", [esc(sm.n)])} ${pc}%<i><b style="width:${pc}%"></b></i>`; }
+    if (txt !== sm.tagTxt) { sm.tagTxt = txt; sm.tag.innerHTML = txt; }
+    sm.tag.style.display = ''; sm.tag.style.left = sp.x + 'px'; sm.tag.style.top = sp.y + 'px';
+  }
+}
 // 군고구마: 모닥불 의자에 앉아 있을 때. 4.5초 동안 호호 불며 먹고, 다 먹으면 체력 +20
 const YAM_TIME = 4.5;
 function startYam() {
@@ -2863,6 +2966,8 @@ function updateMe(dt) {
   if (p.sit && (il > 0.15 || keys[' '] || p.charging || p.dashT > 0)) standUp();
   if (p.fish && (il > 0.15 || keys[' '] || p.charging || p.dashT > 0 || !onIce(p.x, p.z))) stopFish();
   if (p.fish) { p.vx = p.vz = 0; }
+  if (p.build && (il > 0.15 || keys[' '] || p.charging || p.dashT > 0)) { send({ t: 'smk', on: 0 }); p.build = 0; }
+  if (p.build) { p.vx = p.vz = 0; const sm = builtMen.get(p.build); if (sm) p.face = Math.atan2(sm.x - p.x, sm.z - p.z); }
   if (il > 0.15 || p.charging || p.dashT > 0 || !p.onGround) p.tea = 0;
   const w = screenToWorldDir(ix, iz);
   const speed = (8.5 + 3.5 * p.fast) * (p.riding ? W.SLED.speed : 1) * (p.charging ? 0.65 : 1) * (p.slowT > 0 ? 0.55 : 1);
@@ -2873,6 +2978,10 @@ function updateMe(dt) {
   p.x = clamp(p.x + p.vx * dt, -LIMIT, LIMIT); p.z = clamp(p.z + p.vz * dt, -LIMIT, LIMIT);
   pushOut(p, 0.6);
   if (igArr.length) W.iglooPush(p, 0.6, igArr);
+  for (const sm of builtMen.values()) {          // 눈사람에 부딪히면 밀려남 (내 화면에서만)
+    const dx = p.x - sm.x, dz = p.z - sm.z, d = Math.hypot(dx, dz), rr = sm.done ? 1.35 : 0.9;
+    if (d < rr && d > 1e-4) { p.x = sm.x + dx / d * rr; p.z = sm.z + dz / d * rr; }
+  }
   if (keys[' ']) jump();
   const gh = heightAt(p.x, p.z);
   if (!p.onGround) { p.vy -= 26 * dt; p.y += p.vy * dt; if (p.y <= gh) { p.y = gh; p.vy = 0; p.onGround = true; p.squash = 0.3; burst(p.x, gh + 0.1, p.z, 6, 0xffffff, 3, 1); } }
@@ -3033,7 +3142,7 @@ function step(dt) {
     net.sendT -= dt;
     if (net.sendT <= 0) {
       net.sendT = 1 / 15;
-      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0) | (p.riding ? 2048 : 0) | (mySkin << 12);
+      const p = me, fl = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (voice.talking ? 16 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0) | (p.riding ? 2048 : 0) | (mySkin << 12) | (p.build ? 32768 : 0);
       send({ t: 'p', x: r2(p.x), z: r2(p.z), y: r2(p.y), f: r2(p.face), vx: r1(p.vx), vz: r1(p.vz), fl, hp: p.hp, d: p.dead ? 1 : 0 });
     }
     $('net').style.display = net.open && performance.now() - net.lastMsg > 2500 ? 'block' : 'none';
@@ -3062,6 +3171,15 @@ function animElf(m, x, y, z, face, moving, flags, walk, dt, squash = 0) {
   m.held.visible = !throwing && !reloading;
   if (m.heldSkins) { const sk = (flags >> 12) & 7; m.heldSkins.forEach((c, i) => { c.visible = i === sk; }); }   // 4096·8192·16384 칸 = 던지는 것 번호
   if (m.cape) m.cape.rotation.x = lerp(m.cape.rotation.x, moving ? 0.42 + Math.sin(walk * 2) * 0.1 : 0.07 + Math.sin(time * 1.6) * 0.03, Math.min(1, dt * 6));
+  // 눈사람 만들기: 몸을 숙이고 두 손으로 번갈아 눈을 굴리고 토닥토닥
+  const building = flags & 32768;
+  if (building) {
+    const r = time * 5;
+    m.legL.rotation.x = m.legR.rotation.x = -0.5; m.bd.position.y = -0.14; m.bd.rotation.x = 0.38; m.bd.scale.set(1, 1, 1);
+    m.armR.rotation.x = -1.25 + Math.sin(r) * 0.45; m.armL.rotation.x = -1.25 + Math.sin(r + Math.PI) * 0.45;
+    m.armR.rotation.z = -0.15; m.armL.rotation.z = 0.15; m.held.visible = false;
+    m._bld = true;
+  } else if (m._bld) { m.bd.rotation.x = 0; m._bld = false; }
   // 앉기: 통나무 의자에 걸터앉아 다리를 앞으로, 손은 무릎 위에
   const sitting = flags & 64;
   if (sitting) {
@@ -3174,7 +3292,7 @@ function render(dt) {
   updateBuildings(dt);
   const blink = p.inv > 0 && p.dashT <= 0 && Math.floor(p.inv * 14) % 2;
   elf.group.visible = !p.dead && !blink;
-  const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0) | (p.riding ? 2048 : 0) | (mySkin << 12);
+  const flags = (p.charging ? 1 : 0) | (p.throwAnim > 0 ? 2 : 0) | (p.reloadT > 0 ? 4 : 0) | (p.tea > 0 ? 32 : 0) | (p.sit ? (p.sit.kind === 'lie' ? 128 : 64) : 0) | (p.fish ? 256 : 0) | (p.fishJerk > 0 ? 512 : 0) | (p.yam > 0 ? 1024 : 0) | (p.riding ? 2048 : 0) | (mySkin << 12) | (p.build ? 32768 : 0);
   animElf(elf, p.x, p.y, p.z, p.face, Math.hypot(p.vx, p.vz) > 0.5 && p.onGround, flags, p.walk, dt, p.squash);
   elf.held.visible = elf.held.visible && p.ammo > 0;
   shieldMesh.visible = p.shield > 0 && !p.dead; if (shieldMesh.visible) { shieldMesh.position.set(p.x, p.y + 1.3, p.z); shieldMesh.material.opacity = 0.18 + 0.08 * Math.sin(time * 6); }
@@ -3267,7 +3385,7 @@ function render(dt) {
     } else if (e.bar) e.bar.style.display = 'none';
   }
   animFire(dt);
-  updateBoard(); updateGiantFade(dt); updateOcclusion(dt);
+  updateBoard(); updateGiantFade(dt); updateOcclusion(dt); updateBuiltSnowmen(dt);
   { const hue = (time * 0.12) % 1; auroraBasic.color.setHSL(hue, 0.85, 0.62); auroraGlow.color.setHSL((hue + 0.1) % 1, 0.9, 0.6); auroraEm.emissive.setHSL((hue + 0.5) % 1, 0.9, 0.32); }
   if (giant.board && Math.floor(time * 3) % 4 !== ledPhase) { ledPhase = Math.floor(time * 3) % 4; if (boardLast && me && Math.hypot(me.x - GT.x, me.z - GT.z) < 70) drawBoard(...boardLast); }
   if (treeView && Math.random() < 0.1) treeView.info();
@@ -3294,6 +3412,8 @@ function render(dt) {
   if (me && state === 'play' && !ownSled && myScore >= W.SLED.cost && !me.sledHint) { me.sledHint = true; toast(t("🛷 눈썰매를 살 수 있어요!"), t("{0}점 · 이동 속도 3배", [W.SLED.cost.toLocaleString()]), 3); }
   document.body.classList.toggle('fireseat', !!(me && !me.dead && state === 'play' && me.sit && me.sit.fire));
   { const yb = $('yamBtn'), yh = me.yam > 0 ? t("🍠 그만 먹기 <small>(Y)</small>") : t("🍠 군고구마 <small>(Y)</small>"); yb.classList.toggle('on', me.yam > 0); if (yb._h !== yh) { yb._h = yh; yb.innerHTML = yh; } }
+  document.body.classList.toggle('building', !!(me && !me.dead && state === 'play' && me.build));
+  { const bb = $('smBtn'), sm = me.build && builtMen.get(me.build), bh = sm ? t("⛄ 그만 만들기 {0}% <small>(J)</small>", [Math.floor(clamp((performance.now() - sm.t0) / (W.SNOWMAN.build * 1000), 0, 1) * 100)]) : t("⛄ 눈사람 만들기 <small>(J)</small>"); bb.classList.toggle('on', !!sm); if (bb._h !== bh) { bb._h = bh; bb.innerHTML = bh; } }
   { const fb = $('fishBtn'), fh = me.fish ? t("🎣 그만하기 <small>(G)</small>") : t("🎣 얼음낚시 <small>(G)</small>"); fb.classList.toggle('on', !!me.fish); if (fb._h !== fh) { fb._h = fh; fb.innerHTML = fh; } }
   { const sb = $('sitBtn'), on = !!me.sit, html = on ? t("🙋 일어나기 <small>(F)</small>") : nsp && nsp.kind === 'lie' ? t("🛏️ 눕기 <small>(F)</small>") : t("🪑 앉기 <small>(F)</small>"); sb.classList.toggle('on', on); if (sb._h !== html) { sb._h = html; sb.innerHTML = html; } }
   if (friendly) { friendly.bd.scale.y = 1 + Math.sin(time * 2) * 0.02; friendly.armL.rotation.x = Math.sin(time * 4) * 0.6 - 0.4; }

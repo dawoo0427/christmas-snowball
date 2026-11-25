@@ -302,7 +302,9 @@
     TIER_NAMES: ['레어', '에픽', '전설', '대마왕'], TIER_BONUS: [3000, 6000, 12000, 30000],     // 그 등급을 다 가지고 있으면 대신 점수
     rareKey(slot, v) { const r = World.RARES.find(q => q.slot === slot && q.v === v); return r ? r.key : ''; },
     BOSS_RESPAWN: 90, BOSS_FIRST: 20,
-    SLED: { cost: 50000, speed: 3 },      // 눈썰매: 50,000점에 구매, 타면 이동 속도 3배(스피드 아이템과 곱해짐), 타는 동안 공격 불가
+    SLED: { cost: 50000, speed: 3 },
+    // 안전지대 눈사람 만들기: 60초 동안 만드는 동작, 완성되면 실제 시간으로 10분 뒤 사라짐. 한 사람당 동시에 3개, 월드 전체 80개까지
+    SNOWMAN: { build: 60, life: 600, each: 3, max: 80 },      // 눈썰매: 50,000점에 구매, 타면 이동 속도 3배(스피드 아이템과 곱해짐), 타는 동안 공격 불가
     MOB_RESPAWN: 20, GIFT_RESPAWN: 10, HEAL_RESPAWN: 10,
     DROP_TTL: 30, SANTA_DROPS: 2,
     // 캐릭터 꾸미기 선택지 개수 (화면 쪽 이름 목록과 순서를 맞춘다)
